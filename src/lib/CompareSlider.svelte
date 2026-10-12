@@ -17,7 +17,10 @@
 <style>
 	.compare {
 		position: relative;
-		aspect-ratio: 8 / 5;
+		width: 100%;
+		max-width: 58vh;
+		aspect-ratio: 3 / 4;
+		margin-inline: auto;
 		overflow: hidden;
 		border: 1px solid var(--line);
 		border-radius: 6px;

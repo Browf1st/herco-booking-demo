@@ -60,24 +60,28 @@ export const services = [
 		name: 'Matte Ceramic Coating',
 		blurb: 'Full detail plus a ceramic layer made for matte paint.',
 		prices: { small: 1799, medium: 2799, large: 3799 }
+	},
+	{
+		id: 'wheel-colour',
+		name: 'Wheel Colour Coating',
+		blurb: 'Both wheels stripped, coated in your colour and sealed.',
+		prices: { small: 2500, medium: 3000, large: 3500 }
 	}
 ];
 
-export const bikes: { id: string; name: string; size: Size }[] = [
-	{ id: 'scooter', name: 'Scooter 125', size: 'small' },
-	{ id: 'sport', name: 'Sport 400', size: 'medium' },
-	{ id: 'adventure', name: 'Adventure 650', size: 'large' }
-];
+// Shop photos live in static/photos, with relative paths so they work under any base path since all routes are top-level.
+export const photos = {
+	before: 'photos/bike-before.jpg',
+	after: 'photos/bike-after.jpg',
+	wheelSet: 'photos/wheel-set.jpg'
+};
 
-export const colours = [
-	{ id: 'red', name: 'Racing Red', hex: '#d7263d' },
-	{ id: 'blue', name: 'Circuit Blue', hex: '#1f5fe0' },
-	{ id: 'white', name: 'Pearl White', hex: '#e6e9ee' }
-];
-
-export const finishes = [
-	{ id: 'glossy', name: 'Glossy ceramic', serviceId: 'ceramic-glossy' },
-	{ id: 'matte', name: 'Matte ceramic', serviceId: 'ceramic-matte' }
+// The wheel photos are square crops of the wheel set photo, one per colour.
+export const wheelColours = [
+	{ id: 'purple', name: 'Purple', hex: '#5a1fb5', photo: 'photos/wheel-purple.jpg' },
+	{ id: 'pink', name: 'Pink', hex: '#f2357f', photo: 'photos/wheel-pink.jpg' },
+	{ id: 'blue', name: 'Blue', hex: '#1a2fd0', photo: 'photos/wheel-blue.jpg' },
+	{ id: 'red', name: 'Red', hex: '#d81e1e', photo: 'photos/wheel-red.jpg' }
 ];
 
 export const reviews = [
@@ -85,10 +89,6 @@ export const reviews = [
 	{ name: 'Sample Rider B', text: 'Sample review. The bike looked better than the day it left the casa.' },
 	{ name: 'Sample Rider C', text: 'Sample review. Booked a slot, dropped off on time, no waiting.' }
 ];
-
-// Bike photos follow this naming, and the path is relative so it works under any base path since all routes are top-level.
-export const bikeImage = (bike: string, colour: string, finish: string) =>
-	`bikes/${bike}-${colour}-${finish}.svg`;
 
 export const serviceOf = (id: string) => services.find((s) => s.id === id) ?? services[0];
 

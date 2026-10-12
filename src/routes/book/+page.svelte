@@ -2,25 +2,24 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import SlotPicker from '#lib/SlotPicker.svelte';
-	import { bikes, colours, peso, priceOf, serviceOf, services, shop, sizes, type Size } from '#lib/config.ts';
+	import { peso, priceOf, serviceOf, services, shop, sizes, type Size } from '#lib/config.ts';
 	import { fmtDate, fmtSlot } from '#lib/dates.ts';
 	import { book, features, type Booking } from '#lib/store.svelte.ts';
 
-	// A link from the home page or the bike preview can preselect the service and bike.
+	// A link from the home page or the preview can preselect the service, bike size and a note.
 	const query = page.url.searchParams;
-	const bike = bikes.find((b) => b.id === query.get('bike'));
-	const colour = colours.find((c) => c.id === query.get('colour'));
+	const size = query.get('size') ?? '';
 
 	let form = $state({
 		serviceId: services.find((s) => s.id === query.get('service'))?.id ?? '',
-		size: (bike?.size ?? '') as Size,
-		bike: [bike?.name, colour?.name].filter(Boolean).join(', '),
+		size: (size in sizes ? size : '') as Size,
+		bike: '',
 		date: '',
 		slot: '',
 		name: '',
 		phone: '',
 		email: '',
-		notes: '',
+		notes: query.get('notes') ?? '',
 		gcashRef: ''
 	});
 	let step = $state(0);

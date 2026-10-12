@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import CompareSlider from '#lib/CompareSlider.svelte';
-	import { bikeImage, peso, reviews, services, shop } from '#lib/config.ts';
+	import { peso, photos, reviews, services, shop } from '#lib/config.ts';
 	import { features } from '#lib/store.svelte.ts';
 
 	const steps = $derived([
@@ -28,7 +28,7 @@
 				{#if features().preview}<a class="btn ghost" href={resolve('/preview')}>Preview your bike</a>{/if}
 			</div>
 		</div>
-		<img class="hero-img" src={bikeImage('sport', 'red', 'glossy')} alt="Placeholder sport bike with a glossy coating" />
+		<img class="hero-img" src={photos.after} alt="Scooter detailed and coated by the shop" />
 	</div>
 	<div class="wrap stats">
 		{#each shop.stats as stat}
@@ -73,16 +73,12 @@
 {#if features().preview}
 	<section class="section wrap teaser">
 		<div class="stack">
-			<p class="eyebrow">03 / Bike preview</p>
+			<p class="eyebrow">03 / Preview</p>
 			<h2>See the finish before you book</h2>
-			<p class="muted">Pick your model, colour and finish, then drag to compare stock against coated.</p>
-			<div><a class="btn" href={resolve('/preview')}>Open bike preview</a></div>
+			<p class="muted">Drag to compare a real bike before and after, then browse wheel colours coated by the shop.</p>
+			<div><a class="btn" href={resolve('/preview')}>Open preview</a></div>
 		</div>
-		<CompareSlider
-			before={bikeImage('adventure', 'blue', 'stock')}
-			after={bikeImage('adventure', 'blue', 'glossy')}
-			alt="Placeholder adventure bike"
-		/>
+		<CompareSlider before={photos.before} after={photos.after} alt="Scooter coated by the shop" />
 	</section>
 {/if}
 
@@ -135,6 +131,8 @@
 
 	.hero-img {
 		width: 100%;
+		max-height: 540px;
+		object-fit: cover;
 		border-radius: 6px;
 		clip-path: polygon(6% 0, 100% 0, 94% 100%, 0 100%);
 	}
