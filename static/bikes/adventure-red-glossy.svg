@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+<defs>
+<radialGradient id="bg" cx=".5" cy=".42" r=".8"><stop offset="0" stop-color="#3a4049"/><stop offset="1" stop-color="#121418"/></radialGradient>
+<linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e57281"/><stop offset=".45" stop-color="#d7263d"/><stop offset="1" stop-color="#811725"/></linearGradient>
+<pattern id="dust" width="67" height="53" patternUnits="userSpaceOnUse"><rect width="67" height="53" fill="#7a6a52" opacity=".28"/><g fill="#c9b899" opacity=".4"><circle cx="8" cy="9" r="1.8"/><circle cx="31" cy="5" r="1.1"/><circle cx="52" cy="17" r="2.3"/><circle cx="19" cy="30" r="1.3"/><circle cx="41" cy="39" r="1.7"/><circle cx="61" cy="46" r="1"/><circle cx="6" cy="47" r="2"/></g></pattern>
+</defs>
+<rect width="800" height="500" fill="url(#bg)"/>
+<rect y="420" width="800" height="80" fill="#0f1114"/>
+<ellipse cx="400" cy="422" rx="310" ry="13" fill="#61111b" opacity=".6"/>
+<path d="M540 190L620 338" fill="none" stroke="#8b929c" stroke-width="11" stroke-linecap="round"/><path d="M340 330L180 342" fill="none" stroke="#8b929c" stroke-width="11" stroke-linecap="round"/><path d="M525 178L492 150" fill="none" stroke="#8b929c" stroke-width="11" stroke-linecap="round"/>
+<circle cx="180" cy="342" r="78" fill="#0c0d0f"/>
+<g fill="none" stroke="#aab1bb" stroke-width="5">
+<circle cx="180" cy="342" r="53.040000000000006"/><circle cx="180" cy="342" r="29.64" stroke-width="3"/><path d="M180 342L180 290.52" transform="rotate(0 180 342)"/><path d="M180 342L180 290.52" transform="rotate(72 180 342)"/><path d="M180 342L180 290.52" transform="rotate(144 180 342)"/><path d="M180 342L180 290.52" transform="rotate(216 180 342)"/><path d="M180 342L180 290.52" transform="rotate(288 180 342)"/></g>
+<circle cx="180" cy="342" r="10.920000000000002" fill="#2a2d33"/><circle cx="620" cy="338" r="82" fill="#0c0d0f"/>
+<g fill="none" stroke="#aab1bb" stroke-width="5">
+<circle cx="620" cy="338" r="55.760000000000005"/><circle cx="620" cy="338" r="31.16" stroke-width="3"/><path d="M620 338L620 283.88" transform="rotate(0 620 338)"/><path d="M620 338L620 283.88" transform="rotate(72 620 338)"/><path d="M620 338L620 283.88" transform="rotate(144 620 338)"/><path d="M620 338L620 283.88" transform="rotate(216 620 338)"/><path d="M620 338L620 283.88" transform="rotate(288 620 338)"/></g>
+<circle cx="620" cy="338" r="11.48" fill="#2a2d33"/>
+<path d="M300 335L150 250L120 250L115 232L160 228L320 315Z" fill="#878e98"/>
+<path d="M295 350L320 245L505 240L525 325L460 378L315 378Z" fill="#22252b"/><path d="M100 200L215 205L215 215L100 212Z" fill="#22252b"/><path d="M320 380L460 380L440 402L340 402Z" fill="#22252b"/>
+<path d="M325 215Q420 130 520 185L530 245L330 250Z" fill="url(#gloss)"/><path d="M515 180L580 175L660 205L655 218L575 225L530 245Z" fill="url(#gloss)"/><path d="M150 200L280 212L268 248L215 244Z" fill="url(#gloss)"/><path d="M262 250L335 252L320 300L275 290Z" fill="url(#gloss)"/>
+
+<path d="M240 208L335 212L332 250L265 248Z" fill="#0e0f11"/>
+<path d="M548 110L580 175L552 190L532 130Z" fill="#a9c0d6" opacity=".45"/>
+<path d="M572 182L600 190L598 204L574 208Z" fill="#fff6cf"/>
+<path d="M345 208Q420 150 505 190L500 198Q420 164 350 216Z" fill="#ffffff" opacity="0.75"/><path d="M585 185L645 206L643 211L584 192Z" fill="#ffffff" opacity="0.75"/>
+<g font-family="Arial, sans-serif" font-size="14" fill="#7d8590"><text x="20" y="480">PLACEHOLDER IMAGE</text><text x="780" y="480" text-anchor="end">Adventure 650 / Racing Red / glossy</text></g>
+</svg>
