@@ -86,9 +86,9 @@ export const reviews = [
 	{ name: 'Sample Rider C', text: 'Sample review. Booked a slot, dropped off on time, no waiting.' }
 ];
 
-// Bike photos follow this naming so real photos can replace the placeholders file for file.
+// Bike photos follow this naming, and the path is relative so it works under any base path since all routes are top-level.
 export const bikeImage = (bike: string, colour: string, finish: string) =>
-	`/bikes/${bike}-${colour}-${finish}.svg`;
+	`bikes/${bike}-${colour}-${finish}.svg`;
 
 export const serviceOf = (id: string) => services.find((s) => s.id === id) ?? services[0];
 

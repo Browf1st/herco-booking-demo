@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import CompareSlider from '#lib/CompareSlider.svelte';
 	import { bikeImage, bikes, colours, finishes, peso, serviceOf, sizes } from '#lib/config.ts';
 	import { features } from '#lib/store.svelte.ts';
@@ -55,7 +56,7 @@
 						<p class="muted small">{service.name}, {bike.name}</p>
 						<p class="display price">{peso(service.prices[bike.size])}</p>
 					</div>
-					<a class="btn" href="/book?service={service.id}&bike={bike.id}&colour={colour.id}">Book this</a>
+					<a class="btn" href={resolve(`/book?service=${service.id}&bike=${bike.id}&colour=${colour.id}`)}>Book this</a>
 				</div>
 			</div>
 		</div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import CompareSlider from '#lib/CompareSlider.svelte';
 	import { bikeImage, peso, reviews, services, shop } from '#lib/config.ts';
 	import { features } from '#lib/store.svelte.ts';
@@ -23,8 +24,8 @@
 				minute, with no account needed.
 			</p>
 			<div class="row">
-				<a class="btn" href="/book">Book a slot</a>
-				{#if features().preview}<a class="btn ghost" href="/preview">Preview your bike</a>{/if}
+				<a class="btn" href={resolve('/book')}>Book a slot</a>
+				{#if features().preview}<a class="btn ghost" href={resolve('/preview')}>Preview your bike</a>{/if}
 			</div>
 		</div>
 		<img class="hero-img" src={bikeImage('sport', 'red', 'glossy')} alt="Placeholder sport bike with a glossy coating" />
@@ -42,7 +43,7 @@
 	<h2>Built for two wheels</h2>
 	<div class="cols">
 		{#each services as service}
-			<a class="card service stack" href="/book?service={service.id}">
+			<a class="card service stack" href={resolve(`/book?service=${service.id}`)}>
 				<h3>{service.name}</h3>
 				<p class="muted">{service.blurb}</p>
 				<p class="price">from <b class="display accent">{peso(service.prices.small)}</b></p>
@@ -75,7 +76,7 @@
 			<p class="eyebrow">03 / Bike preview</p>
 			<h2>See the finish before you book</h2>
 			<p class="muted">Pick your model, colour and finish, then drag to compare stock against coated.</p>
-			<div><a class="btn" href="/preview">Open bike preview</a></div>
+			<div><a class="btn" href={resolve('/preview')}>Open bike preview</a></div>
 		</div>
 		<CompareSlider
 			before={bikeImage('adventure', 'blue', 'stock')}
@@ -107,7 +108,7 @@
 				<a href={shop.facebook}>Facebook</a>.
 			</p>
 		</div>
-		<a class="btn" href="/book">Book a slot</a>
+		<a class="btn" href={resolve('/book')}>Book a slot</a>
 	</div>
 </section>
 

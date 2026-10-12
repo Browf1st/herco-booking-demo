@@ -1,8 +1,8 @@
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
 	plugins: [
 		sveltekit({
 			compilerOptions: {
@@ -12,7 +12,10 @@ export default defineConfig({
 			},
 
 			// Static output for the UI-only demo; switch to adapter-cloudflare when the backend is added.
-			adapter: adapter()
+			adapter: adapter(),
+
+			// GitHub Pages serves the site under /<repo-name>, set through BASE_PATH in the deploy workflow.
+			paths: { base: (loadEnv(mode, '.', 'BASE_PATH').BASE_PATH ?? '') as `/${string}` | '' }
 		})
 	]
-});
+}));

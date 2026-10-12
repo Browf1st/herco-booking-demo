@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../app.css';
+	import { resolve } from '$app/paths';
 	import { shop, tiers, type Tier } from '#lib/config.ts';
 	import { db, features, resetDemo, setTier } from '#lib/store.svelte.ts';
 	import type { LayoutProps } from './$types';
@@ -11,16 +12,18 @@
 	<title>{shop.name} | Book online</title>
 </svelte:head>
 
+<p class="demo-note small">Demo preview with sample data. Bookings and payments here are not real.</p>
+
 <header>
 	<div class="wrap row">
-		<a class="logo" href="/">
+		<a class="logo" href={resolve('/')}>
 			<span class="mark">H</span>
 			<span><b>Herco</b><small>Detailing Garage</small></span>
 		</a>
 		<nav class="row">
-			<a class="link wide" href="/#services">Services</a>
-			{#if features().preview}<a class="link" href="/preview">Preview</a>{/if}
-			<a class="btn sm" href="/book">Book</a>
+			<a class="link wide" href={resolve('/#services')}>Services</a>
+			{#if features().preview}<a class="link" href={resolve('/preview')}>Preview</a>{/if}
+			<a class="btn sm" href={resolve('/book')}>Book</a>
 		</nav>
 	</div>
 </header>
@@ -35,7 +38,7 @@
 				<p class="display name">{shop.name}</p>
 				<p class="muted small">{shop.area}. Open Wednesday to Sunday, 9AM to 5PM, strictly by schedule.</p>
 			</div>
-			<a class="link" href="/admin">Shop admin</a>
+			<a class="link" href={resolve('/admin')}>Shop admin</a>
 		</div>
 		<div class="card demo row">
 			<span class="small muted">Demo controls. Show the site as package:</span>
@@ -48,6 +51,13 @@
 </footer>
 
 <style>
+	.demo-note {
+		padding: 4px 16px;
+		background: var(--accent);
+		color: var(--accent-ink);
+		text-align: center;
+	}
+
 	header {
 		position: sticky;
 		top: 0;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import SlotPicker from '#lib/SlotPicker.svelte';
 	import { bikes, colours, peso, priceOf, serviceOf, services, shop, sizes, type Size } from '#lib/config.ts';
@@ -74,8 +75,8 @@
 			</div>
 		{/if}
 		<div class="row">
-			<a class="btn" href="/">Back to home</a>
-			<a class="btn ghost" href="/admin">See it in the admin queue</a>
+			<a class="btn" href={resolve('/')}>Back to home</a>
+			<a class="btn ghost" href={resolve('/admin')}>See it in the admin queue</a>
 		</div>
 	{:else}
 		<p class="eyebrow">Step {step + 1} of {steps.length} / {steps[step]}</p>
