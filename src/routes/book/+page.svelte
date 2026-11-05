@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import SlotPicker from '#lib/SlotPicker.svelte';
-	import { peso, priceOf, serviceOf, services, shop, sizes, type Size } from '#lib/config.ts';
+	import { bookableServices, peso, priceOf, serviceOf, shop, sizes, type Size } from '#lib/config.ts';
 	import { fmtDate, fmtSlot } from '#lib/dates.ts';
 	import { book, features, type Booking } from '#lib/store.svelte.ts';
 
@@ -11,9 +11,10 @@
 	const size = query.get('size') ?? '';
 
 	let form = $state({
-		serviceId: services.find((s) => s.id === query.get('service'))?.id ?? '',
+		serviceId: bookableServices.find((s) => s.id === query.get('service'))?.id ?? '',
 		size: (size in sizes ? size : '') as Size,
 		bike: '',
+		plateNumber: '',
 		date: '',
 		slot: '',
 		name: '',
@@ -56,6 +57,7 @@
 		<div class="card stack">
 			<p class="display big">{fmtDate(done.date)}, {fmtSlot(done.slot)}</p>
 			<p>{serviceOf(done.serviceId).name} for {done.bike}</p>
+			{#if done.plateNumber}<p>Plate number {done.plateNumber}</p>{/if}
 			<p class="muted">
 				Total {peso(priceOf(done))}{features().payment
 					? `, less the ${peso(shop.downpayment)} downpayment (GCash ref ${done.gcashRef})`
@@ -94,10 +96,10 @@
 				</div>
 				<p class="eyebrow">Service</p>
 				<div class="stack tight">
-					{#each services as service}
+					{#each bookableServices as service}
 						<button type="button" class="opt service" class:on={form.serviceId === service.id} onclick={() => (form.serviceId = service.id)}>
 							<b>{service.name}</b>
-							<span class="display accent price">{form.size ? '' : 'from '}{peso(service.prices[form.size || 'small'])}</span>
+							<span class="display accent price">Sample {form.size ? '' : 'from '}{peso(service.prices[form.size || 'small'])}</span>
 							<span class="muted small">{service.blurb}</span>
 						</button>
 					{/each}
@@ -106,16 +108,17 @@
 				{#if error}<p class="error">{error}</p>{/if}
 				<SlotPicker bind:date={form.date} bind:slot={form.slot} />
 			{:else if step === 2}
-				<label>Full name <input bind:value={form.name} required autocomplete="name" /></label>
+				<label>Full name <input bind:value={form.name} autocomplete="name" /></label>
 				<label>
 					Mobile number
-					<input bind:value={form.phone} required type="tel" inputmode="numeric" pattern="09\d{'{9}'}" placeholder="09XXXXXXXXX" title="11-digit mobile number starting with 09" />
+					<input bind:value={form.phone} type="tel" inputmode="numeric" pattern="09\d{'{9}'}" placeholder="09XXXXXXXXX" title="11-digit mobile number starting with 09" />
 				</label>
 				<label>
 					Email {features().email ? '(for your confirmation and reminder)' : '(optional)'}
-					<input bind:value={form.email} required={features().email} type="email" autocomplete="email" />
+					<input bind:value={form.email} type="email" autocomplete="email" />
 				</label>
-				<label>Bike make and model <input bind:value={form.bike} required placeholder="Example: Scooter 125, red" /></label>
+				<label>Bike model <input bind:value={form.bike} placeholder="e.g. Honda ADV160" /></label>
+				<label>Plate number (optional) <input bind:value={form.plateNumber} maxlength="20" placeholder="e.g. 123 ABC" autocapitalize="characters" spellcheck={false} /></label>
 				<label>Notes for the shop (optional) <textarea bind:value={form.notes} rows="3"></textarea></label>
 			{:else}
 				<div class="card stack">

@@ -6,7 +6,7 @@
 	--line: #2b2f37;
 	--text: #f3f4f6;
 	--muted: #9aa1ad;
-	--accent: #ff5a1f;
+	--accent: #ff3748;
 	--accent-ink: #0a0b0d;
 	--ok: #35d07f;
 	--warn: #ffc53d;
@@ -148,6 +148,16 @@ img {
 
 .btn:hover {
 	filter: brightness(1.12);
+}
+
+.btn.confirm-action {
+	background: #6cb5ff;
+	color: #0a0b0d;
+}
+
+.btn.complete-action {
+	background: var(--ok);
+	color: #0a0b0d;
 }
 
 .btn:focus-visible {

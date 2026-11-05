@@ -1,12 +1,16 @@
-// PLACEHOLDER DATA: every value in this file is sample content to replace with the shop's real details.
+// Visit details come from the supplied HERCO site. Booking settings and prices are demo data.
 
 export type Size = 'small' | 'medium' | 'large';
-export type Tier = 'basic' | 'standard' | 'pro';
 
 export const shop = {
 	name: 'Herco Detailing Garage',
 	area: 'Valenzuela City, Philippines',
-	facebook: 'https://www.facebook.com/',
+	address: '4494 G Bamboo Street, Valenzuela 1442',
+	phone: '+639936935697',
+	phoneLabel: '0993 693 5697',
+	facebook: 'https://www.facebook.com/profile.php?id=100085045826929',
+	messenger: 'https://m.me/100085045826929',
+	contactEmail: 'hercoprojects@gmail.com',
 	email: 'bookings@example.com',
 	// Day numbers follow Date.getDay(), so 0 is Sunday and 3 is Wednesday.
 	openDays: [3, 4, 5, 6, 0],
@@ -15,20 +19,10 @@ export const shop = {
 	dailyLimit: 8,
 	bookingWindowDays: 21,
 	downpayment: 500,
-	gcash: { name: 'SAMPLE ACCOUNT NAME', number: '0900 000 0000' },
-	stats: [
-		{ value: '370K', label: 'Facebook followers' },
-		{ value: '1,275', label: 'Reviews' },
-		{ value: '100%', label: 'Recommend' }
-	]
+	gcash: { name: 'SAMPLE ACCOUNT NAME', number: '0900 000 0000' }
 };
 
-// Each package switches whole features on or off, so a cheaper package needs no code removed.
-export const tiers: Record<Tier, { label: string; payment: boolean; email: boolean; preview: boolean }> = {
-	basic: { label: 'Basic', payment: false, email: false, preview: false },
-	standard: { label: 'Standard', payment: true, email: true, preview: false },
-	pro: { label: 'Pro', payment: true, email: true, preview: true }
-};
+export const proFeatures = { payment: true, email: true, preview: true } as const;
 
 export const sizes: Record<Size, string> = {
 	small: 'Scooter or underbone',
@@ -52,29 +46,35 @@ export const services = [
 	{
 		id: 'ceramic-glossy',
 		name: 'Glossy Ceramic Coating',
-		blurb: 'Full detail plus a deep wet-look ceramic layer.',
+		blurb: 'Ceramic coating for suitable glossy painted panels.',
 		prices: { small: 1499, medium: 2499, large: 3499 }
 	},
 	{
 		id: 'ceramic-matte',
 		name: 'Matte Ceramic Coating',
-		blurb: 'Full detail plus a ceramic layer made for matte paint.',
+		blurb: 'Ceramic coating for suitable matte painted panels.',
 		prices: { small: 1799, medium: 2799, large: 3799 }
 	},
 	{
 		id: 'wheel-colour',
-		name: 'Wheel Colour Coating',
-		blurb: 'Both wheels stripped, coated in your colour and sealed.',
+		name: 'Powder Coating',
+		blurb: 'Choose a colour or finish for wheels or other suitable metal parts.',
 		prices: { small: 2500, medium: 3000, large: 3500 }
 	}
 ];
 
+export const bookableServices = services.filter(({ id }) => id !== 'wash' && id !== 'detail');
+
 // Shop photos live in static/photos, with relative paths so they work under any base path since all routes are top-level.
 export const photos = {
+	logo: 'photos/logo.png',
+	hero: 'photos/herco-cruiser.png',
+	ceramic: 'photos/ceramic-application.jpg',
+	powder: 'photos/herco-red-wheels.jpg',
 	before: 'photos/bike-before.jpg',
 	after: 'photos/bike-after.jpg',
 	wheelSet: 'photos/wheel-set.jpg'
-};
+} as const;
 
 // The wheel photos are square crops of the wheel set photo, one per colour.
 export const wheelColours = [
@@ -84,14 +84,27 @@ export const wheelColours = [
 	{ id: 'red', name: 'Red', hex: '#d81e1e', photo: 'photos/wheel-red.jpg' }
 ];
 
-export const reviews = [
-	{ name: 'Sample Rider A', text: 'Sample review. Replace with a real review from the Facebook page.' },
-	{ name: 'Sample Rider B', text: 'Sample review. The bike looked better than the day it left the casa.' },
-	{ name: 'Sample Rider C', text: 'Sample review. Booked a slot, dropped off on time, no waiting.' }
-];
-
 export const serviceOf = (id: string) => services.find((s) => s.id === id) ?? services[0];
 
 export const priceOf = (b: { serviceId: string; size: Size }) => serviceOf(b.serviceId).prices[b.size];
 
 export const peso = (n: number) => `PHP ${n.toLocaleString('en-PH')}`;
+
+// Reward tiers transcribed from the HERCO Rewards Program poster supplied by the user.
+export const rewardProgram = [
+	{ points: 1000, name: 'Free T-shirt' },
+	{ points: 1500, name: 'Free Graphene Seal' },
+	{ points: 2000, name: 'Free powder coating', scope: 'Small parts' },
+	{ points: 3000, name: 'Free buffing', scope: 'Full unit' },
+	{ points: 4000, name: 'Free ceramic coating' },
+	{ points: 5000, name: 'Free powder coating', scope: 'Mags' }
+];
+
+export const demoFans = [
+	{ name: 'Marco Santos', points: 1280 },
+	{ name: 'Andrea Reyes', points: 960 },
+	{ name: 'Jolo Cruz', points: 740 },
+	{ name: 'Nicole Garcia', points: 520 },
+	{ name: 'Paolo Mendoza', points: 310 },
+	{ name: 'Trisha Ramos', points: 150 }
+];

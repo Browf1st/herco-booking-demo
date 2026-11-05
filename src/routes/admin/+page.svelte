@@ -1,12 +1,15 @@
 <script lang="ts">
-	import DayStrip from '#lib/DayStrip.svelte';
+	import { page } from '$app/state';
+	import OperationsAdmin from '#lib/OperationsAdmin.svelte';
+	import AdminCalendar from '#lib/AdminCalendar.svelte';
 	import SlotPicker from '#lib/SlotPicker.svelte';
 	import { peso, priceOf, serviceOf, shop, sizes } from '#lib/config.ts';
 	import { fmtDate, fmtSlot, isOpenDay, slots, today, upcoming } from '#lib/dates.ts';
 	import { bookingsOn, db, features, reschedule, setStatus, toggleBlock } from '#lib/store.svelte.ts';
 
-	// Demo gate only: the live site signs the shop owner in with a real email and password.
-	let authed = $state(false);
+	const tabs = ['Overview', 'Bookings', 'Booking history', 'Customers', 'HERCO Points', 'Inventory', 'Reports & payments'];
+	const requestedTab = $derived(page.url.searchParams.get('tab') === 'Customers & points' ? 'HERCO Points' : page.url.searchParams.get('tab') ?? 'Overview');
+	const tab = $derived(tabs.includes(requestedTab) ? requestedTab : 'Overview');
 	let date = $state(upcoming().find(isOpenDay)!);
 	let moving = $state<{ id: string; date: string; slot: string }>();
 	let error = $state('');
@@ -26,24 +29,27 @@
 	}
 </script>
 
+<svelte:head><title>Shop admin | HERCO Detailing Garage</title></svelte:head>
+
 <section class="section wrap stack">
-	{#if !authed}
-		<div class="card stack gate">
-			<p class="eyebrow">Shop admin</p>
-			<h2>Sign in</h2>
-			<p class="muted">Demo mode. The live site asks for the shop owner's email and password here.</p>
-			<div><button class="btn" onclick={() => (authed = true)}>Enter demo admin</button></div>
-		</div>
+	<p class="eyebrow">HERCO / Shop admin</p>
+	<div class="row between">
+		<h2>Garage dashboard</h2>
+	</div>
+	{#if tab !== 'Bookings'}
+		<OperationsAdmin {tab} />
 	{:else}
 		<p class="eyebrow">Shop admin / {date === today() ? 'Today' : 'Upcoming'}</p>
 		<h2>{fmtDate(date)}</h2>
-		<DayStrip value={date} onpick={(d) => (date = d)} admin />
+		<AdminCalendar value={date} onpick={(d) => { date = d; moving = undefined; error = ''; }} />
 
 		<div class="tiles">
 			<div class="card"><b class="display">{queue.length}/{shop.dailyLimit}</b><span class="muted small">Booked</span></div>
-			<div class="card"><b class="display">{count('pending')}</b><span class="muted small">To approve</span></div>
+			<div class="card"><b class="display">{count('pending')}</b><span class="muted small">Awaiting confirmation</span></div>
 			<div class="card"><b class="display">{count('confirmed')}</b><span class="muted small">Confirmed</span></div>
 		</div>
+
+		<p class="muted small">Confirm a pending booking after reviewing its details and payment. Mark it as done once the service is finished.</p>
 
 		<div class="row">
 			<button class="btn sm" class:ghost={!blocked} onclick={() => toggleBlock(date)}>
@@ -70,6 +76,7 @@
 							<p>{serviceOf(b.serviceId).name}, {peso(priceOf(b))}</p>
 							<p class="muted small">
 								{b.bike} ({sizes[b.size]})<br />
+								{#if b.plateNumber}Plate number {b.plateNumber}<br />{/if}
 								<a href="tel:{b.phone}">{b.phone}</a>{b.email ? `, ${b.email}` : ''}<br />
 								{#if features().payment}Downpayment {peso(shop.downpayment)}, GCash ref {b.gcashRef || 'none'}<br />{/if}
 								{b.notes}
@@ -84,11 +91,11 @@
 							{:else if b.status !== 'done'}
 								<div class="row">
 									{#if b.status === 'pending'}
-										<button class="btn sm" onclick={() => setStatus(b.id, 'confirmed')}>
-											{features().payment ? 'Payment OK, approve' : 'Approve'}
+										<button class="btn sm confirm-action" onclick={() => setStatus(b.id, 'confirmed')}>
+											Confirm booking
 										</button>
-									{:else}
-										<button class="btn sm" onclick={() => setStatus(b.id, 'done')}>Mark done</button>
+									{:else if b.status === 'confirmed'}
+										<button class="btn sm complete-action" onclick={() => setStatus(b.id, 'done')}>Mark as done</button>
 									{/if}
 									<button class="btn sm ghost" onclick={() => (moving = { id: b.id, date: '', slot: '' })}>Reschedule</button>
 									<button class="btn sm danger" onclick={() => confirm('Cancel this booking?') && setStatus(b.id, 'cancelled')}>
@@ -114,11 +121,6 @@
 </section>
 
 <style>
-	.gate {
-		max-width: 420px;
-		margin: 0 auto;
-	}
-
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);

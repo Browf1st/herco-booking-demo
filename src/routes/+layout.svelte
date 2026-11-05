@@ -1,31 +1,55 @@
 <script lang="ts">
 	import '../app.css';
-	import { resolve } from '$app/paths';
-	import { shop, tiers, type Tier } from '#lib/config.ts';
-	import { db, features, resetDemo, setTier } from '#lib/store.svelte.ts';
+	import { onMount } from 'svelte';
+	import { resetDemoPointsOnRefresh, syncOperations } from '#lib/operations.svelte.ts';
+	import { asset, resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import { photos, shop } from '#lib/config.ts';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
+	const adminTabs = ['Overview', 'Bookings', 'Booking history', 'Customers', 'HERCO Points', 'Inventory', 'Reports & payments'];
+	onMount(() => {
+		resetDemoPointsOnRefresh();
+		return syncOperations();
+	});
 </script>
 
 <svelte:head>
 	<title>{shop.name} | Book online</title>
 </svelte:head>
 
-<p class="demo-note small">Demo preview with sample data. Bookings and payments here are not real.</p>
-
 <header>
 	<div class="wrap row">
 		<a class="logo" href={resolve('/')}>
-			<span class="mark">H</span>
+			<img class="mark" src={asset(photos.logo)} alt="" />
 			<span><b>Herco</b><small>Detailing Garage</small></span>
 		</a>
 		<nav class="row">
-			<a class="link wide" href={resolve('/#services')}>Services</a>
-			{#if features().preview}<a class="link" href={resolve('/preview')}>Preview</a>{/if}
-			<a class="btn sm" href={resolve('/book')}>Book</a>
+			{#if page.route.id === '/admin'}
+				<a class="btn sm ghost" href={resolve('/')}>Back to user view</a>
+			{:else}
+			<a class="link wide" href={resolve('/#services')} aria-current={page.route.id === '/' && page.url.hash === '#services' ? 'location' : undefined}>Services</a>
+			<a class="link" href={resolve('/announcements')} aria-current={page.route.id === '/announcements' ? 'page' : undefined}>Announcements</a>
+			<a class="link wide" href={resolve('/preview')} aria-current={page.route.id === '/preview' ? 'page' : undefined}>Preview</a>
+			<a class="link" href={resolve('/points')} aria-current={page.route.id === '/points' ? 'page' : undefined}>HercoPoints</a>
+			<a class="btn sm" href={resolve('/book')} aria-current={page.route.id === '/book' ? 'page' : undefined}>Book</a>
+			<a class="link admin-link" href={resolve('/admin')}>Admin view</a>
+			{/if}
 		</nav>
 	</div>
+	{#if page.route.id === '/admin'}
+		<nav class="wrap admin-sections" aria-label="Admin sections">
+			{#each adminTabs as tab}
+				{@const requested = page.url.searchParams.get('tab') === 'Customers & points' ? 'HERCO Points' : page.url.searchParams.get('tab') ?? 'Overview'}
+				{@const active = requested === tab}
+				<a
+					href={resolve(`/admin?tab=${encodeURIComponent(tab)}`)}
+					aria-current={active ? 'page' : undefined}
+				>{tab}</a>
+			{/each}
+		</nav>
+	{/if}
 </header>
 
 <main>{@render children()}</main>
@@ -36,26 +60,33 @@
 		<div class="row between">
 			<div>
 				<p class="display name">{shop.name}</p>
-				<p class="muted small">{shop.area}. Open Wednesday to Sunday, 9AM to 5PM, strictly by schedule.</p>
+				<p class="muted small">{shop.area}. Open Wednesday to Sunday, 9AM to 5PM.</p>
 			</div>
-			<a class="link" href={resolve('/admin')}>Shop admin</a>
-		</div>
-		<div class="card demo row">
-			<span class="small muted">Demo controls. Show the site as package:</span>
-			{#each Object.entries(tiers) as [id, tier]}
-				<button class="btn sm" class:ghost={db.tier !== id} onclick={() => setTier(id as Tier)}>{tier.label}</button>
-			{/each}
-			<button class="btn sm ghost" onclick={resetDemo}>Reset sample bookings</button>
 		</div>
 	</div>
 </footer>
 
 <style>
-	.demo-note {
-		padding: 4px 16px;
-		background: var(--accent);
-		color: var(--accent-ink);
-		text-align: center;
+	.admin-sections {
+		display: flex;
+		gap: 24px;
+		overflow-x: auto;
+		border-top: 1px solid var(--line);
+	}
+
+	.admin-sections a {
+		flex-shrink: 0;
+		padding-block: 12px;
+		border-bottom: 3px solid transparent;
+		text-decoration: none;
+		font: 700 1.05rem var(--display);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.admin-sections a[aria-current='page'] {
+		color: var(--accent);
+		border-bottom-color: var(--accent);
 	}
 
 	header {
@@ -88,14 +119,9 @@
 	}
 
 	.mark {
-		display: grid;
-		place-items: center;
-		width: 38px;
-		height: 38px;
-		background: var(--accent);
-		color: var(--accent-ink);
-		font: italic 800 1.7rem var(--display);
-		clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+		width: 54px;
+		height: 46px;
+		object-fit: contain;
 	}
 
 	.logo b {
@@ -122,6 +148,17 @@
 		color: var(--accent);
 	}
 
+	.link[aria-current] {
+		color: var(--accent);
+		text-decoration: underline;
+		text-underline-offset: 8px;
+		text-decoration-thickness: 3px;
+	}
+
+	.btn[aria-current] {
+		box-shadow: inset 0 -4px 0 var(--text);
+	}
+
 	main {
 		min-height: 70vh;
 	}
@@ -139,11 +176,21 @@
 		font-size: 1.5rem;
 	}
 
-	.demo {
-		border-style: dashed;
-	}
-
 	@media (max-width: 520px) {
+		header .wrap {
+			flex-wrap: wrap;
+			gap: 8px;
+			padding-block: 8px;
+		}
+
+		nav {
+			flex-wrap: wrap;
+		}
+		header .link {
+			font-size: 0.82rem;
+			letter-spacing: 0.04em;
+		}
+
 		.wide {
 			display: none;
 		}
