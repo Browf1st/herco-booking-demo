@@ -77,12 +77,12 @@
 		onplaying={() => (heroPlaying = true)}
 		onpause={() => (heroPlaying = false)}
 	></video>
-	<img class="hero-video" src={asset(photos.hero)} alt="" />
 	<canvas class="hero-video" bind:this={heroCanvas} aria-hidden="true"></canvas>
 	<div class="hero-shade"></div>
 	<div class="wrap hero-content">
 		<div class="stack">
-			<p class="eyebrow">{shop.area} / Wed to Sun / {hours}</p>
+			<p class="hero-address">4494 G Bamboo Street<br />Valenzuela, 1442</p>
+			<p class="eyebrow">Wed to Sun / {hours}</p>
 			<h1>Cleaner bikes.<br /><span class="accent">Bigger dreams.</span></h1>
 			<p class="lead">
 				Motorcycle detailing, ceramic coating and powder coating in Valenzuela. Find a service and choose a drop-off time.
@@ -344,6 +344,12 @@
 
 	.hero-content > .stack {
 		max-width: 660px;
+	}
+
+	.hero-address {
+		color: var(--text);
+		font-size: 0.95rem;
+		line-height: 1.5;
 	}
 
 	.hero-shade {
