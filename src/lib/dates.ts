@@ -6,6 +6,8 @@ const utc = (d: string) => new Date(`${d}T00:00:00Z`);
 
 export const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
 
+export const currentShopTime = () => new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+
 export const nowHour = () =>
 	Number(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
 
@@ -30,5 +32,5 @@ export const slots = Array.from(
 
 export function fmtSlot(slot: string) {
 	const h = parseInt(slot);
-	return `${h % 12 || 12}:00 ${h < 12 ? 'AM' : 'PM'}`;
+	return `${h % 12 || 12}:${slot.slice(3, 5)} ${h < 12 ? 'AM' : 'PM'}`;
 }

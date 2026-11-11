@@ -1,17 +1,19 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount } from 'svelte';
-	import { resetDemoPointsOnRefresh, syncOperations } from '#lib/operations.svelte.ts';
+	import { syncBookings } from '#lib/store.svelte.ts';
+	import { syncOperations } from '#lib/operations.svelte.ts';
 	import { asset, resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { photos, shop } from '#lib/config.ts';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
-	const adminTabs = ['Overview', 'Bookings', 'Booking history', 'Customers', 'HERCO Points', 'Inventory', 'Reports & payments'];
+	const adminTabs = ['Overview', 'Bookings', 'Booking history', 'Customers', 'HERCO Points', 'Inventory', 'Reports', 'Pricing', 'Change requests', 'Activity log'];
 	onMount(() => {
-		resetDemoPointsOnRefresh();
-		return syncOperations();
+		const stopOperations = syncOperations();
+		const stopBookings = syncBookings();
+		return () => { stopOperations(); stopBookings(); };
 	});
 </script>
 
@@ -30,9 +32,9 @@
 				<a class="btn sm ghost" href={resolve('/')}>Back to user view</a>
 			{:else}
 			<a class="link wide" href={resolve('/#services')} aria-current={page.route.id === '/' && page.url.hash === '#services' ? 'location' : undefined}>Services</a>
-			<a class="link" href={resolve('/announcements')} aria-current={page.route.id === '/announcements' ? 'page' : undefined}>Announcements</a>
-			<a class="link wide" href={resolve('/preview')} aria-current={page.route.id === '/preview' ? 'page' : undefined}>Preview</a>
-			<a class="link" href={resolve('/points')} aria-current={page.route.id === '/points' ? 'page' : undefined}>HercoPoints</a>
+			<a class="link" href={resolve('/preview')} aria-current={page.route.id === '/preview' ? 'page' : undefined}>Showcase</a>
+			<a class="link" href={resolve('/points')} aria-current={page.route.id === '/points' ? 'page' : undefined}>HERCO Points</a>
+			<a class="link" href={resolve('/account')} aria-current={['/account', '/my-bookings'].includes(page.route.id ?? '') ? 'page' : undefined}>Account</a>
 			<a class="btn sm" href={resolve('/book')} aria-current={page.route.id === '/book' ? 'page' : undefined}>Book</a>
 			<a class="link admin-link" href={resolve('/admin')}>Admin view</a>
 			{/if}
@@ -57,7 +59,8 @@
 <footer>
 	<div class="stripe"></div>
 	<div class="wrap stack">
-		<div class="row between">
+		<div class="row">
+			<img class="mark" src={asset(photos.logo)} alt="" width="54" height="46" />
 			<div>
 				<p class="display name">{shop.name}</p>
 				<p class="muted small">{shop.area}. Open Wednesday to Sunday, 9AM to 5PM.</p>
@@ -132,7 +135,7 @@
 
 	.logo small {
 		color: var(--muted);
-		font-size: 0.72rem;
+		font-size: 0.8rem;
 		font-weight: 600;
 		letter-spacing: 0.22em;
 	}
@@ -168,15 +171,11 @@
 		padding-bottom: 28px;
 	}
 
-	.between {
-		justify-content: space-between;
-	}
-
 	.name {
 		font-size: 1.5rem;
 	}
 
-	@media (max-width: 520px) {
+	@media (max-width: 960px) {
 		header .wrap {
 			flex-wrap: wrap;
 			gap: 8px;
@@ -187,7 +186,7 @@
 			flex-wrap: wrap;
 		}
 		header .link {
-			font-size: 0.82rem;
+			font-size: 0.95rem;
 			letter-spacing: 0.04em;
 		}
 
@@ -196,7 +195,7 @@
 		}
 
 		.logo small {
-			font-size: 0.6rem;
+			font-size: 0.75rem;
 			letter-spacing: 0.14em;
 		}
 	}

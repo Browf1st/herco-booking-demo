@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { fmtDate, upcoming } from './dates';
-	import { dayStatus, spotsLeft } from './store.svelte';
+	import { dayStatus } from './store.svelte';
 
 	// Admin mode lets full and blocked days be opened, customers can only pick open days.
 	let { value, onpick, admin = false }: { value: string; onpick: (date: string) => void; admin?: boolean } = $props();
@@ -21,7 +21,7 @@
 			<small>{fmtDate(d, { weekday: 'short' })}</small>
 			<b>{fmtDate(d, { day: 'numeric' })}</b>
 			<small>{fmtDate(d, { month: 'short' })}</small>
-			<em>{status === 'open' ? `${spotsLeft(d)} left` : labels[status]}</em>
+			<em>{status === 'open' ? 'Open' : labels[status]}</em>
 		</button>
 	{/each}
 </div>

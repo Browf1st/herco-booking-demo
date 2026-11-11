@@ -8,12 +8,13 @@
 			'REWARDS ACKNOWLEDGMENT RECEIPT',
 			receipt.reference,
 			'Issued ' + new Date(receipt.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true }),
-			'Fan ' + receipt.memberName,
+			'Redeemed by ' + receipt.memberName,
 			'Reward ' + receipt.reward,
 			'Points redeemed ' + receipt.cost,
 			'Balance before redemption ' + receipt.balanceBefore,
 			'Balance after redemption ' + receipt.balanceAfter,
 			'Status ' + receipt.status,
+			receipt.claimedBy ? 'Claim recorded by ' + receipt.claimedBy : '',
 			receipt.claimedAt ? 'Claimed ' + new Date(receipt.claimedAt).toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true }) : 'Present this AR at HERCO to claim your reward.',
 			'Local demo receipt'
 		].join('\r\n');
@@ -31,15 +32,18 @@
 	<h3>{receipt.reward}</h3>
 	<p class="reference">{receipt.reference}</p>
 	<dl>
-		<div><dt>Fan</dt><dd>{receipt.memberName}</dd></div>
-		<div><dt>Issued</dt><dd>{new Date(receipt.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true })}</dd></div>
+		<div><dt>Redeemed by</dt><dd>{receipt.memberName}</dd></div>
+		<div><dt>Redeemed at (PH time)</dt><dd>{new Date(receipt.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true })}</dd></div>
 		<div><dt>Points redeemed</dt><dd>{receipt.cost.toLocaleString('en-PH')}</dd></div>
 		<div><dt>Balance after redemption</dt><dd>{receipt.balanceAfter.toLocaleString('en-PH')}</dd></div>
 		<div><dt>Status</dt><dd>{receipt.status === 'claimed' ? 'Claimed' : 'Ready to claim'}</dd></div>
 	</dl>
+	{#if receipt.status === 'claimed'}
+		<p class="small muted">Claim recorded by {receipt.claimedBy ?? 'Admin name unavailable for this older record'}</p>
+	{/if}
 	{#if receipt.claimedAt}
 		<p class="small muted">Claimed {new Date(receipt.claimedAt).toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true })}</p>
-	{:else}
+	{:else if receipt.status === 'issued'}
 		<p class="small muted">Present this AR at HERCO to claim your reward.</p>
 	{/if}
 	<div><button class="btn sm ghost" onclick={download}>Download AR</button></div>

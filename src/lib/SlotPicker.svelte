@@ -15,7 +15,7 @@
 {#if date}
 	<p class="muted">Drop-off time on {fmtDate(date)}</p>
 	<div class="slots">
-		{#each slotsFor(date) as s (s.time)}
+		{#each slotsFor(date).filter(slot => slot.free) as s (s.time)}
 			<button type="button" class="opt" class:on={slot === s.time} disabled={!s.free} onclick={() => (slot = s.time)}>
 				<b>{fmtSlot(s.time)}</b>
 				<span class="small muted">{s.free ? 'Open' : 'Taken'}</span>

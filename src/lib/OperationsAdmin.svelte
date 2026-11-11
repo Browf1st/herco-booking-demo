@@ -2,10 +2,12 @@
 	import { resolve } from '$app/paths';
 	import { tick } from 'svelte';
 	import RewardReceipt from './RewardReceipt.svelte';
-	import { db, setStatus } from './store.svelte';
-	import { peso, priceOf, serviceOf, sizes } from './config';
+	import AdminBooking from './AdminBooking.svelte';
+	import { money, serviceLabel } from './coating';
+	import { audit, db } from './store.svelte';
+	import { serviceOf, sizes } from './config';
 	import { fmtDate, fmtSlot, today } from './dates';
-	import { addStock, adjustStock, claimRewardReceipt, editRewardTier, grantPoints, ops, fanRanking, pointBalance, recordPayment } from './operations.svelte';
+	import { addStock, adjustStock, claimRewardReceipt, editRewardTier, grantPoints, ops, fanRanking, pointBalance } from './operations.svelte';
 
 	let { tab }: { tab: string } = $props();
 	let search = $state('');
@@ -18,6 +20,17 @@
 	let rewardScope = $state('');
 	let rewardCost = $state(1);
 	let stockName = $state('');
+	let stockSearch = $state('');
+	let stockFilter = $state('all');
+	let historyItem = $state('');
+	const stockHealth = (quantity: number, minimum: number) => quantity === 0 ? 'out' : quantity <= minimum ? 'low' : 'healthy';
+	const lowStock = $derived(ops.data.stock.filter(item => stockHealth(item.quantity, item.minimum) === 'low').length);
+	const outOfStock = $derived(ops.data.stock.filter(item => item.quantity === 0).length);
+	const visibleStock = $derived(ops.data.stock.filter(item =>
+		item.name.toLowerCase().includes(stockSearch.trim().toLowerCase()) &&
+		(stockFilter === 'all' || stockHealth(item.quantity, item.minimum) === stockFilter)
+	));
+	const stockHistory = $derived(ops.data.stockEntries.filter(entry => !historyItem || entry.itemId === historyItem).toReversed());
 	let unit = $state('bottle');
 	let quantity = $state(0);
 	let minimum = $state(0);
@@ -27,9 +40,6 @@
 	let stockDialog = $state<HTMLDialogElement>();
 	let stockMode = $state<'add' | 'use'>('add');
 	const selectedStock = $derived(ops.data.stock.find((item) => item.id === stockId));
-	let bookingId = $state('');
-	let amount = $state(0);
-	let method = $state('GCash');
 	let from = $state(today().slice(0, 7) + '-01');
 	let to = $state(today());
 	let notice = $state('');
@@ -39,11 +49,9 @@
 	const customers = $derived(ops.data.members.filter((member) => (member.name + member.phone + member.id).toLowerCase().includes(search.toLowerCase())));
 	const selected = $derived(ops.data.members.find((member) => member.id === memberId));
 	const filteredBookings = $derived(db.bookings.filter((booking) => booking.date >= from && booking.date <= to));
-	const filteredPayments = $derived(ops.data.payments.filter((payment) => {
-		const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', hour12: true }).format(new Date(payment.at));
-		return date >= from && date <= to;
-	}));
-	const collected = $derived(filteredPayments.reduce((sum, payment) => sum + payment.amount, 0));
+	const completed = $derived(db.bookings.filter(b => { const date = b.completedAt ? new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Manila'}).format(new Date(b.completedAt)) : b.date; return b.status === 'done' && date >= from && date <= to; }));
+	const valued = $derived(completed.filter(b => b.estimate));
+	const income = $derived(valued.reduce((sum, b) => sum + b.estimate!.total, 0));
 	const ranking = $derived(fanRanking());
 	const rewardProgram = $derived(ops.data.rewardProgram);
 
@@ -78,13 +86,13 @@
 	function perform(action: () => void, message: string) {
 		error = '';
 		notice = '';
-		try { action(); notice = message; }
+		try { action(); notice = message; if (['HERCO Points', 'Inventory', 'Customers'].includes(tab)) audit(message); }
 		catch (e) { error = (e as Error).message; }
 	}
 	function exportBookings() {
 		const rows = [
-			['Reference', 'Date', 'Time', 'Name', 'Phone', 'Bike model', 'Plate', 'Service', 'Status', 'Sample estimate'],
-			...filteredBookings.map((b) => [b.id, b.date, fmtSlot(b.slot), b.name, b.phone, b.bike, b.plateNumber ?? '', serviceOf(b.serviceId).name, b.status, String(priceOf(b))])
+			['Reference', 'Date', 'Time', 'Name', 'Phone', 'Bike model', 'Plate', 'Service', 'Status'],
+			...filteredBookings.map((b) => [b.id, b.date, fmtSlot(b.slot), b.name, b.phone, b.bike, b.plateNumber ?? '', b.selection ? serviceLabel(b.selection) : serviceOf(b.serviceId).name, b.status])
 		];
 		const csv = rows.map((row) => row.map((value) => {
 			const safe = /^[=+\-@\t\r]/.test(value) ? "'" + value : value;
@@ -95,6 +103,7 @@
 		link.href = url;
 		link.download = `herco-bookings-${from}-${to}.csv`;
 		link.click();
+		audit('Exported booking report');
 		setTimeout(() => URL.revokeObjectURL(url), 1000);
 	}
 </script>
@@ -138,35 +147,20 @@
 							<div><dt>Email</dt><dd>{#if booking.email}<a href={`mailto:${booking.email}`}>{booking.email}</a>{:else}Not provided{/if}</dd></div>
 							<div><dt>Bike model</dt><dd>{booking.bike || 'Not provided'}</dd></div>
 							<div><dt>Plate number</dt><dd>{booking.plateNumber || 'Not provided'}</dd></div>
-							<div><dt>Bike category</dt><dd>{sizes[booking.size]}</dd></div>
+							{#if booking.size}<div><dt>Bike category</dt><dd>{sizes[booking.size]}</dd></div>{/if}
 						</dl>
 					</div>
 					<div class="stack">
-						<h3>Service &amp; payment</h3>
+						<h3>Service &amp; visit</h3>
 						<dl class="record-details">
-							<div><dt>Service</dt><dd>{serviceOf(booking.serviceId).name}</dd></div>
+							<div><dt>Service</dt><dd>{booking.selection ? serviceLabel(booking.selection) : serviceOf(booking.serviceId).name}</dd></div>
+							{#if booking.finish}<div><dt>Preferred finish</dt><dd>{booking.finish}</dd></div>{/if}
 							<div><dt>Visit</dt><dd>{fmtDate(booking.date)} · {fmtSlot(booking.slot)}</dd></div>
-							<div><dt>Sample estimate</dt><dd>{peso(priceOf(booking))}</dd></div>
-							<div><dt>GCash reference</dt><dd>{booking.gcashRef || 'Not provided'}</dd></div>
-							<div><dt>Recorded payments</dt><dd>{peso(ops.data.payments.filter((payment) => payment.bookingId === booking.id).reduce((sum, payment) => sum + payment.amount, 0))}</dd></div>
 						</dl>
 					</div>
 				</div>
 				<div class="stack"><h3>Notes for the shop</h3><p class="booking-notes">{booking.notes || 'No notes provided.'}</p></div>
-				{#if ops.data.payments.some((payment) => payment.bookingId === booking.id)}
-					<div class="stack"><h3>Payment activity</h3>
-						{#each ops.data.payments.filter((payment) => payment.bookingId === booking.id) as payment (payment.id)}
-							<p>{peso(payment.amount)} · {payment.method} · {new Date(payment.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true })}</p>
-						{/each}
-					</div>
-				{/if}
-				<div class="row">
-					{#if booking.status === 'pending'}
-						<button class="btn sm confirm-action" onclick={() => perform(() => setStatus(booking.id, 'confirmed'), 'Booking confirmed.')}>Confirm booking</button>
-					{:else if booking.status === 'confirmed'}
-						<button class="btn sm complete-action" onclick={() => perform(() => setStatus(booking.id, 'done'), 'Service completed.')}>Mark as done</button>
-					{/if}
-				</div>
+				<AdminBooking {booking} />
 				</div>
 			</details>
 		{:else}<p class="muted">No matching bookings.</p>{/each}
@@ -238,18 +232,23 @@
 			</form>
 		</dialog>
 		<div class="card stack">
-			<h3>Reward ARs</h3>
+			<h3>Redemption and claim history</h3>
 			{#each ops.data.rewardReceipts.toReversed().filter((receipt) => (receipt.memberName + receipt.reference).toLowerCase().includes(search.toLowerCase())) as receipt (receipt.id)}
 				<details>
-					<summary>{receipt.memberName} · {receipt.reward} · {receipt.status}</summary>
+					<summary>{receipt.memberName} · {receipt.reward} · {receipt.status === 'claimed' ? 'Claimed' : 'Awaiting claim'}</summary>
 					<div class="stack">
 						<RewardReceipt {receipt} />
-						{#if receipt.status === 'issued'}<div><button class="btn sm complete-action" onclick={() => perform(() => claimRewardReceipt(receipt.id), 'Reward AR marked as claimed.')}>Mark AR as claimed</button></div>{/if}
+						{#if receipt.status === 'issued'}<div><button class="btn sm complete-action" onclick={() => perform(() => claimRewardReceipt(receipt.id), 'Reward AR marked as claimed.')}>Mark as claimed</button></div>{/if}
 					</div>
 				</details>
-			{:else}<p class="muted">No matching ARs.</p>{/each}
+			{:else}<p class="muted">No matching reward redemptions.</p>{/each}
 		</div>
 	{:else if tab === 'Inventory'}
+		<div class="cols" aria-label="Inventory summary">
+			<button type="button" class="opt" class:on={stockFilter === 'all'} aria-pressed={stockFilter === 'all'} onclick={() => stockFilter = 'all'}><b>{ops.data.stock.length}</b> All items</button>
+			<button type="button" class="opt" class:on={stockFilter === 'low'} aria-pressed={stockFilter === 'low'} onclick={() => stockFilter = 'low'}><b>{lowStock}</b> Low stock</button>
+			<button type="button" class="opt" class:on={stockFilter === 'out'} aria-pressed={stockFilter === 'out'} onclick={() => stockFilter = 'out'}><b>{outOfStock}</b> Out of stock</button>
+		</div>
 		<div class="cols">
 			<form class="card stack" onsubmit={(e) => { e.preventDefault(); perform(() => { addStock(stockName, unit, quantity, minimum); stockName = ''; }, 'Stock item added.'); }}>
 				<h3>Create new inventory item</h3>
@@ -266,9 +265,18 @@
 		</div>
 		<div class="card stack">
 			<h3>Stock on hand</h3>
-			{#each ops.data.stock as item (item.id)}
-				<div class="ledger"><b>{item.name}</b><div class="row"><span>{item.quantity} {item.unit} {#if item.quantity <= item.minimum}<span class="badge">Low stock</span>{/if}</span><button class="btn sm ghost" onclick={() => openStock(item.id)}>Add stock</button></div></div>
-			{:else}<p class="muted">Add coating supplies, powder colours or tools to start tracking stock.</p>{/each}
+			<label>Search supplies<input type="search" bind:value={stockSearch} placeholder="e.g. Ceramic coating" /></label>
+			{#each visibleStock as item (item.id)}
+				{@const health = stockHealth(item.quantity, item.minimum)}
+				<div class="ledger">
+					<div><b>{item.name}</b><p class="small muted">{item.quantity} {item.unit} on hand · Reorder at {item.minimum}</p></div>
+					<div class="row">
+						<span class="badge" data-status={health === 'out' ? 'cancelled' : health === 'low' ? 'pending' : 'done'}>{health === 'out' ? 'Out of stock' : health === 'low' ? 'Low stock' : 'In stock'}</span>
+						<button class="btn sm ghost" aria-label={'Stock in for ' + item.name} onclick={() => openStock(item.id)}>Stock in</button>
+						<button class="btn sm ghost" aria-label={'Stock out for ' + item.name} disabled={!item.quantity} onclick={() => openStock(item.id, 'use')}>Stock out</button>
+					</div>
+				</div>
+			{:else}<p class="muted">No supplies match this view.</p>{/each}
 		</div>
 		<dialog bind:this={stockDialog} aria-labelledby="stock-dialog-title">
 			<form class="stack" onsubmit={(e) => {
@@ -293,27 +301,22 @@
 			</form>
 		</dialog>
 		<details class="card"><summary>Stock history</summary>
-			{#each ops.data.stockEntries.toReversed() as entry (entry.id)}<div class="ledger"><div>{ops.data.stock.find((item) => item.id === entry.itemId)?.name}<p class="small muted">{entry.reason} · {new Date(entry.at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', hour12: true })}</p></div><b>{entry.amount > 0 ? '+' : ''}{entry.amount}</b></div>{/each}
+			<label>Filter stock history<select bind:value={historyItem}><option value="">All items</option>{#each ops.data.stock as item (item.id)}<option value={item.id}>{item.name}</option>{/each}</select></label>
+			{#each stockHistory as entry (entry.id)}<div class="ledger"><div>{ops.data.stock.find((item) => item.id === entry.itemId)?.name}<p class="small muted">{entry.reason} · {new Date(entry.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short', hour12: true })}</p></div><b>{entry.amount > 0 ? '+' : ''}{entry.amount}</b></div>{:else}<p class="muted">No stock movements for this view.</p>{/each}
 		</details>
-	{:else if tab === 'Reports & payments'}
+	{:else if tab === 'Reports'}
 		<div class="row"><label>From<input type="date" bind:value={from} max={to} /></label><label>To<input type="date" bind:value={to} min={from} /></label><button class="btn sm ghost" onclick={exportBookings}>Export bookings CSV</button></div>
 		<div class="cols">
 			<div class="card stack"><span class="muted">Bookings in period</span><b class="metric">{filteredBookings.length}</b></div>
-			<div class="card stack"><span class="muted">Completed services</span><b class="metric">{filteredBookings.filter((b) => b.status === 'done').length}</b></div>
-			<div class="card stack"><span class="muted">Recorded collections</span><b class="metric">{peso(collected)}</b></div>
+			<div class="card stack"><span class="muted">Completed services</span><b class="metric">{completed.length}</b></div>
+			<div class="card stack"><span class="muted">Cancelled bookings</span><b class="metric">{filteredBookings.filter((b) => b.status === 'cancelled').length}</b></div>
+			<div class="card stack"><span class="muted">Estimated income from completed services</span><b class="metric">{money(income)}</b></div>
+			<div class="card stack"><span class="muted">Average completed service value</span><b class="metric">{money(valued.length ? income / valued.length : 0)}</b></div>
+			<div class="card stack"><span class="muted">Pending and confirmed bookings</span><b class="metric">{filteredBookings.filter(b => b.status === 'pending' || b.status === 'confirmed').length}</b></div>
+			<div class="card stack"><span class="muted">Walk-in bookings</span><b class="metric">{filteredBookings.filter(b => b.walkIn).length}</b></div>
+			<div class="card stack"><span class="muted">Promo discounts on completed work</span><b class="metric">{money(valued.reduce((sum, b) => sum + b.estimate!.discount, 0))}</b></div>
 		</div>
-		<form class="card stack" onsubmit={(e) => { e.preventDefault(); perform(() => recordPayment(bookingId, amount, method), 'Payment recorded.'); }}>
-			<h3>Record a payment</h3>
-			<p class="muted small">Record money actually received. Booking estimates and GCash reference numbers do not automatically count as collections.</p>
-			<label>Booking<select bind:value={bookingId} required><option value="">Select booking</option>{#each db.bookings.filter((b) => b.status !== 'cancelled') as b (b.id)}<option value={b.id}>{b.id} · {b.name || 'Test booking'} · {b.date}</option>{/each}</select></label>
-			<div class="cols"><label>Amount received<input type="number" min="0.01" step="0.01" bind:value={amount} required /></label><label>Method<select bind:value={method}><option>GCash</option><option>Cash</option><option>Bank transfer</option></select></label></div>
-			<div><button class="btn sm">Record payment</button></div>
-		</form>
-		<div class="card stack"><h3>Payment history</h3>
-			{#each filteredPayments.toReversed() as payment (payment.id)}
-				<div class="ledger"><div><b>{payment.bookingId}</b><p class="muted small">{payment.method} · {new Date(payment.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true })}</p></div><b>{peso(payment.amount)}</b></div>
-			{:else}<p class="muted">No payments recorded in this period.</p>{/each}
-		</div>
+		<p class="small muted">Philippine time. Income is based on saved service estimates for completed work. Older jobs without an estimate are excluded from value totals.</p>
 	{/if}
 </div>
 

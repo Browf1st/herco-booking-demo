@@ -9,7 +9,7 @@
 </script>
 
 <section class="section wrap stack">
-	<p class="eyebrow">Preview / Finished work</p>
+	<p class="eyebrow">Showcase / Finished work</p>
 	<h2>Coating results</h2>
 	{#if features().preview}
 		<div class="layout">
@@ -19,7 +19,7 @@
 				<p class="muted">Drag the slider to explore the before-and-after photos of a glossy black finish.</p>
 				<p class="eyebrow">Finish shown</p>
 				<h3>Glossy black</h3>
-				<div><a class="btn ghost" href={resolve('/book?service=ceramic-glossy')}>Book ceramic coating</a></div>
+				<div><a class="btn ghost" href={resolve('/book?service=ceramic')}>Book ceramic coating</a></div>
 			</div>
 		</div>
 
@@ -37,7 +37,7 @@
 					<button class="swatch" class:on={colour === c} style:background={c.hex} aria-label={c.name} aria-pressed={colour === c} title={c.name} onclick={() => (colour = c)}></button>
 				{/each}
 			</div>
-				<div><a class="btn ghost" href={resolve(`/book?service=wheel-colour&notes=${encodeURIComponent("Wheel colour: " + colour.name)}`)}>Book powder coating</a></div>
+				<div><a class="btn ghost" href={resolve(`/book?service=wheel-colour&finish=${encodeURIComponent(colour.name)}`)}>Book powder coating</a></div>
 				<img class="photo" src={asset(photos.wheelSet)} alt="Wheels coated in red, purple, pink and blue by the shop" />
 				<p class="muted small">All four colours, fresh off the shop floor.</p>
 			</div>

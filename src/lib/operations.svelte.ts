@@ -13,13 +13,14 @@ export type RewardReceipt = {
 	at: string;
 	status: 'issued' | 'claimed';
 	claimedAt?: string;
+	claimedBy?: string;
 };
 export type Member = { id: string; name: string; phone: string; demoFan?: boolean };
 type PointEntry = { id: string; memberId: string; amount: number; reason: string; at: string };
 type Redemption = { id: string; memberId: string; service: RewardService; cost: number; status: 'requested' | 'fulfilled' | 'rejected'; at: string };
 type StockItem = { id: string; name: string; unit: string; quantity: number; minimum: number };
 type StockEntry = { id: string; itemId: string; amount: number; reason: string; at: string };
-type Payment = { id: string; bookingId: string; amount: number; method: string; at: string };
+
 export type RewardTier = { points: number; name: string; scope?: string };
 type Operations = {
 	rewardProgram: RewardTier[];
@@ -31,20 +32,24 @@ type Operations = {
 	rewardReceipts: RewardReceipt[];
 	stock: StockItem[];
 	stockEntries: StockEntry[];
-	payments: Payment[];
+
 	rewardCosts: Record<RewardService, number>;
 };
 
 const KEY = 'herco-operations-v1';
 const empty = (): Operations => ({
 	rewardProgram: rewardProgram.map((reward) => ({ ...reward })),
-	members: [], points: [], redemptions: [], rewardReceipts: [], stock: [], stockEntries: [], payments: [],
+	members: [], points: [], redemptions: [], rewardReceipts: [], stock: [], stockEntries: [],
 	rewardCosts: { ceramic: 0, powder: 0 }
 });
 function load(): Operations {
 	if (typeof localStorage === 'undefined') return empty();
 	const saved = localStorage.getItem(KEY);
-	const data: Operations = saved ? { ...empty(), ...JSON.parse(saved) } : empty();
+	const stored = saved ? JSON.parse(saved) : {};
+	const hadPayments = 'payments' in stored;
+	delete stored.payments;
+	const data: Operations = { ...empty(), ...stored };
+	if (hadPayments) localStorage.setItem(KEY, JSON.stringify(data));
 	if (data.fanSamplesVersion !== 1) {
 		demoFans.forEach((fan, index) => {
 			const memberId = `DEMO-FAN-${index + 1}`;
@@ -98,18 +103,6 @@ export function syncOperations() {
 	window.addEventListener('storage', sync);
 	return () => window.removeEventListener('storage', sync);
 }
-export function resetDemoPointsOnRefresh() {
-	const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-	if (navigation?.type !== 'reload' || !window.location.pathname.replace(/\/$/, '').endsWith('/points')) return;
-	const memberId = 'DEMO-FAN-1';
-	commit((data) => {
-		if (!data.members.some((member) => member.id === memberId && member.demoFan)) return;
-		data.points = data.points.filter((entry) => entry.memberId !== memberId);
-		data.points.push({ id: 'DEMO-POINTS-1', memberId, amount: 1280, reason: 'Sample HERCO Points balance', at: timestamp() });
-		data.rewardReceipts = data.rewardReceipts.filter((receipt) => receipt.memberId !== memberId);
-		data.redemptions = data.redemptions.filter((request) => request.memberId !== memberId);
-	});
-}
 function balanceIn(data: Operations, memberId: string) {
 	return data.points.filter((entry) => entry.memberId === memberId).reduce((sum, entry) => sum + entry.amount, 0);
 }
@@ -152,6 +145,7 @@ export function claimRewardReceipt(receiptId: string) {
 		if (!receipt || receipt.status !== 'issued') throw new Error('This AR has already been claimed or was not found.');
 		receipt.status = 'claimed';
 		receipt.claimedAt = timestamp();
+		receipt.claimedBy = 'Demo admin';
 	});
 }
 export function editRewardTier(index: number, reward: RewardTier) {
@@ -211,8 +205,4 @@ export function adjustStock(itemId: string, amount: number, reason: string) {
 		item.quantity = Math.round((item.quantity + amount) * 1000) / 1000;
 		data.stockEntries.push({ id: id(), itemId, amount, reason: reason.trim(), at: timestamp() });
 	});
-}
-export function recordPayment(bookingId: string, amount: number, method: string) {
-	if (!bookingId || !Number.isFinite(amount) || amount <= 0 || !method) throw new Error('Select a booking and enter a positive payment.');
-	commit((data) => data.payments.push({ id: id(), bookingId, amount: Math.round(amount * 100) / 100, method, at: timestamp() }));
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { addDays, fmtDate, isOpenDay, today } from './dates';
+	import { addDays, fmtDate, today } from './dates';
 	import { bookingsOn, dayStatus } from './store.svelte';
 
 	let { value, onpick }: { value: string; onpick: (date: string) => void } = $props();
@@ -44,15 +44,16 @@
 			{@const count = bookings.length}
 			{@const pending = bookings.filter((b) => b.status === 'pending').length}
 			{@const outside = !date.startsWith(displayedMonth)}
-			{@const blocked = dayStatus(date) === 'blocked'}
+			{@const status = dayStatus(date)}
+			{@const closed = status === 'closed' || status === 'blocked'}
 			<button
 				type="button"
 				class="day"
 				class:selected={value === date}
-				class:closed={!isOpenDay(date)}
+				class:closed
 				class:is-today={date === today()}
 				class:outside
-				aria-label={fmtDate(date) + ', ' + count + ' bookings' + (blocked ? ', blocked' : !isOpenDay(date) ? ', closed' : '')}
+				aria-label={fmtDate(date) + ', ' + count + ' bookings' + (closed ? ', closed' : '')}
 				aria-pressed={value === date}
 				aria-current={date === today() ? 'date' : undefined}
 				onclick={() => { if (outside) month = date.slice(0, 7); onpick(date); }}
@@ -60,8 +61,7 @@
 				<span class="date-line"><time datetime={date}>{fmtDate(date, { day: 'numeric' })}</time>{#if count}<span class="booking-count">{count}</span>{/if}</span>
 				{#if !outside}
 					<span class="day-caption">
-						{#if blocked}Blocked
-						{:else if !isOpenDay(date)}Closed
+						{#if closed}Closed
 						{:else if pending}<span class="status-dot pending"></span><span>{pending} pending</span>
 						{:else if count}<span class="status-dot confirmed"></span><span>{count} booked</span>
 						{:else}<span class="empty-caption">No bookings</span>{/if}

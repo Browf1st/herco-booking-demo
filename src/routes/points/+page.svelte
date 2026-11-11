@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import { account } from '#lib/account.svelte.ts';
 	import { ops, fanRanking, pointBalance, redeemReward } from '#lib/operations.svelte.ts';
 	import RewardReceipt from '#lib/RewardReceipt.svelte';
 	const rewardProgram = $derived(ops.data.rewardProgram);
@@ -16,6 +18,7 @@
 	const receipts = $derived(ops.data.rewardReceipts.filter((receipt) => receipt.memberId === activeId).toReversed());
 
 	async function confirmRedemption() {
+		if (!account.current) return;
 		if (issuing || !selectedReward) return;
 		issuing = true;
 		error = '';
@@ -30,6 +33,7 @@
 
 <svelte:head><title>HERCO Points | Fan rewards</title></svelte:head>
 
+{#if account.current}
 <section class="section wrap stack">
 	<p class="eyebrow">HERCO fan community</p>
 	<h1>HERCO Points</h1>
@@ -99,8 +103,37 @@
 			{/each}
 		</div>
 </section>
+{:else}
+	<section class="section wrap points-intro">
+		<div class="stack points-welcome">
+			<h1>HERCO Points</h1>
+			<p class="muted">Sign in to see your balance, redeem rewards, and check what’s ready to claim.</p>
+			<div><a class="btn" href={resolve('/account')}>Sign in to HERCO Points</a></div>
+		</div>
+		<aside class="card stack reward-preview" aria-labelledby="reward-preview-title">
+			<h2 id="reward-preview-title">Rewards to work toward</h2>
+			<ul>
+				{#each rewardProgram.toSorted((a, b) => a.points - b.points) as reward (reward.points)}
+					<li><span>{reward.name}{#if reward.scope} · {reward.scope}{/if}</span><strong>{reward.points.toLocaleString('en-PH')} pts</strong></li>
+				{/each}
+			</ul>
+		</aside>
+	</section>
+{/if}
 
 <style>
+	.points-intro { display: grid; gap: clamp(20px, 5vw, 60px); align-items: center; }
+	.points-welcome { padding-block: 12px; }
+	.points-welcome h1 { font-size: clamp(2.9rem, 7vw, 5.4rem); }
+	.points-welcome p { max-width: 42ch; }
+	.reward-preview { padding: clamp(16px, 3vw, 26px); border-top: 4px solid var(--accent); }
+	.reward-preview h2 { font-size: clamp(1.6rem, 3vw, 2.25rem); }
+	.reward-preview ul { list-style: none; margin: 0; padding: 0; }
+	.reward-preview li { display: flex; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding-block: 12px; border-top: 1px solid var(--line); }
+	.reward-preview li strong { color: var(--accent); white-space: nowrap; }
+	@media (min-width: 760px) {
+		.points-intro { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+	}
 	.ranking-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding: 12px; border-bottom: 1px solid var(--line); }
 	.current { background: var(--panel-2); border-radius: 6px; }
 	.rank { color: var(--accent); min-width: 32px; }

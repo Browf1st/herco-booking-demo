@@ -1,203 +1,189 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
-	import SlotPicker from '#lib/SlotPicker.svelte';
-	import { bookableServices, peso, priceOf, serviceOf, shop, sizes, type Size } from '#lib/config.ts';
-	import { fmtDate, fmtSlot } from '#lib/dates.ts';
-	import { book, features, type Booking } from '#lib/store.svelte.ts';
+ import { resolve } from '$app/paths';
+ import { page } from '$app/state';
+ import { tick } from 'svelte';
+ import CoatingFields from '#lib/CoatingFields.svelte';
+ import VisitPicker from '#lib/VisitPicker.svelte';
+ import { account, rememberBooking } from '#lib/account.svelte.ts';
+ import { bikes, motorcycleVersions, money, quote, selection, serviceLabel } from '#lib/coating.ts';
+ import { sizes, type Size } from '#lib/config.ts';
+ import { currentShopTime, fmtDate, fmtSlot, today, upcoming } from '#lib/dates.ts';
+ import { book, db, type Booking } from '#lib/store.svelte.ts';
 
-	// A link from the home page or the preview can preselect the service, bike size and a note.
-	const query = page.url.searchParams;
-	const size = query.get('size') ?? '';
+ const query = page.url.searchParams;
+ const walkIn = query.get('walk-in') === '1';
+ const preferredDate = query.get('date') ?? '';
+ let coating = $state(selection(['wheel-colour', 'Powder Coating'].includes(query.get('service') ?? ''), query.get('finish') ?? ''));
+ let size = $state<Size>('small');
+ const modelGroups = $derived(Object.groupBy(bikes[size], model =>
+  model.startsWith('Royal Enfield ') ? 'Royal Enfield' : model.split(' ')[0]
+ ));
+ let unit = $state('');
+ let version = $state('');
+ let customVersion = $state('');
+ let modelYear = $state<number | undefined>();
+ let custom = $state('');
+ const baseModel = $derived(unit === 'other' ? custom.trim() : unit);
+ const chosenVersion = $derived(version === 'other' ? customVersion.trim() : version);
+ const bike = $derived(baseModel && chosenVersion ? baseModel + ' — ' + chosenVersion : baseModel);
+ let form = $state({
+  name: walkIn ? '' : account.current?.name ?? '', email: walkIn ? '' : account.current?.email ?? '',
+  phone: '', plateNumber: '', notes: query.get('notes') ?? '', date: upcoming().includes(preferredDate) ? preferredDate : '', slot: ''
+ });
+ let signer = $state('');
+ let acknowledged = $state(false);
+ let immediate = $state(true);
+ const estimate = $derived(quote(coating, size, bike, db.pricing));
+ let error = $state('');
+ let done = $state<Booking>();
+ let heading = $state<HTMLHeadingElement>();
 
-	let form = $state({
-		serviceId: bookableServices.find((s) => s.id === query.get('service'))?.id ?? '',
-		size: (size in sizes ? size : '') as Size,
-		bike: '',
-		plateNumber: '',
-		date: '',
-		slot: '',
-		name: '',
-		phone: '',
-		email: '',
-		notes: query.get('notes') ?? '',
-		gcashRef: ''
-	});
-	let step = $state(0);
-	let error = $state('');
-	let done = $state<Booking>();
-
-	const steps = $derived(['Service', 'Schedule', 'Details', ...(features().payment ? ['Downpayment'] : [])]);
-	const price = $derived(form.serviceId && form.size ? priceOf(form) : 0);
-	const ready = $derived(step === 0 ? price > 0 : step === 1 ? !!form.slot : true);
-
-	function next(event: SubmitEvent) {
-		event.preventDefault();
-		scrollTo(0, 0);
-		if (step < steps.length - 1) return void step++;
-		try {
-			done = book(form);
-		} catch (e) {
-			error = (e as Error).message;
-			form.slot = '';
-			step = 1;
-		}
-	}
+ async function submit(event: SubmitEvent) {
+  event.preventDefault();
+  error = '';
+  const name = form.name.trim();
+  const phone = form.phone.trim();
+  if (!name || !bike || !/^\+?[\d ()-]+$/.test(phone) || phone.replace(/\D/g, '').length < 7) {
+   error = 'Enter your name, a valid mobile number, and your motorcycle model.';
+   return;
+  }
+  if (walkIn && (!acknowledged || signer.trim().toLowerCase() !== name.toLowerCase())) {
+   error = 'Confirm the intake details and type the customer name to sign the demo form.';
+   return;
+  }
+  try {
+   const booking = book({
+    ...form, date: walkIn && immediate ? today() : form.date, slot: walkIn && immediate ? currentShopTime() : form.slot,
+    name, bike, modelYear, phone, size, selection: $state.snapshot(coating),
+    serviceId: coating.ceramic ? 'ceramic' : 'wheel-colour',
+    accountId: walkIn ? undefined : account.current?.id,
+    walkIn: walkIn ? { signer: signer.trim(), at: new Date().toISOString(), version: 'Demo intake v1', immediate } : undefined
+   });
+   if (!walkIn && !account.current) rememberBooking(booking.id);
+   done = booking;
+  } catch (e) {
+   error = (e as Error).message;
+   return;
+  }
+  await tick();
+  heading?.focus();
+ }
 </script>
 
-<section class="section wrap stack">
-	{#if done}
-		<p class="eyebrow">Booking {done.id}</p>
-		<h2>Slot requested</h2>
-		<p class="muted">
-			{features().payment
-				? 'The shop will check your GCash reference number and confirm your slot.'
-				: 'The shop will approve your slot shortly.'}
-		</p>
-		<div class="card stack">
-			<p class="display big">{fmtDate(done.date)}, {fmtSlot(done.slot)}</p>
-			<p>{serviceOf(done.serviceId).name} for {done.bike}</p>
-			{#if done.plateNumber}<p>Plate number {done.plateNumber}</p>{/if}
-			<p class="muted">
-				Total {peso(priceOf(done))}{features().payment
-					? `, less the ${peso(shop.downpayment)} downpayment (GCash ref ${done.gcashRef})`
-					: ', paid at the shop'}
-			</p>
-		</div>
-		{#if features().email}
-			<div class="card mail stack">
-				<p class="eyebrow">Email preview</p>
-				<p class="small muted">To: {done.email}<br />Subject: We got your booking {done.id}</p>
-				<p>
-					Hi {done.name}, we received your booking for {serviceOf(done.serviceId).name} on {fmtDate(done.date)} at
-					{fmtSlot(done.slot)}. We will email you again once the shop confirms it, and send a reminder the day before.
-				</p>
-				<p class="small muted">The shop also gets an alert at {shop.email} for every new booking.</p>
-			</div>
-		{/if}
-		<div class="row">
-			<a class="btn" href={resolve('/')}>Back to home</a>
-			<a class="btn ghost" href={resolve('/admin')}>See it in the admin queue</a>
-		</div>
-	{:else}
-		<p class="eyebrow">Step {step + 1} of {steps.length} / {steps[step]}</p>
-		<h2>Book a slot</h2>
-		<div class="progress" style:--done={(step + 1) / steps.length}></div>
+<svelte:head><title>{walkIn ? 'Walk-in intake' : 'Book a visit'} | HERCO</title></svelte:head>
 
-		<form class="stack" onsubmit={next}>
-			{#if step === 0}
-				<p class="eyebrow">Your bike</p>
-				<div class="cols">
-					{#each Object.entries(sizes) as [id, label]}
-						<button type="button" class="opt" class:on={form.size === id} onclick={() => (form.size = id as Size)}>
-							<b>{label}</b>
-						</button>
-					{/each}
-				</div>
-				<p class="eyebrow">Service</p>
-				<div class="stack tight">
-					{#each bookableServices as service}
-						<button type="button" class="opt service" class:on={form.serviceId === service.id} onclick={() => (form.serviceId = service.id)}>
-							<b>{service.name}</b>
-							<span class="display accent price">Sample {form.size ? '' : 'from '}{peso(service.prices[form.size || 'small'])}</span>
-							<span class="muted small">{service.blurb}</span>
-						</button>
-					{/each}
-				</div>
-			{:else if step === 1}
-				{#if error}<p class="error">{error}</p>{/if}
-				<SlotPicker bind:date={form.date} bind:slot={form.slot} />
-			{:else if step === 2}
-				<label>Full name <input bind:value={form.name} autocomplete="name" /></label>
-				<label>
-					Mobile number
-					<input bind:value={form.phone} type="tel" inputmode="numeric" pattern="09\d{'{9}'}" placeholder="09XXXXXXXXX" title="11-digit mobile number starting with 09" />
-				</label>
-				<label>
-					Email {features().email ? '(for your confirmation and reminder)' : '(optional)'}
-					<input bind:value={form.email} type="email" autocomplete="email" />
-				</label>
-				<label>Bike model <input bind:value={form.bike} placeholder="e.g. Honda ADV160" /></label>
-				<label>Plate number (optional) <input bind:value={form.plateNumber} maxlength="20" placeholder="e.g. 123 ABC" autocapitalize="characters" spellcheck={false} /></label>
-				<label>Notes for the shop (optional) <textarea bind:value={form.notes} rows="3"></textarea></label>
-			{:else}
-				<div class="card stack">
-					<p class="eyebrow">GCash downpayment</p>
-					<p>
-						Send <b class="accent">{peso(shop.downpayment)}</b> to GCash <b>{shop.gcash.number}</b>
-						({shop.gcash.name}), then type the reference number from your GCash receipt below.
-					</p>
-					<p class="muted small">The balance of {peso(price - shop.downpayment)} is paid at the shop. Sample GCash details for this demo.</p>
-				</div>
-				<label>
-					GCash reference number
-					<input bind:value={form.gcashRef} required inputmode="numeric" pattern="\d{'{13}'}" placeholder="13 digits" title="13-digit GCash reference number" />
-				</label>
-			{/if}
-
-			<div class="bar row">
-				<p class="summary">
-					{#if price}<b class="display accent">{peso(price)}</b>{/if}
-					<span class="muted small">
-						{form.serviceId ? serviceOf(form.serviceId).name : 'Pick a bike size and service'}{form.slot
-							? `, ${fmtDate(form.date, { month: 'short', day: 'numeric' })} ${fmtSlot(form.slot)}`
-							: ''}
-					</span>
-				</p>
-				{#if step > 0}<button type="button" class="btn ghost sm" onclick={() => step--}>Back</button>{/if}
-				<button class="btn" disabled={!ready}>{step < steps.length - 1 ? 'Next' : 'Confirm'}</button>
-			</div>
-		</form>
-	{/if}
+<section class="section wrap stack booking">
+ {#if done}
+  <p class="eyebrow">{done.id}</p>
+  <h1 bind:this={heading} tabindex="-1">{walkIn ? 'Intake saved' : 'Booking submitted'}</h1>
+  <p class="muted">This demo request is saved in this browser and awaits shop confirmation.</p>
+  <div class="card stack">
+   <p><strong>{serviceLabel(done.selection!)}</strong> · {done.bike}{done.modelYear ? ' · Model year ' + done.modelYear : ''}</p>
+   <p>{fmtDate(done.date)} at {fmtSlot(done.slot)} (Philippine time)</p>
+   <p>Estimated service price <strong>{money(done.estimate!.total)}</strong></p>
+  </div>
+  <div><a class="btn" href={walkIn ? resolve('/admin?tab=Booking%20history') : resolve('/my-bookings')}>{walkIn ? 'View booking history' : 'View my bookings'}</a></div>
+ {:else}
+  <h1>{walkIn ? 'Walk-in intake' : 'Book a visit'}</h1>
+  <p class="small muted">Demo only. Use sample details. Requests stay in this browser.</p>
+  <form class="stack" onsubmit={submit}>
+   <fieldset class="card stack booking-panel">
+    <legend>Motorcycle and services</legend>
+    <div class="cols">
+     <label>Motorcycle category
+      <select bind:value={size} onchange={() => { unit = ''; version = ''; customVersion = ''; modelYear = undefined; }}>{#each Object.entries(sizes) as [key, label]}<option value={key}>{label}</option>{/each}</select>
+     </label>
+     <label>Motorcycle model
+      <select bind:value={unit} onchange={() => { version = ''; customVersion = ''; modelYear = undefined; }} required>
+       <option value="">Choose your unit</option>
+       {#each Object.entries(modelGroups) as [brand, models] (brand)}
+        <optgroup label={brand}>
+         {#each models ?? [] as model (model)}
+          <option value={model}>{model}</option>
+         {/each}
+        </optgroup>
+       {/each}
+       <option value="other">Other model</option>
+      </select>
+     </label>
+    </div>
+    <div class="cols">
+     {#if unit === 'other'}<label>Make and model <input bind:value={custom} maxlength="100" required /></label>{/if}
+     {#if unit}
+      <label>Version or trim (optional)
+       <select bind:value={version} onchange={(event) => {
+        const listedYear = /^(\d{4}) model$/.exec(event.currentTarget.value)?.[1];
+        if (listedYear) modelYear = Number(listedYear);
+       }}>
+        <option value="">Not sure / skip</option>
+        {#each motorcycleVersions(unit) as trim (trim)}<option value={trim}>{trim}</option>{/each}
+        <option value="other">Enter a version</option>
+       </select>
+      </label>
+      {#if version === 'other'}<label>Version name<input bind:value={customVersion} maxlength="60" placeholder="e.g. ABS" required /></label>{/if}
+     {/if}
+     <label>Model year (optional)
+      <input type="number" min="1900" max={Number(today().slice(0, 4)) + 1} step="1" placeholder="e.g. 2025" bind:value={modelYear} />
+     </label>
+    </div>
+    <CoatingFields bind:value={coating} {bike} />
+    <label>Notes for the shop (optional) <textarea bind:value={form.notes} maxlength="700" rows="2" placeholder="e.g. Please check the brackets for scratches"></textarea></label>
+    <div class="estimate">
+     <span>Estimated price</span>
+     <strong>{coating.ceramic || coating.powderParts.length && coating.powder ? money(estimate.total) : '—'}</strong>
+     {#if estimate.discount}<small>{money(estimate.discount)} promo discount</small>{/if}
+    </div>
+   </fieldset>
+   <fieldset class="card stack booking-panel">
+    <legend>Contact details</legend>
+    <div class="cols">
+     <label>Full name <input bind:value={form.name} autocomplete="name" placeholder="e.g. Jamie Reyes" maxlength="70" required /></label>
+     <label>Mobile number <input type="tel" bind:value={form.phone} autocomplete="tel" placeholder="e.g. 0917 000 0000" maxlength="20" required /></label>
+     <label>Email (optional) <input type="email" bind:value={form.email} autocomplete="email" placeholder="e.g. jamie@example.com" maxlength="254" /></label>
+     <label>Plate number (optional) <input bind:value={form.plateNumber} placeholder="e.g. ABC 1234" maxlength="20" /></label>
+    </div>
+   </fieldset>
+   <fieldset class="card stack booking-panel">
+    <legend>Preferred visit</legend>
+    {#if walkIn}<label class="check"><input type="checkbox" bind:checked={immediate} /> Customer is at the shop now</label>{/if}
+    {#if !walkIn || !immediate}<VisitPicker bind:date={form.date} bind:slot={form.slot} />{/if}
+    {#if walkIn}
+     <p class="small muted">Demo intake acknowledgement. The customer checks the motorcycle and service details above before signing.</p>
+     <label class="check"><input type="checkbox" bind:checked={acknowledged} required /> I reviewed the details on this intake form.</label>
+     <label>Customer signature (type full name for this demo) <input bind:value={signer} required /></label>
+    {/if}
+    {#if error}<p class="error" role="alert">{error}</p>{/if}
+    <div><button class="btn">{walkIn ? 'Save walk-in intake' : 'Submit booking'}</button></div>
+   </fieldset>
+  </form>
+ {/if}
 </section>
 
 <style>
-	.progress {
-		height: 6px;
-		background: linear-gradient(90deg, var(--accent) calc(var(--done) * 100%), var(--panel-2) 0);
-		transform: skewX(-20deg);
-	}
-
-	.tight {
-		gap: 8px;
-	}
-
-	.service {
-		grid-template-columns: 1fr auto;
-	}
-
-	.service .small {
-		grid-column: 1 / -1;
-	}
-
-	.price {
-		font-size: 1.4rem;
-	}
-
-	.big {
-		font-size: 2rem;
-	}
-
-	.mail {
-		border-style: dashed;
-	}
-
-	.bar {
-		flex-wrap: nowrap;
-		position: sticky;
-		bottom: 0;
-		margin: 0 -16px;
-		padding: 12px 16px;
-		background: var(--panel);
-		border-top: 1px solid var(--line);
-	}
-
-	.summary {
-		display: grid;
-		flex: 1;
-	}
-
-	.summary b {
-		font-size: 1.6rem;
-	}
+ .booking { max-width: 860px; }
+ h1 { font-size: clamp(2.6rem, 8vw, 4.2rem); }
+ fieldset { min-inline-size: 0; margin: 0; }
+ legend { padding-inline: 6px; font-weight: 750; font-size: 1.2rem; }
+ .booking-panel {
+  padding: clamp(16px, 3vw, 28px);
+  gap: 18px;
+  border-radius: 12px;
+ }
+ .booking-panel > .cols {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 235px), 1fr));
+ }
+ .booking-panel label { min-width: 0; }
+ .booking-panel select { min-width: 0; }
+ .estimate {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 12px 16px;
+  background: var(--panel-2);
+  border-radius: 8px;
+ }
+ .estimate strong { margin-inline-start: auto; font-size: 1.25rem; }
+ .estimate small { flex-basis: 100%; text-align: end; color: var(--muted); }
+ .check { display: flex; align-items: center; gap: 8px; }
 </style>

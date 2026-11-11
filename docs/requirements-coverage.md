@@ -1,0 +1,17 @@
+# HERCO requirements and demo coverage
+
+This audit compares the chat requests and the HERCO production skill against the current browser demo.
+
+| Requirement | Demo coverage | Remaining work |
+| --- | --- | --- |
+| Date overrides and public schedule | Admin can open or close a date or restore regular hours. Public availability and booking use the override. Existing appointments remain scheduled. | Individual slot blocks are available in the demo. Server-side conflict protection remains. |
+| Customer presentation and booking | Showcase, light theme, readable hero, responsive schedule, calendar and clock controls, Submit booking, status colors and both coatings in one booking. Announcements and payment UI were removed. | Mobile browser and staging usability review. |
+| Coating configuration | Four ceramic choices, red Honda ADV/PCX eligibility, powder parts and front/rear mag sizes. Category and model pricing, promotions and saved estimates. | Expand and verify the Philippine catalog. Define service duration, resource allocation and production price rules. |
+| Service change and promotion history | New bookings preserve original services and estimates. Later edits show what was added or removed, who changed it, and the estimate before and after. Unchanged lines retain their saved prices and discounts. A sample shows an in-shop add-on. | Save and display applied promotion names or references, and enforce history immutability on the server. Legacy bookings lack original snapshots and per-service pricing. |
+| Customer account and change requests | Simulated email, Google and Facebook login/signup. My Bookings, service edits, and admin approval or decline of cancellation and rescheduling. | Real identity, account linking and cross-device access, server-enforced ownership, customer notifications, request withdrawal and policy limits. |
+| Admin intake and completion | Walk-in intake with sample typed acknowledgement, approval notes, service edits, completion notes, photo capture/upload controls and browser persistence. | Approved walk-in form and signature method, private media storage, access control, retention and staff attribution. Dedicated staff booking on behalf of a non-walk-in customer is also outstanding. |
+| Owner reports and logs | Booking counts, estimated completed-service income, average service value, promo totals, Philippine-time activity log and booking history. | Owner-only access, a reliable income source, authenticated actor IDs, append-only server audit, and a production-grade change timeline. |
+| HERCO Points reward history | Persistent redemption and claim records show the member, reward, points, dates, and demo admin claim attribution. | Authenticated admin identity and server-side access control. |
+| Infrastructure and operations | Static demo with local browser storage. | Supabase database/auth and access policies, scoped roles including restricted Admin, Owner and Superadmin, Brevo notifications, monitoring and uptime alerts, Google Analytics, backups and restore drill, staging/CI, production performance baseline, rollout and rollback verification. |
+
+The skill previously covered the larger workflows but omitted or underspecified the explicit date-open override, Showcase naming, Announcements removal, hero and hover refinements, schedule and picker details, My Bookings placement, exact ceramic and powder choices, Philippine catalog and model adjustments, and the demo login mockup. The updated flow requirements record these details.

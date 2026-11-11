@@ -1,19 +1,20 @@
 /* Brand tokens: change --accent to the shop's real brand colour once confirmed. */
 :root {
-	--bg: #0a0b0d;
-	--panel: #14161a;
-	--panel-2: #1d2026;
-	--line: #2b2f37;
-	--text: #f3f4f6;
-	--muted: #9aa1ad;
-	--accent: #ff3748;
-	--accent-ink: #0a0b0d;
-	--ok: #35d07f;
-	--warn: #ffc53d;
-	--bad: #ff6b6b;
+	--bg: #f6f7fa;
+	--panel: #fff;
+	--panel-2: #e9edf3;
+	--line: #b5bfcd;
+	--text: #181e28;
+	--muted: #485567;
+	--accent: #b61632;
+	--accent-ink: #fff;
+	--ok: #17643c;
+	--warn: #795000;
+	--bad: #aa1831;
 	--display: 'Barlow Condensed', 'Arial Narrow', Impact, sans-serif;
 	--body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-	color-scheme: dark;
+	color-scheme: light;
+	font-size: 112.5%;
 }
 
 * {
@@ -24,7 +25,7 @@ body {
 	margin: 0;
 	background: var(--bg);
 	color: var(--text);
-	font: 16px/1.5 var(--body);
+	font: 1rem/1.55 var(--body);
 }
 
 h1,
@@ -94,7 +95,7 @@ img {
 .cols {
 	display: grid;
 	gap: 14px;
-	grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
 }
 
 .accent {
@@ -106,7 +107,7 @@ img {
 }
 
 .small {
-	font-size: 0.85rem;
+	font-size: 0.95rem;
 }
 
 .eyebrow {
@@ -146,23 +147,29 @@ img {
 	clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
 }
 
-.btn:hover {
-	filter: brightness(1.12);
+.btn {
+	--button-bg: var(--accent);
+	background: var(--button-bg);
+	transition: background-color 150ms ease;
+}
+
+.btn:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--button-bg) 88%, var(--text));
 }
 
 .btn.confirm-action {
-	background: #6cb5ff;
+	--button-bg: #6cb5ff;
 	color: #0a0b0d;
 }
 
 .btn.complete-action {
-	background: var(--ok);
-	color: #0a0b0d;
+	--button-bg: var(--ok);
+	color: #fff;
 }
 
 .btn:focus-visible {
 	outline: none;
-	box-shadow: inset 0 0 0 3px #fff;
+	box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 4px #17191f;
 }
 
 .btn:disabled {
@@ -171,12 +178,12 @@ img {
 }
 
 .btn.ghost {
-	background: var(--panel-2);
+	--button-bg: var(--panel-2);
 	color: var(--text);
 }
 
 .btn.danger {
-	background: var(--panel-2);
+	--button-bg: #fbe5ea;
 	color: var(--bad);
 }
 
@@ -216,11 +223,12 @@ img {
 label {
 	display: grid;
 	gap: 6px;
-	font-size: 0.9rem;
+	font-size: 1rem;
 	color: var(--muted);
 }
 
-input:not([type='range']),
+input:not([type='range'], [type='radio'], [type='checkbox']),
+select,
 textarea {
 	width: 100%;
 	min-height: 48px;
@@ -237,19 +245,16 @@ textarea {
 	border-radius: 99px;
 	background: var(--panel-2);
 	color: var(--muted);
-	font: 700 0.85rem var(--display);
+	font: 700 0.95rem var(--display);
 	letter-spacing: 0.1em;
 	text-transform: uppercase;
 }
 
-.badge[data-status='pending'] {
-	color: var(--warn);
-}
-
-.badge[data-status='confirmed'],
-.badge[data-status='done'] {
-	color: var(--ok);
-}
+.badge[data-status='pending'] { color: #754600; background: #ffedb8; }
+.badge[data-status='confirmed'] { color: #17498a; background: #dceaff; }
+.badge[data-status='done'], .badge[data-status='approved'] { color: #17643c; background: #d9f3e3; }
+.badge[data-status='cancelled'], .badge[data-status='declined'] { color: #9c1832; background: #fbe1e7; }
+.opt:hover:not(:disabled) { background: var(--panel-2); border-color: var(--accent); }
 
 .error {
 	color: var(--bad);

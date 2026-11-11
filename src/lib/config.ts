@@ -1,4 +1,4 @@
-// Visit details come from the supplied HERCO site. Booking settings and prices are demo data.
+// Visit details come from the supplied HERCO site. Booking settings are demo data.
 
 export type Size = 'small' | 'medium' | 'large';
 
@@ -11,18 +11,15 @@ export const shop = {
 	facebook: 'https://www.facebook.com/profile.php?id=100085045826929',
 	messenger: 'https://m.me/100085045826929',
 	contactEmail: 'hercoprojects@gmail.com',
-	email: 'bookings@example.com',
 	// Day numbers follow Date.getDay(), so 0 is Sunday and 3 is Wednesday.
 	openDays: [3, 4, 5, 6, 0],
 	openHour: 9,
 	closeHour: 17,
 	dailyLimit: 8,
 	bookingWindowDays: 21,
-	downpayment: 500,
-	gcash: { name: 'SAMPLE ACCOUNT NAME', number: '0900 000 0000' }
 };
 
-export const proFeatures = { payment: true, email: true, preview: true } as const;
+export const proFeatures = { preview: true } as const;
 
 export const sizes: Record<Size, string> = {
 	small: 'Scooter or underbone',
@@ -31,39 +28,35 @@ export const sizes: Record<Size, string> = {
 };
 
 export const services = [
+	{ id: 'ceramic', name: 'Ceramic Coating', blurb: 'For suitable painted surfaces and finishes.' },
 	{
 		id: 'wash',
 		name: 'Premium Wash',
 		blurb: 'Foam wash, wheel and chain clean, hand dry.',
-		prices: { small: 250, medium: 350, large: 450 }
 	},
 	{
 		id: 'detail',
 		name: 'Full Detail',
 		blurb: 'Deep clean, decontamination and machine polish.',
-		prices: { small: 600, medium: 800, large: 1000 }
 	},
 	{
 		id: 'ceramic-glossy',
 		name: 'Glossy Ceramic Coating',
 		blurb: 'Ceramic coating for suitable glossy painted panels.',
-		prices: { small: 1499, medium: 2499, large: 3499 }
 	},
 	{
 		id: 'ceramic-matte',
 		name: 'Matte Ceramic Coating',
 		blurb: 'Ceramic coating for suitable matte painted panels.',
-		prices: { small: 1799, medium: 2799, large: 3799 }
 	},
 	{
 		id: 'wheel-colour',
 		name: 'Powder Coating',
 		blurb: 'Choose a colour or finish for wheels or other suitable metal parts.',
-		prices: { small: 2500, medium: 3000, large: 3500 }
 	}
 ];
 
-export const bookableServices = services.filter(({ id }) => id !== 'wash' && id !== 'detail');
+export const bookableServices = services.filter(({ id }) => id === 'ceramic' || id === 'wheel-colour');
 
 // Shop photos live in static/photos, with relative paths so they work under any base path since all routes are top-level.
 export const photos = {
@@ -85,10 +78,6 @@ export const wheelColours = [
 ];
 
 export const serviceOf = (id: string) => services.find((s) => s.id === id) ?? services[0];
-
-export const priceOf = (b: { serviceId: string; size: Size }) => serviceOf(b.serviceId).prices[b.size];
-
-export const peso = (n: number) => `PHP ${n.toLocaleString('en-PH')}`;
 
 // Reward tiers transcribed from the HERCO Rewards Program poster supplied by the user.
 export const rewardProgram = [

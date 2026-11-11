@@ -208,7 +208,7 @@
 		background: radial-gradient(ellipse at 50% 65%, #393b46, #17191f 62%, #101115);
 	}
 
-	.stage p { padding: 24px; }
+	.stage p { padding: 24px; color: #f9fafb; }
 
 	.viewer {
 		position: relative;
