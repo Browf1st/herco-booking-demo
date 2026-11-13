@@ -266,6 +266,9 @@
  .selected .tier-indicator::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-ink); }
  .tier-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 8px; }
  .tier-price strong { font-size: 1.25rem; }
+ .model-group { grid-row: span 5; grid-template-rows: subgrid; align-items: start; }
+ .tier-heading { grid-row: span 4; grid-template-rows: subgrid; align-self: stretch; }
+ .tier-price { align-self: end; }
  .model-options { display: grid; gap: 2px; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px; }
  .model { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 4px 7px; border-radius: 6px; color: var(--text); font-size: .9rem; cursor: pointer; }
  .model input { flex: none; width: 1rem; height: 1rem; margin: 0; accent-color: var(--accent); }
