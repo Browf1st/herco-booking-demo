@@ -1,15 +1,31 @@
 <script lang="ts">
  import CustomerBookingHistory from '#lib/CustomerBookingHistory.svelte';
- import { account, signIn, signOut } from '#lib/account.svelte.ts';
+ import { account, saveProfilePhone, signIn, signOut } from '#lib/account.svelte.ts';
  let mode = $state<'Log in' | 'Sign up'>('Log in');
  const socialProviders = ['Facebook', 'Google'] as const;
  let provider = $state<'Email' | typeof socialProviders[number]>('Email');
  let showForm = $state(false);
  let name = $state('');
  let email = $state('');
+ let phone = $state(account.current?.phone ?? '');
+ let profileStatus = $state('');
+ let phoneError = $state('');
+ function saveProfile(event: SubmitEvent) {
+  event.preventDefault();
+  const value = phone.trim();
+  if (value && (!/^\+?[\d ()-]+$/.test(value) || value.replace(/\D/g, '').length < 7)) {
+   phoneError = 'Enter a valid mobile number.';
+   return;
+  }
+  saveProfilePhone(value);
+  phone = value;
+  profileStatus = 'Profile saved.';
+ }
  function submit(event: SubmitEvent) {
   event.preventDefault();
   signIn(name, email, provider);
+  phone = account.current?.phone ?? '';
+  profileStatus = phoneError = '';
   showForm = false;
   email = name = '';
  }
@@ -18,10 +34,25 @@
 <svelte:head><title>Demo account | HERCO</title></svelte:head>
 <section class="section wrap stack account">
  {#if account.current}
-  <h1>HERCO account</h1>
-  <div class="card stack"><p>Signed in as <strong>{account.current.name}</strong> via {account.current.provider}</p>
-   <div class="row"><button class="btn ghost" onclick={signOut}>Sign out</button></div>
+  <div class="account-heading">
+   <button class="btn ghost" onclick={signOut}>Sign out</button>
   </div>
+  <section class="card stack" aria-labelledby="profile-heading">
+   <h1 id="profile-heading">Profile</h1>
+   <p>Signed in as <strong>{account.current.name}</strong> via {account.current.provider}</p>
+   <form class="stack" onsubmit={saveProfile}>
+    <label>Email<input type="email" value={account.current.email} readonly /></label>
+    <label>Mobile number
+     <input type="tel" bind:value={phone} autocomplete="tel" maxlength="20"
+      placeholder="e.g. 0917 000 0000" aria-invalid={!!phoneError} aria-describedby="profile-phone-help"
+      oninput={() => { profileStatus = phoneError = ''; }} />
+    </label>
+    <p id="profile-phone-help" class="muted">Your email and saved mobile number will prefill future bookings.</p>
+    {#if phoneError}<p role="alert">{phoneError}</p>{/if}
+    <div class="row"><button class="btn ghost" type="submit">Save profile</button></div>
+    {#if profileStatus}<p role="status">{profileStatus}</p>{/if}
+   </form>
+  </section>
  {:else}
   <div class="login stack">
    <h1>{mode === 'Log in' ? 'Log In' : 'Sign Up'}</h1>
@@ -63,6 +94,8 @@
 </section>
 <style>
  .account { max-width: 680px; }
+ .account-heading { display: flex; justify-content: flex-end; }
+ #profile-heading { font-size: 1.5rem; }
  .login { background: #fff; text-align: center; padding: clamp(20px, 5vw, 54px) 16px; border-radius: 8px; }
  .login h1 { font: 750 clamp(2.6rem, 7vw, 4.4rem)/1.1 var(--body); text-transform: none; }
  .providers, .demo-form { width: min(100%, 440px); margin: 24px auto 0; }

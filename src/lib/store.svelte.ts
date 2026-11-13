@@ -1,6 +1,7 @@
 // Demo store: bookings live in this browser only, and this file is the one seam a real database replaces.
 import { demoFans, proFeatures, shop, type Size } from './config';
 import { defaultPricing, selection, validateSelection, quote, type Selection, type Pricing } from './coating';
+import { powderDay } from './bookingCatalog';
 import { addDays, isOpenDay, nowHour, slots, today, upcoming } from './dates';
 
 export type Status = 'pending' | 'confirmed' | 'done' | 'cancelled';
@@ -169,6 +170,7 @@ function active(booking: Booking) {
 export function editCoating(booking: Booking, input: Selection, actor = 'Demo admin') {
  active(booking);
  validateSelection(input, booking.bike);
+ if (!booking.selection?.powder && !booking.walkIn?.immediate) assertServiceDay(input, booking.date);
  const before = { selection: coatingOf(booking), estimate: $state.snapshot(booking.estimate) };
  const estimate = estimateServiceEdit(booking, input);
  if (JSON.stringify(before.selection) === JSON.stringify(input)) return;
@@ -181,13 +183,16 @@ export function editCoating(booking: Booking, input: Selection, actor = 'Demo ad
 }
 
 export function estimateServiceEdit(booking: Booking, input: Selection) {
- return quote(input, booking.size ?? 'small', booking.bike, db.pricing, $state.snapshot(booking.estimate?.lines));
+ return quote(input, booking.size ?? 'small', booking.bike, db.pricing, $state.snapshot(booking.estimate?.lines), booking.modelYear);
 }
 
 export function requestChange(booking: Booking, kind: ChangeRequest['kind'], reason: string, date?: string, slot?: string) {
  active(booking);
  if (booking.requests?.some(r => r.state === 'Pending')) throw Error('There is already a request awaiting review.');
- if (kind === 'Reschedule') assertFree(date ?? '', slot ?? '');
+ if (kind === 'Reschedule') {
+  assertServiceDay(booking.selection, date ?? '');
+  assertFree(date ?? '', slot ?? '');
+ }
  booking.requests = [...(booking.requests ?? []), { kind, reason, date, slot, state: 'Pending', at: new Date().toISOString() }];
  audit(kind + ' requested', booking.id, 'Customer');
 }
@@ -197,6 +202,7 @@ export function reviewChange(booking: Booking, request: ChangeRequest, approved:
  if (request.state !== 'Pending') throw Error('This request has already been reviewed.');
  const previous = booking.date + ' ' + booking.slot;
  if (approved && request.kind === 'Reschedule') {
+  assertServiceDay(booking.selection, request.date ?? '');
   assertFree(request.date ?? '', request.slot ?? '');
   booking.date = request.date!;
   booking.slot = request.slot!;
@@ -260,10 +266,16 @@ function assertFree(date: string, slot: string) {
 		throw new Error('That slot was just taken. Please pick another.');
 }
 
+function assertServiceDay(selection: Selection | undefined, date: string) {
+	if (selection?.catalog && selection.powder && !powderDay(date))
+		throw Error('Choose a Wednesday, Saturday, or Sunday for powder coating.');
+}
+
 export function book(input: NewBooking) {
+	if (!input.walkIn?.immediate) assertServiceDay(input.selection, input.date);
 	if (!input.walkIn?.immediate) assertFree(input.date, input.slot);
 	if (input.selection) validateSelection(input.selection, input.bike);
-	const estimate = input.selection ? quote(input.selection, input.size ?? 'small', input.bike, db.pricing) : undefined;
+	const estimate = input.selection ? quote(input.selection, input.size ?? 'small', input.bike, db.pricing, [], input.modelYear) : undefined;
 	const originalServices = input.selection ? { selection: structuredClone(input.selection), estimate: structuredClone(estimate) } : undefined;
 	const booking: Booking = { ...input, estimate, originalServices, id: code(), status: 'pending' };
 	db.bookings.push(booking);
@@ -272,9 +284,10 @@ export function book(input: NewBooking) {
 }
 
 export function reschedule(id: string, date: string, slot: string) {
-	assertFree(date, slot);
 	const booking = db.bookings.find(b => b.id === id)!;
 	active(booking);
+	assertServiceDay(booking.selection, date);
+	assertFree(date, slot);
 	if (booking.requests?.some(r => r.state === 'Pending')) throw Error('Review the pending change request first.');
 	const previous = booking.date + ' ' + booking.slot;
 	Object.assign(booking, { date, slot });

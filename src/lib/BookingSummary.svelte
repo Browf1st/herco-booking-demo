@@ -1,17 +1,17 @@
 <script lang="ts">
  import { serviceOf } from './config';
- import { defaultPricing, money, quote, serviceLabel, type Selection } from './coating';
+ import { defaultPricing, estimatePrice, money, quote, serviceLabel, type Selection } from './coating';
  import { db, type Booking } from './store.svelte';
  let { booking, staff = false }: { booking: Booking; staff?: boolean } = $props();
  const events = $derived(db.events.filter(e => e.bookingId === booking.id && (staff || e.actor === 'Customer' || !e.action.startsWith('Recorded walk-in'))));
- const labels = (selection: Selection) => quote(selection, booking.size ?? 'small', booking.bike, defaultPricing).lines?.map(line => line.label) ?? [];
+ const labels = (selection: Selection) => quote(selection, booking.size ?? 'small', booking.bike, defaultPricing, [], booking.modelYear).lines?.map(line => line.label) ?? [];
 </script>
 
 <p><strong>{booking.selection ? serviceLabel(booking.selection) : serviceOf(booking.serviceId).name}</strong> · {booking.bike}{booking.modelYear ? ' · Model year ' + booking.modelYear : ''}</p>
-{#if booking.selection?.ceramic}<p>Ceramic finish: {booking.selection.ceramicFinish}</p>{/if}
+{#if booking.selection?.ceramic && !booking.selection.catalog}<p>Ceramic finish: {booking.selection.ceramicFinish}</p>{/if}
 {#if booking.selection?.powder}
  <p>Powder coating: {booking.selection.powderParts.join(', ')}{booking.selection.finish ? ' · ' + booking.selection.finish : ''}</p>
- {#if booking.selection.powderParts.includes('Wheels / mags')}<p>Mag diameter · Front: {booking.selection.front || '—'} · Rear: {booking.selection.rear || '—'} (inches)</p>{/if}
+ {#if !booking.selection.catalog && booking.selection.powderParts.includes('Wheels / mags')}<p>Mag diameter · Front: {booking.selection.front || '—'} · Rear: {booking.selection.rear || '—'} (inches)</p>{/if}
 {/if}
 {#if booking.estimate}<p>Estimated service value <strong>{money(booking.estimate.total)}</strong>{#if booking.estimate.discount} · {money(booking.estimate.discount)} promo discount{/if}</p>{/if}
 {#if booking.originalServices || booking.serviceChanges?.length}
@@ -21,7 +21,7 @@
    <div>
     <strong>Original booking</strong>
     <ul>{#each labels(booking.originalServices.selection) as label}<li>{label}</li>{/each}</ul>
-    {#if booking.originalServices.estimate}<p>Original estimate <strong>{money(booking.originalServices.estimate.total)}</strong></p>{/if}
+    {#if booking.originalServices.estimate}<p>Original estimate <strong>{estimatePrice(booking.originalServices.estimate)}</strong></p>{/if}
    </div>
   {:else}
    <p class="small muted">Original booking details are unavailable for this older record. History starts with the first recorded edit.</p>
@@ -36,7 +36,7 @@
      {#each after.filter(label => !before.includes(label)) as label}<li><strong>Added</strong> {label}</li>{/each}
      {#each before.filter(label => !after.includes(label)) as label}<li><strong>Removed</strong> {label}</li>{/each}
     </ul>
-    {#if change.after.estimate}<p>Estimate {change.before.estimate ? money(change.before.estimate.total) + ' → ' : ''}<strong>{money(change.after.estimate.total)}</strong></p>{/if}
+    {#if change.after.estimate}<p>Estimate {change.before.estimate ? estimatePrice(change.before.estimate) + ' → ' : ''}<strong>{estimatePrice(change.after.estimate)}</strong></p>{/if}
    </div>
   {/each}
  </section>

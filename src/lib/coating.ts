@@ -1,4 +1,5 @@
 import type { Size } from './config';
+import { catalogItems, powderParts, wheels, type CatalogOptions } from './bookingCatalog';
 
 export const finishes = ['Stay Matte', 'Matte to Glossy', 'Enhance', 'Glossy Finish'] as const;
 export const parts = ['Wheels / mags', 'Frame', 'Subframe', 'Swingarm', 'Brackets', 'Foot pegs', 'Grab rails', 'Metal covers', 'Other metal parts'];
@@ -8,7 +9,7 @@ export const bikes: Record<Size, string[]> = {
  large: ['Honda CB650R','Honda CBR650R','Honda X-ADV','Honda Africa Twin','Yamaha MT-07','Yamaha MT-09','Yamaha TMAX','Suzuki SV650','Suzuki GSX-8S','Kawasaki Ninja 650','Kawasaki Z650','Kawasaki Z900','Kawasaki Versys 650','CFMOTO 450MT','CFMOTO 450SR','CFMOTO 700CL-X','Royal Enfield Interceptor 650','Triumph Trident 660','BMW R 1300 GS','Ducati Monster']
 };
 
-export type Selection = { ceramic: boolean; powder: boolean; ceramicFinish: string; red: boolean; powderParts: string[]; front: string; rear: string; finish: string };
+export type Selection = { ceramic: boolean; powder: boolean; ceramicFinish: string; red: boolean; powderParts: string[]; front: string; rear: string; finish: string; catalog?: CatalogOptions };
 const versions: Record<string, readonly string[]> = {
  'Honda ADV160': ['ABS', 'RoadSync'],
  'Honda PCX160': ['CBS (earlier model)', 'ABS (earlier model)', 'Standard', 'RoadSync'],
@@ -45,11 +46,32 @@ export const defaultPricing: Pricing = {
 export const money = (value: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 2 }).format(value);
 export const canEnhance = (bike: string) => /^honda\s+(adv|pcx)\s*(150|160)\b/i.test(bike.trim());
 export const serviceLabel = (s: Selection) => [s.ceramic && 'Ceramic Coating', s.powder && 'Powder Coating'].filter(Boolean).join(' + ');
-export type ServiceLine = { label: string; subtotal: number; discount: number };
+export type ServiceLine = { label: string; subtotal: number; discount: number; maximum?: number; pending?: boolean };
 export type Estimate = { subtotal: number; discount: number; total: number; lines?: ServiceLine[] };
 const round = (amount: number) => Math.round(amount * 100) / 100;
 
-export function quote(s: Selection, size: Size, bike: string, pricing: Pricing, saved: ServiceLine[] = []): Estimate {
+export function linePrice(line: ServiceLine) {
+ return line.pending ? 'Shop quote required' : line.maximum !== undefined ? money(line.subtotal) + '–' + money(line.maximum) : money(line.subtotal);
+}
+
+export function estimatePrice(estimate: Estimate) {
+ const maximum = round(estimate.total + (estimate.lines ?? []).reduce((sum, line) => sum + (line.maximum ?? line.subtotal) - line.subtotal, 0));
+ const priced = maximum === estimate.total ? money(estimate.total) : money(estimate.total) + '–' + money(maximum);
+ if (estimate.lines?.some(line => line.pending)) return estimate.total ? priced + ' plus shop quote' : 'Shop quote required';
+ return priced;
+}
+
+export function quote(s: Selection, size: Size, bike: string, pricing: Pricing, saved: ServiceLine[] = [], year?: number): Estimate {
+ if (s.catalog) {
+  const lines = [...catalogItems(s, s.catalog, bike, year)].map(([label, range]): ServiceLine =>
+   saved.find(line => line.label === label) ?? {
+    label, subtotal: range?.[0] ?? 0, discount: round((range?.[0] ?? 0) * pricing.promo / 100),
+    maximum: range && range[0] !== range[1] ? range[1] : undefined, pending: !range
+   });
+  const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0);
+  const discount = round(lines.reduce((sum, line) => sum + line.discount, 0));
+  return { subtotal, discount, total: round(subtotal - discount), lines };
+ }
  const items = new Map<string, number>();
  if (s.ceramic) {
   items.set('Ceramic coating · ' + s.ceramicFinish, (pricing.ceramic[s.ceramicFinish] ?? 0) + pricing.size[size] + modelAdjustment(pricing.models, bike));
@@ -68,6 +90,12 @@ export function quote(s: Selection, size: Size, bike: string, pricing: Pricing, 
 }
 export function validateSelection(s: Selection, bike: string) {
  if (!s.ceramic && !s.powder) throw Error('Choose at least one service.');
+ if (s.catalog) {
+  if (s.powder && (!s.powderParts.length || s.powderParts.some(part => part !== wheels && !Object.hasOwn(powderParts, part)))) throw Error('Choose wheels or small parts for powder coating.');
+  if (s.powder && s.powderParts.includes(wheels) && !s.catalog.wheelType) throw Error('Choose a wheel category.');
+  if (s.powder && s.powderParts.includes(wheels) && s.catalog.wheelType.startsWith('17') && !/Raider|Sniper/i.test(bike)) throw Error('The 17-inch mags price is for Raider and Sniper only. Check your motorcycle or choose another wheel category.');
+  return;
+ }
  if (s.ceramic && (!finishes.some(f => f === s.ceramicFinish) || (s.ceramicFinish === 'Enhance' && (!canEnhance(bike) || !s.red)))) throw Error('Enhance is for red Honda ADV or PCX 150/160 units.');
  if (s.powder && (!s.powderParts.length || s.powderParts.some(p => !parts.includes(p)))) throw Error('Choose the parts you want powder coated.');
  if (s.powder && s.powderParts.includes(parts[0]) && ![s.front, s.rear].some(Boolean)) throw Error('Enter a wheel size or select Not sure.');

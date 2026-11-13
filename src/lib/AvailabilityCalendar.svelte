@@ -3,7 +3,7 @@
  import { fmtDate, upcoming } from './dates';
  import { dayStatus } from './store.svelte';
 
- let { selected = '', onpick }: { selected?: string; onpick?: (date: string) => void } = $props();
+ let { selected = '', onpick, allows = () => true }: { selected?: string; onpick?: (date: string) => void; allows?: (date: string) => boolean } = $props();
  const dates = upcoming();
  const months = [...new Set(dates.map(date => date.slice(0, 7)))];
  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -27,7 +27,7 @@
   {#each weekdays as day}<span class="weekday">{day}</span>{/each}
   {#each Array(leading) as _}<span aria-hidden="true"></span>{/each}
   {#each monthDates as date (date)}
-   {@const available = dayStatus(date) === 'open'}
+   {@const available = allows(date) && dayStatus(date) === 'open'}
    {@const day = fmtDate(date, { day: 'numeric' })}
    {#if !available}
     <span class="cell unavailable" aria-label={fmtDate(date) + ', unavailable'}>{day}</span>
@@ -42,14 +42,14 @@
 </div>
 
 <style>
- .calendar { border: 1px solid var(--line); border-radius: 8px; padding: clamp(8px, 2vw, 16px); }
+ .calendar { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding: clamp(8px, 2vw, 16px); }
  .heading { justify-content: space-between; }
  .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
  .weekday { text-align: center; color: var(--muted); font-size: .75rem; }
  .cell { display: grid; place-items: center; min-height: 42px; padding: 0; border: 1px solid var(--line); border-radius: 6px; font: inherit; text-decoration: none; }
- .available { background: #e9f6ed; color: var(--ok); border-color: #9ac7aa; cursor: pointer; }
- .available:hover { background: #d7efdf; }
- .available[aria-pressed='true'] { background: #17643c; color: #fff; border-color: #17643c; }
+ .available { background: color-mix(in srgb, var(--ok) 10%, var(--panel)); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--panel)); cursor: pointer; }
+ .available:hover { background: color-mix(in srgb, var(--ok) 20%, var(--panel)); }
+ .available[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 750; }
  .unavailable { color: var(--muted); background: var(--panel-2); }
  .arrow { width: 42px; color: var(--text); background: var(--panel); cursor: pointer; }
  .arrow:disabled { opacity: .45; cursor: default; }

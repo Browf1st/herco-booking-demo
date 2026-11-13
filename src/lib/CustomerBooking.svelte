@@ -36,7 +36,7 @@
   {:else if kind}
    <form class="card stack" onsubmit={submit}>
     <h3>{kind === 'Cancel' ? 'Request cancellation' : 'Request rescheduling'}</h3>
-    {#if kind === 'Reschedule'}<VisitPicker bind:date bind:slot />{/if}
+    {#if kind === 'Reschedule'}<VisitPicker bind:date bind:slot powder={!!(booking.selection?.catalog && booking.selection.powder)} />{/if}
     <label>Reason (optional)<textarea bind:value={reason} maxlength="500" rows="2"></textarea></label>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     <div class="row"><button class="btn sm">Send request</button><button type="button" class="btn sm ghost" onclick={() => {kind = undefined; error = '';}}>Back</button></div>
