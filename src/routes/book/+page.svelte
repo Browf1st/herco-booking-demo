@@ -178,7 +178,11 @@
     <div class="cols">
      <label>Full name <input bind:value={form.name} autocomplete="name" placeholder="e.g. Jamie Reyes" maxlength="70" required /></label>
      <label>Mobile number <input type="tel" bind:value={form.phone} autocomplete="tel" placeholder="e.g. 0917 000 0000" maxlength="20" required /></label>
-     <label><span>{walkIn ? 'Email (optional)' : 'Email for booking reminders'}{#if !walkIn} <span class="required-label">(required)</span>{/if}</span><input type="email" bind:value={form.email} autocomplete="email" placeholder="e.g. jamie@example.com" maxlength="254" required={!walkIn} /></label>
+     <label>
+      <span>Email <span class:required-label={!walkIn}>{walkIn ? '(optional)' : '(required)'}</span></span>
+      <input type="email" bind:value={form.email} autocomplete="email" placeholder="e.g. jamie@example.com" maxlength="254" required={!walkIn} aria-describedby={walkIn ? undefined : 'booking-email-help'} />
+      {#if !walkIn}<span id="booking-email-help" class="small muted email-help">Used for booking reminders.</span>{/if}
+     </label>
      <label>Plate number (optional) <input bind:value={form.plateNumber} placeholder="e.g. ABC 1234" maxlength="20" /></label>
     </div>
    </fieldset>
@@ -277,4 +281,5 @@
  .contact-panel label { align-content: start; font-weight: 600; }
  .contact-panel input, .booking-panel textarea { background: var(--panel); border-radius: 10px; font-weight: 400; }
  .required-label { color: var(--accent); font-weight: 400; }
+ .email-help { font-weight: 400; }
 </style>
