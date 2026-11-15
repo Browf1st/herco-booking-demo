@@ -21,24 +21,29 @@
 	<title>{shop.name} | Book online</title>
 </svelte:head>
 
+<div class="demo-switch">
+	<div class="wrap">
+		<a class="link" href={page.route.id === '/admin' ? resolve('/') : resolve('/admin')}>
+			{page.route.id === '/admin' ? 'Back to user view' : 'Admin view'}
+		</a>
+	</div>
+</div>
+
 <header>
 	<div class="wrap row">
 		<a class="logo" href={resolve('/')}>
 			<img class="mark" src={asset(photos.logo)} alt="" />
 			<span><b>Herco</b><small>Detailing Garage</small></span>
 		</a>
-		<nav class="row">
-			{#if page.route.id === '/admin'}
-				<a class="btn sm ghost" href={resolve('/')}>Back to user view</a>
-			{:else}
+		{#if page.route.id !== '/admin'}
+		<nav class="row" aria-label="Customer navigation">
 			<a class="link wide" href={resolve('/#services')} aria-current={page.route.id === '/' && page.url.hash === '#services' ? 'location' : undefined}>Services</a>
 			<a class="link" href={resolve('/preview')} aria-current={page.route.id === '/preview' ? 'page' : undefined}>Showcase</a>
 			<a class="link" href={resolve('/points')} aria-current={page.route.id === '/points' ? 'page' : undefined}>HERCO Points</a>
 			<a class="link" href={resolve('/account')} aria-current={['/account', '/my-bookings'].includes(page.route.id ?? '') ? 'page' : undefined}>Account</a>
 			<a class="btn sm" href={resolve('/book')} aria-current={page.route.id === '/book' ? 'page' : undefined}>Book</a>
-			<a class="link admin-link" href={resolve('/admin')}>Admin view</a>
-			{/if}
 		</nav>
+		{/if}
 	</div>
 	{#if page.route.id === '/admin'}
 		<nav class="wrap admin-sections" aria-label="Admin sections">
@@ -70,6 +75,22 @@
 </footer>
 
 <style>
+	.demo-switch {
+		border-bottom: 1px solid var(--line);
+		background: var(--panel-2);
+	}
+
+	.demo-switch .wrap {
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	.demo-switch .link {
+		padding-block: 6px;
+		font-size: 0.85rem;
+	}
+
+
 	.admin-sections {
 		display: flex;
 		gap: 24px;

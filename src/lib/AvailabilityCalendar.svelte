@@ -1,33 +1,33 @@
 <script lang="ts">
  import { resolve } from '$app/paths';
- import { fmtDate, upcoming } from './dates';
+ import { addDays, fmtDate, isBookableDate, today } from './dates';
  import { dayStatus } from './store.svelte';
 
  let { selected = '', onpick, allows = () => true }: { selected?: string; onpick?: (date: string) => void; allows?: (date: string) => boolean } = $props();
- const dates = upcoming();
- const months = [...new Set(dates.map(date => date.slice(0, 7)))];
+ const currentMonth = today().slice(0, 7);
  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
- let browsedMonth = $state<number>();
- const month = $derived(browsedMonth ?? Math.max(0, months.indexOf(selected.slice(0, 7))));
- const monthDates = $derived(dates.filter(date => date.startsWith(months[month])));
- const leading = $derived((new Date(monthDates[0] + 'T00:00:00Z').getUTCDay() + 6) % 7);
+ let browsedMonth = $state<string>();
+ const month = $derived(browsedMonth ?? (isBookableDate(selected) ? selected.slice(0, 7) : currentMonth));
+ const first = $derived(month + '-01');
+ const firstDay = $derived(new Date(first + 'T00:00:00Z'));
+ const days = $derived(new Date(Date.UTC(firstDay.getUTCFullYear(), firstDay.getUTCMonth() + 1, 0)).getUTCDate());
+ const monthDates = $derived(Array.from({ length: days }, (_, i) => addDays(first, i)));
+ const leading = $derived((firstDay.getUTCDay() + 6) % 7);
 </script>
 
 <div class="stack calendar" role="group" aria-label="Booking availability">
  <div class="row heading">
-  <strong aria-live="polite">{fmtDate(monthDates[0], { month: 'long', year: 'numeric' })}</strong>
-  {#if months.length > 1}
-   <div class="row">
-    <button type="button" class="cell arrow" aria-label="Previous month" disabled={month === 0} onclick={() => browsedMonth = month - 1}>‹</button>
-    <button type="button" class="cell arrow" aria-label="Next month" disabled={month === months.length - 1} onclick={() => browsedMonth = month + 1}>›</button>
-   </div>
-  {/if}
+  <strong aria-live="polite">{fmtDate(first, { month: 'long', year: 'numeric' })}</strong>
+  <div class="row">
+   <button type="button" class="cell arrow" aria-label="Previous month" disabled={month === currentMonth} onclick={() => browsedMonth = addDays(first, -1).slice(0, 7)}>‹</button>
+   <button type="button" class="cell arrow" aria-label="Next month" onclick={() => browsedMonth = addDays(first, days).slice(0, 7)}>›</button>
+  </div>
  </div>
  <div class="grid">
   {#each weekdays as day}<span class="weekday">{day}</span>{/each}
   {#each Array(leading) as _}<span aria-hidden="true"></span>{/each}
   {#each monthDates as date (date)}
-   {@const available = allows(date) && dayStatus(date) === 'open'}
+   {@const available = isBookableDate(date) && allows(date) && dayStatus(date) === 'open'}
    {@const day = fmtDate(date, { day: 'numeric' })}
    {#if !available}
     <span class="cell unavailable" aria-label={fmtDate(date) + ', unavailable'}>{day}</span>

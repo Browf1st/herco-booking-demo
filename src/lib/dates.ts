@@ -19,7 +19,11 @@ export function addDays(d: string, n: number) {
 
 export const isOpenDay = (d: string) => shop.openDays.includes(utc(d).getUTCDay());
 
-export const upcoming = () => Array.from({ length: shop.bookingWindowDays }, (_, i) => addDays(today(), i));
+export const isBookableDate = (date: string) =>
+	/^\d{4}-\d{2}-\d{2}$/.test(date) && date >= today() &&
+	Number.isFinite(utc(date).getTime()) && utc(date).toISOString().slice(0, 10) === date;
+
+export const upcoming = () => Array.from({ length: shop.dateStripDays }, (_, i) => addDays(today(), i));
 
 export const fmtDate = (d: string, options: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'long', day: 'numeric' }) =>
 	utc(d).toLocaleDateString('en-PH', { timeZone: 'UTC', ...options });
@@ -31,6 +35,7 @@ export const slots = Array.from(
 );
 
 export function fmtSlot(slot: string) {
-	const h = parseInt(slot);
-	return `${h % 12 || 12}:${slot.slice(3, 5)} ${h < 12 ? 'AM' : 'PM'}`;
+	const [hour, minute] = slot.split(':');
+	const h = Number(hour);
+	return `${h % 12 || 12}:${minute} ${h < 12 ? 'AM' : 'PM'}`;
 }

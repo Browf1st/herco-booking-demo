@@ -2,7 +2,7 @@
 import { demoFans, proFeatures, shop, type Size } from './config';
 import { defaultPricing, selection, validateSelection, quote, type Selection, type Pricing } from './coating';
 import { powderDay } from './bookingCatalog';
-import { addDays, isOpenDay, nowHour, slots, today, upcoming } from './dates';
+import { addDays, isBookableDate, isOpenDay, nowHour, slots, today, upcoming } from './dates';
 
 export type Status = 'pending' | 'confirmed' | 'done' | 'cancelled';
 export type ChangeRequest = { kind: 'Cancel' | 'Reschedule'; reason: string; date?: string; slot?: string; state: 'Pending' | 'Approved' | 'Declined'; at: string; reviewedAt?: string };
@@ -262,7 +262,7 @@ export function dayStatus(date: string) {
 
 // The real build enforces this with a unique index in Postgres, not in the browser.
 function assertFree(date: string, slot: string) {
-	if (!upcoming().includes(date) || dayStatus(date) !== 'open' || !slotsFor(date).find((s) => s.time === slot)?.free)
+	if (!isBookableDate(date) || dayStatus(date) !== 'open' || !slotsFor(date).find((s) => s.time === slot)?.free)
 		throw new Error('That slot was just taken. Please pick another.');
 }
 

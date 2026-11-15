@@ -16,7 +16,7 @@ export const shop = {
 	openHour: 9,
 	closeHour: 17,
 	dailyLimit: 8,
-	bookingWindowDays: 21,
+	dateStripDays: 21,
 };
 
 export const proFeatures = { preview: true } as const;

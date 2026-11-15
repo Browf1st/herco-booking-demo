@@ -1,12 +1,11 @@
 <script lang="ts">
  import AvailabilityCalendar from './AvailabilityCalendar.svelte';
- import { fmtDate, fmtSlot, upcoming } from './dates';
+ import { fmtDate, fmtSlot, isBookableDate } from './dates';
  import { dayStatus, slotsFor } from './store.svelte';
  import { powderDay } from './bookingCatalog';
  let { date = $bindable(), slot = $bindable(), powder = false }: { date: string; slot: string; powder?: boolean } = $props();
  const allows = (day: string) => !powder || powderDay(day);
- const dates = upcoming();
- const times = $derived(dates.includes(date) && allows(date) && dayStatus(date) === 'open' ? slotsFor(date) : []);
+ const times = $derived(isBookableDate(date) && allows(date) && dayStatus(date) === 'open' ? slotsFor(date) : []);
 </script>
 <div class="visit-picker">
  <div class="stack">

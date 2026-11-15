@@ -8,7 +8,7 @@
  import { account, rememberBooking } from '#lib/account.svelte.ts';
  import { estimatePrice, linePrice, money, quote, selection, serviceLabel } from '#lib/coating.ts';
  import { type Size } from '#lib/config.ts';
- import { currentShopTime, fmtDate, fmtSlot, today, upcoming } from '#lib/dates.ts';
+ import { currentShopTime, fmtDate, fmtSlot, isBookableDate, today } from '#lib/dates.ts';
  import { book, db, type Booking } from '#lib/store.svelte.ts';
 
  const query = page.url.searchParams;
@@ -50,7 +50,7 @@
  const tiers = Object.entries(ceramicModels);
  let form = $state({
   name: walkIn ? '' : account.current?.name ?? '', email: walkIn ? '' : account.current?.email ?? '',
-  phone: walkIn ? '' : account.current?.phone ?? '', plateNumber: '', notes: query.get('notes') ?? '', date: upcoming().includes(preferredDate) ? preferredDate : '', slot: ''
+  phone: walkIn ? '' : account.current?.phone ?? '', plateNumber: '', notes: query.get('notes') ?? '', date: isBookableDate(preferredDate) ? preferredDate : '', slot: ''
  });
  let signer = $state('');
  let acknowledged = $state(false);
