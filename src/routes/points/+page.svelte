@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { account } from '#lib/account.svelte.ts';
-	import { ops, fanRanking, pointBalance, redeemReward } from '#lib/operations.svelte.ts';
+	import { ops, fanRanking, pointBalance, redeemReward, rewardStatus } from '#lib/operations.svelte.ts';
 	import RewardReceipt from '#lib/RewardReceipt.svelte';
 	const rewardProgram = $derived(ops.data.rewardProgram);
 
-	const activeId = 'DEMO-FAN-1';
+	const activeId = $derived(account.current?.id ?? '');
 	const fan = $derived(ops.data.members.find((member) => member.id === activeId));
 	const ranking = $derived(fanRanking());
 	let selectedCost = $state(0);
@@ -14,7 +14,7 @@
 	let error = $state('');
 	let issuedId = $state('');
 	const selectedReward = $derived(rewardProgram.find((reward) => reward.points === selectedCost));
-	const issued = $derived(ops.data.rewardReceipts.find((receipt) => receipt.id === issuedId));
+	const issued = $derived(ops.data.rewardReceipts.find((receipt) => receipt.id === issuedId && receipt.memberId === activeId));
 	const receipts = $derived(ops.data.rewardReceipts.filter((receipt) => receipt.memberId === activeId).toReversed());
 
 	async function confirmRedemption() {
@@ -53,13 +53,13 @@
 						{#if selectedReward.scope}<p>{selectedReward.scope}</p>{/if}
 						<p>{selectedCost.toLocaleString('en-PH')} points will be deducted. Your remaining balance will be {(pointBalance(activeId) - selectedCost).toLocaleString('en-PH')} points.</p>
 						<div class="row">
-							<button class="btn sm" disabled={issuing || pointBalance(activeId) < selectedCost} onclick={confirmRedemption}>{issuing ? 'Issuing AR…' : 'Confirm redemption'}</button>
+							<button class="btn sm" disabled={issuing || pointBalance(activeId) < selectedCost} onclick={confirmRedemption}>{issuing ? 'Submitting…' : 'Confirm redemption'}</button>
 							<button class="btn sm ghost" disabled={issuing} onclick={() => (selectedCost = 0)}>Cancel</button>
 						</div>
 					</div>
 				{/if}
 				{#if issued}
-					<div class="stack" role="status"><p>Reward redeemed. Your AR is ready.</p><RewardReceipt receipt={issued} /></div>
+					<div class="stack" role="status"><p>Redemption status: {rewardStatus(issued)}</p><RewardReceipt receipt={issued} /></div>
 				{/if}
 				<div class="stack">
 					<p class="eyebrow">HERCO Rewards Program</p>
@@ -83,7 +83,7 @@
 					<div class="card stack">
 						<h3>Your reward ARs</h3>
 						{#each receipts as receipt (receipt.id)}
-							<details><summary>{receipt.reward} · {receipt.cost.toLocaleString('en-PH')} points · {receipt.status === 'claimed' ? 'Claimed' : 'Ready to claim'}</summary><RewardReceipt {receipt} /></details>
+							<details><summary>{receipt.reward} · {receipt.cost.toLocaleString('en-PH')} points · {rewardStatus(receipt)}</summary><RewardReceipt {receipt} /></details>
 						{/each}
 					</div>
 				{/if}

@@ -2,7 +2,8 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { syncBookings } from '#lib/store.svelte.ts';
-	import { syncOperations } from '#lib/operations.svelte.ts';
+	import { saveFanProfile, syncOperations } from '#lib/operations.svelte.ts';
+	import { account } from '#lib/account.svelte.ts';
 	import { asset, resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { photos, shop } from '#lib/config.ts';
@@ -12,6 +13,7 @@
 	const adminTabs = ['Overview', 'Bookings', 'Booking history', 'Customers', 'HERCO Points', 'Inventory', 'Reports', 'Pricing', 'Change requests', 'Activity log'];
 	onMount(() => {
 		const stopOperations = syncOperations();
+		if (account.current) saveFanProfile(account.current);
 		const stopBookings = syncBookings();
 		return () => { stopOperations(); stopBookings(); };
 	});

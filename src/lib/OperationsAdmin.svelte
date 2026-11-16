@@ -2,12 +2,13 @@
 	import { resolve } from '$app/paths';
 	import { tick } from 'svelte';
 	import RewardReceipt from './RewardReceipt.svelte';
+	import { approveRewardReceipt, correctPoints, rewardStatus, type Member } from './operations.svelte';
 	import AdminBooking from './AdminBooking.svelte';
 	import { money, serviceLabel } from './coating';
 	import { audit, db } from './store.svelte';
 	import { serviceOf, sizes } from './config';
 	import { fmtDate, fmtSlot, today } from './dates';
-	import { addStock, adjustStock, claimRewardReceipt, editRewardTier, grantPoints, ops, fanRanking, pointBalance } from './operations.svelte';
+	import { addStock, addStockOption, adjustStock, claimRewardReceipt, editRewardTier, editStockItem, grantPoints, ops, fanRanking, pointBalance, renameStockOption, stockOptions } from './operations.svelte';
 
 	let { tab }: { tab: string } = $props();
 	let search = $state('');
@@ -16,18 +17,40 @@
 	let pointsDialog = $state<HTMLDialogElement>();
 	let rewardDialog = $state<HTMLDialogElement>();
 	let rewardIndex = $state(0);
+	let correctingPoints = $state(false);
+	let correctionReason = $state('');
 	let rewardTitle = $state('');
 	let rewardScope = $state('');
 	let rewardCost = $state(1);
 	let stockName = $state('');
 	let stockSearch = $state('');
 	let stockFilter = $state('all');
+	let categoryFilter = $state('');
+	let newItemCategory = $state('');
+	let editItemDialog = $state<HTMLDialogElement>();
+	let itemDraft = $state({ id: '', name: '', unit: '', minimum: 0, category: '' });
+	const categories = $derived(stockOptions(ops.data, 'category'));
+	const units = $derived(stockOptions(ops.data, 'unit'));
+	let optionDialog = $state<HTMLDialogElement>();
+	let optionKind = $state<'unit' | 'category'>('unit');
+	let optionName = $state('');
+	let renamingOption = $state(false);
+	let previousOption = $state('');
+	const existingOptions = $derived(optionKind === 'unit' ? units : categories);
+
+	function resetStockOption() {
+		error = '';
+		previousOption = '';
+		optionName = '';
+	}
 	let historyItem = $state('');
 	const stockHealth = (quantity: number, minimum: number) => quantity === 0 ? 'out' : quantity <= minimum ? 'low' : 'healthy';
 	const lowStock = $derived(ops.data.stock.filter(item => stockHealth(item.quantity, item.minimum) === 'low').length);
 	const outOfStock = $derived(ops.data.stock.filter(item => item.quantity === 0).length);
+	const inStock = $derived(ops.data.stock.length - lowStock - outOfStock);
 	const visibleStock = $derived(ops.data.stock.filter(item =>
 		item.name.toLowerCase().includes(stockSearch.trim().toLowerCase()) &&
+		(!categoryFilter || categoryFilter === (item.category ? 'category:' + item.category : 'uncategorized')) &&
 		(stockFilter === 'all' || stockHealth(item.quantity, item.minimum) === stockFilter)
 	));
 	const stockHistory = $derived(ops.data.stockEntries.filter(entry => !historyItem || entry.itemId === historyItem).toReversed());
@@ -38,6 +61,7 @@
 	let adjustment = $state(1);
 	let stockReason = $state('');
 	let stockDialog = $state<HTMLDialogElement>();
+	let newItemDialog = $state<HTMLDialogElement>();
 	let stockMode = $state<'add' | 'use'>('add');
 	const selectedStock = $derived(ops.data.stock.find((item) => item.id === stockId));
 	let from = $state(today().slice(0, 7) + '-01');
@@ -53,23 +77,80 @@
 	const valued = $derived(completed.filter(b => b.estimate));
 	const income = $derived(valued.reduce((sum, b) => sum + b.estimate!.total, 0));
 	const ranking = $derived(fanRanking());
+	const fanQuery = $derived(search.trim().toLowerCase());
+	let pointsSearch = $state('');
+	const pointsQuery = $derived(pointsSearch.trim().toLowerCase());
+	function matchesFan(fan: Member, query: string) {
+		const digits = query.replace(/\D/g, '');
+		return [fan.name, fan.email ?? '', fan.id, fan.phone].some(value => value.toLowerCase().includes(query)) ||
+			(Boolean(digits) && /^[+\d\s().-]+$/.test(query) && fan.phone.replace(/\D/g, '').includes(digits));
+	}
+	const matchingFans = $derived(ranking.map((fan, index) => ({ fan, rank: index + 1 })).filter(({ fan }) => matchesFan(fan, fanQuery)));
+	const pageSize = 10;
+	let leaderboardSort = $state('highest');
+	let leaderboardPage = $state(1);
+	const sortedFans = $derived(leaderboardSort === 'name'
+		? matchingFans.toSorted((a, b) => a.fan.name.localeCompare(b.fan.name) || a.rank - b.rank)
+		: leaderboardSort === 'lowest'
+			? matchingFans.toSorted((a, b) => pointBalance(a.fan.id) - pointBalance(b.fan.id) || a.rank - b.rank)
+			: matchingFans);
+	const leaderboardPages = $derived(Math.max(1, Math.ceil(sortedFans.length / pageSize)));
+	const currentLeaderboardPage = $derived(Math.min(leaderboardPage, leaderboardPages));
+	const redemptionStatuses = [
+		{ value: 'pending', label: 'Pending for approval', tone: 'pending' },
+		{ value: 'approved', label: 'Approved · awaiting claim', tone: 'confirmed' },
+		{ value: 'claimed', label: 'Claimed', tone: 'done' }
+	] as const;
+	let redemptionFilter = $state('pending');
+	let redemptionSearch = $state('');
+	let redemptionSort = $state('oldest');
+	let redemptionPage = $state(1);
+	const redemptions = $derived(ops.data.rewardReceipts.map(receipt => {
+		const status = receipt.status === 'issued' ? 'approved' : receipt.status;
+		return { receipt, status };
+	}));
+	const redemptionCounts = $derived({
+		pending: redemptions.filter(row => row.status === 'pending').length,
+		approved: redemptions.filter(row => row.status === 'approved').length,
+		claimed: redemptions.filter(row => row.status === 'claimed').length
+	});
+	const redemptionQuery = $derived(redemptionSearch.trim().toLowerCase());
+	const redemptionMembers = $derived(new Set(ops.data.members.filter(fan => matchesFan(fan, redemptionQuery)).map(fan => fan.id)));
+	const visibleRedemptions = $derived(redemptions
+		.filter(({ receipt, status }) =>
+			(redemptionFilter === 'all' || status === redemptionFilter) &&
+			(!redemptionQuery || redemptionMembers.has(receipt.memberId) ||
+				[receipt.memberName, receipt.reference].some(value => value.toLowerCase().includes(redemptionQuery))))
+		.sort((a, b) => redemptionSort === 'oldest'
+			? Date.parse(a.receipt.at) - Date.parse(b.receipt.at)
+			: Date.parse(b.receipt.at) - Date.parse(a.receipt.at)));
+	const redemptionPages = $derived(Math.max(1, Math.ceil(visibleRedemptions.length / pageSize)));
+	const currentRedemptionPage = $derived(Math.min(redemptionPage, redemptionPages));
+	const redemptionDate = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' });
+	const pointsMatches = $derived(pointsQuery ? ranking.filter(fan => matchesFan(fan, pointsQuery)) : []);
 	const rewardProgram = $derived(ops.data.rewardProgram);
 
-	async function openPoints(fanId: string) {
-		memberId = fanId;
+	async function openPoints() {
+		memberId = '';
+		pointsSearch = search;
 		points = 1;
+		correctingPoints = false;
+		correctionReason = '';
 		error = '';
 		notice = '';
 		await tick();
 		pointsDialog?.showModal();
 	}
-	async function openReward(index: number) {
+	function selectReward(index: number) {
 		const reward = rewardProgram[index];
 		rewardIndex = index;
 		rewardTitle = reward.name;
 		rewardScope = reward.scope ?? '';
 		rewardCost = reward.points;
 		error = '';
+	}
+	async function openReward() {
+		selectReward(0);
 		await tick();
 		rewardDialog?.showModal();
 	}
@@ -181,50 +262,90 @@
 			</details>
 		{:else}<p class="muted">No matching customers.</p>{/each}
 	{:else if tab === 'HERCO Points'}
-		<h3>HERCO Points ranking</h3>
+		<div class="admin-points-layout">
+		<section class="stack">
+		<div class="row between"><h3>HERCO Points ranking</h3><button class="btn sm" disabled={!ranking.length} onclick={openPoints}>Manage HERCO Points</button></div>
 		<p class="muted small">Search fan accounts, add HERCO Points and view their ranking. Sample accounts are fictional.</p>
-		<label>Find a fan<input type="search" bind:value={search} placeholder="Fan name or account ID" /></label>
+		<div class="cols">
+			<label>Find a fan<input type="search" bind:value={search} oninput={() => leaderboardPage = 1} placeholder="Name, email, phone or account ID" /></label>
+			<label>Sort leaderboard<select bind:value={leaderboardSort} onchange={() => leaderboardPage = 1}>
+				<option value="highest">Highest points first</option>
+				<option value="lowest">Lowest points first</option>
+				<option value="name">Fan name (A–Z)</option>
+			</select></label>
+		</div>
 		<div class="card leaderboard">
-			{#each ranking as fan, index (fan.id)}
-				{#if (fan.name + fan.id).toLowerCase().includes(search.toLowerCase())}
+			{#each sortedFans.slice((currentLeaderboardPage - 1) * pageSize, currentLeaderboardPage * pageSize) as { fan, rank } (fan.id)}
 					<div class="rank-row">
-						<b class="rank-number" class:podium={index < 3}>#{index + 1}</b>
-						<div class="rank-fan"><b>{fan.name}</b><span class="muted small">{fan.demoFan ? 'Sample fan account' : 'Fan account'}</span></div>
+						<b class="rank-number" class:podium={rank <= 3}>#{rank}</b>
+						<div class="rank-fan"><b>{fan.name}</b><span class="muted small">{fan.email || (fan.demoFan ? 'Sample fan account' : 'No email on file')}</span>{#if fan.phone}<span class="muted small">{fan.phone}</span>{/if}</div>
 						<strong class="rank-points">{pointBalance(fan.id)} <span class="small muted">points</span></strong>
-						<button class="btn sm ghost" onclick={() => openPoints(fan.id)}>Add HERCO Points</button>
 					</div>
-				{/if}
+			{:else}<p class="muted">No fans found.</p>{/each}
+		</div>
+		{@render pagination('Leaderboard', currentLeaderboardPage, leaderboardPages, page => leaderboardPage = page)}
+		</section>
+		<aside class="card stack">
+			<div class="rewards-heading"><h3>HERCO Rewards Program</h3><button class="btn sm" disabled={!rewardProgram.length} onclick={openReward}>Edit reward</button></div>
+			{#each rewardProgram as reward, index (index)}
+				<div class="ledger reward-line">
+					<div><b>{reward.name}</b>{#if reward.scope}<p class="small muted">{reward.scope}</p>{/if}</div>
+					<strong class="reward-points">{reward.points.toLocaleString('en-PH')} <span class="small">points</span></strong>
+				</div>
 			{/each}
-			{#if !ranking.some((fan) => (fan.name + fan.id).toLowerCase().includes(search.toLowerCase()))}<p class="muted">No fans found.</p>{/if}
+		</aside>
 		</div>
 		<dialog bind:this={pointsDialog} aria-labelledby="points-dialog-title">
-			{#if selected}
 			<div class="stack">
-				<div class="dialog-heading row"><h3 id="points-dialog-title">Add HERCO Points</h3><button class="close-dialog" aria-label="Close points popup" onclick={() => pointsDialog?.close()}>×</button></div>
+				<div class="dialog-heading row"><h3 id="points-dialog-title">Manage HERCO Points</h3><button class="close-dialog" aria-label="Close points popup" onclick={() => pointsDialog?.close()}>×</button></div>
+				<label>Find a fan<input type="search" bind:value={pointsSearch} placeholder="Name, email, phone or account ID" oninput={() => {
+					memberId = '';
+					error = '';
+					points = 1;
+					correctionReason = '';
+				}} /></label>
+				{#if !selected && pointsQuery}
+					<ul class="fan-results">
+						{#each pointsMatches as fan (fan.id)}
+							<li><button type="button" class="opt" onclick={() => { memberId = fan.id; pointsSearch = fan.name; }}>
+								<b>{fan.name}</b>
+								<span class="small muted">{fan.email || fan.id}{fan.phone ? ' · ' + fan.phone : ''}</span>
+							</button></li>
+						{:else}<li class="muted">No fans found.</li>{/each}
+					</ul>
+				{/if}
+				{#if selected}
 				<h3>{selected.name} · {pointBalance(selected.id)} points</h3>
-				<p class="small muted">Account {selected.id}</p>
-				<p class="muted small">Points are credited to the selected fan account.</p>
 				{#if error}<p class="error" role="alert">{error}</p>{/if}
-				<form class="stack" onsubmit={(e) => { e.preventDefault(); perform(() => { grantPoints(selected.id, points); pointsDialog?.close(); }, 'HERCO Points added.'); }}>
-					<label>Points to add<input type="number" min="1" step="1" required bind:value={points} /></label>
-					<div class="row"><button class="btn sm">Add HERCO Points</button><button type="button" class="btn sm ghost" onclick={() => pointsDialog?.close()}>Cancel</button></div>
+				<form class="stack" onsubmit={(e) => {
+					e.preventDefault();
+					perform(() => {
+						if (correctingPoints) correctPoints(selected.id, points, correctionReason);
+						else grantPoints(selected.id, points);
+						pointsDialog?.close();
+					}, correctingPoints ? 'HERCO Points correction recorded.' : 'HERCO Points added.');
+				}}>
+					<label>Action<select bind:value={correctingPoints} onchange={() => { error = ''; points = 1; }}>
+						<option value={false}>Add points</option><option value={true}>Correct points</option>
+					</select></label>
+					<label>{correctingPoints ? 'Adjustment (use a negative number to subtract)' : 'Points to add'}<input type="number" min={correctingPoints ? -pointBalance(selected.id) : 1} step="1" required bind:value={points} /></label>
+					{#if correctingPoints}<label>Reason<input bind:value={correctionReason} required /></label>{/if}
+					<div class="row"><button class="btn sm">{correctingPoints ? 'Save correction' : 'Add HERCO Points'}</button><button type="button" class="btn sm ghost" onclick={() => pointsDialog?.close()}>Cancel</button></div>
 				</form>
 				<h3>Points history</h3>
 				{#each ops.data.points.filter((entry) => entry.memberId === selected.id).toReversed() as entry (entry.id)}
 					<div class="ledger"><div>{entry.reason}<p class="muted small">{new Date(entry.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true })}</p></div><b>{entry.amount > 0 ? '+' : ''}{entry.amount}</b></div>
 				{:else}<p class="muted">No points activity.</p>{/each}
+				{/if}
 			</div>
-			{/if}
 		</dialog>
-		<details class="card"><summary>HERCO Rewards Program</summary>
-			{#each rewardProgram as reward, index (index)}
-				<div class="ledger"><b>{reward.points.toLocaleString('en-PH')} points</b><span>{reward.name}{reward.scope ? ' · ' + reward.scope : ''}</span><button class="btn sm ghost" onclick={() => openReward(index)}>Edit reward</button></div>
-			{/each}
-		</details>
 		<dialog bind:this={rewardDialog} aria-labelledby="reward-dialog-title">
 			<form class="stack" onsubmit={(e) => { e.preventDefault(); perform(() => { editRewardTier(rewardIndex, { name: rewardTitle, scope: rewardScope, points: rewardCost }); rewardDialog?.close(); }, 'Reward updated.'); }}>
 				<div class="dialog-heading row"><h3 id="reward-dialog-title">Edit reward</h3><button type="button" class="close-dialog" aria-label="Close reward popup" onclick={() => rewardDialog?.close()}>×</button></div>
 				{#if error}<p class="error" role="alert">{error}</p>{/if}
+				<label>Reward<select bind:value={rewardIndex} onchange={(e) => selectReward(Number(e.currentTarget.value))}>
+					{#each rewardProgram as reward, index (index)}<option value={index}>{reward.name}{reward.scope ? ' · ' + reward.scope : ''}</option>{/each}
+				</select></label>
 				<label>Reward name<input required bind:value={rewardTitle} /></label>
 				<label>Scope (optional)<input bind:value={rewardScope} placeholder="e.g. Small parts" /></label>
 				<label>Points required<input type="number" min="1" step="1" required bind:value={rewardCost} /></label>
@@ -232,52 +353,194 @@
 			</form>
 		</dialog>
 		<div class="card stack">
-			<h3>Redemption and claim history</h3>
-			{#each ops.data.rewardReceipts.toReversed().filter((receipt) => (receipt.memberName + receipt.reference).toLowerCase().includes(search.toLowerCase())) as receipt (receipt.id)}
-				<details>
-					<summary>{receipt.memberName} · {receipt.reward} · {receipt.status === 'claimed' ? 'Claimed' : 'Awaiting claim'}</summary>
+			<h3>Redemptions</h3>
+			<dl class="inventory-metrics">
+				{#each redemptionStatuses as status (status.value)}
+					<div><dt>{status.label}</dt><dd>{redemptionCounts[status.value]}</dd></div>
+				{/each}
+			</dl>
+			<div class="cols">
+				<label>Search redemptions<input type="search" bind:value={redemptionSearch} oninput={() => redemptionPage = 1} placeholder="Customer name, email, phone or AR reference" /></label>
+				<label>Status<select bind:value={redemptionFilter} onchange={() => redemptionPage = 1}>
+					<option value="all">All statuses</option>
+					{#each redemptionStatuses as status (status.value)}<option value={status.value}>{status.label}</option>{/each}
+				</select></label>
+				<label>Sort redemptions<select bind:value={redemptionSort} onchange={() => redemptionPage = 1}>
+					<option value="oldest">Oldest first</option>
+					<option value="newest">Newest first</option>
+				</select></label>
+			</div>
+			<p class="small muted" aria-live="polite">{visibleRedemptions.length} {visibleRedemptions.length === 1 ? 'redemption' : 'redemptions'}</p>
+			{#each visibleRedemptions.slice((currentRedemptionPage - 1) * pageSize, currentRedemptionPage * pageSize) as { receipt, status } (receipt.id)}
+				<details class="redemption-row">
+					<summary>
+						<span class="redemption-summary">
+							<span><b>{receipt.memberName}</b><span class="small muted redemption-meta">{receipt.reward} · {receipt.cost.toLocaleString('en-PH')} points</span></span>
+							<span class="small muted">{redemptionDate.format(new Date(receipt.at))} PH</span>
+							<span class="badge" data-status={redemptionStatuses.find(option => option.value === status)?.tone}>{rewardStatus(receipt)}</span>
+						</span>
+					</summary>
 					<div class="stack">
 						<RewardReceipt {receipt} />
-						{#if receipt.status === 'issued'}<div><button class="btn sm complete-action" onclick={() => perform(() => claimRewardReceipt(receipt.id), 'Reward AR marked as claimed.')}>Mark as claimed</button></div>{/if}
+						{#if receipt.status === 'pending'}
+							<div><button class="btn sm" onclick={() => perform(() => approveRewardReceipt(receipt.id), 'Reward redemption approved.')}>Approve redemption</button></div>
+						{:else if receipt.status !== 'claimed'}
+							<div><button class="btn sm complete-action" onclick={() => perform(() => claimRewardReceipt(receipt.id), 'Reward AR marked as claimed.')}>Mark as claimed</button></div>
+						{/if}
 					</div>
 				</details>
 			{:else}<p class="muted">No matching reward redemptions.</p>{/each}
+			{@render pagination('Redemptions', currentRedemptionPage, redemptionPages, page => redemptionPage = page)}
 		</div>
 	{:else if tab === 'Inventory'}
-		<div class="cols" aria-label="Inventory summary">
-			<button type="button" class="opt" class:on={stockFilter === 'all'} aria-pressed={stockFilter === 'all'} onclick={() => stockFilter = 'all'}><b>{ops.data.stock.length}</b> All items</button>
-			<button type="button" class="opt" class:on={stockFilter === 'low'} aria-pressed={stockFilter === 'low'} onclick={() => stockFilter = 'low'}><b>{lowStock}</b> Low stock</button>
-			<button type="button" class="opt" class:on={stockFilter === 'out'} aria-pressed={stockFilter === 'out'} onclick={() => stockFilter = 'out'}><b>{outOfStock}</b> Out of stock</button>
+		<section class="card stack" aria-labelledby="inventory-overview-title">
+			<h3 id="inventory-overview-title">Inventory overview</h3>
+			<dl class="inventory-metrics">
+				<div><dt>All items</dt><dd>{ops.data.stock.length}</dd></div>
+				<div><dt><span class="badge" data-status="done">In stock</span></dt><dd>{inStock}</dd></div>
+				<div><dt><span class="badge" data-status="pending">Low stock</span></dt><dd>{lowStock}</dd></div>
+				<div><dt><span class="badge" data-status="cancelled">Out of stock</span></dt><dd>{outOfStock}</dd></div>
+			</dl>
+		</section>
+		<div class="row">
+			<button type="button" class="btn sm" onclick={() => {
+				error = '';
+				if (!units.includes(unit)) unit = units[0] ?? '';
+				newItemDialog?.showModal();
+			}}>Create new inventory item</button>
+			<button type="button" class="btn sm ghost" onclick={() => openStock()}>Update existing stock</button>
+			<button type="button" class="btn sm ghost" onclick={() => {
+				optionKind = 'unit';
+				renamingOption = false;
+				resetStockOption();
+				optionDialog?.showModal();
+			}}>Manage units and categories</button>
 		</div>
-		<div class="cols">
-			<form class="card stack" onsubmit={(e) => { e.preventDefault(); perform(() => { addStock(stockName, unit, quantity, minimum); stockName = ''; }, 'Stock item added.'); }}>
-				<h3>Create new inventory item</h3>
-				<label>Item name<input bind:value={stockName} placeholder="e.g. Ceramic coating" required /></label>
-				<div class="cols"><label>Unit<input bind:value={unit} required /></label><label>Opening stock<input type="number" min="0" step="0.001" bind:value={quantity} required /></label><label>Low stock threshold<input type="number" min="0" step="0.001" bind:value={minimum} required /></label></div>
-				<button class="btn sm">Add item</button>
+		<dialog bind:this={optionDialog} aria-labelledby="stock-option-title">
+			<form class="stack" onsubmit={(e) => {
+				e.preventDefault();
+				perform(() => {
+					if (renamingOption) {
+						renameStockOption(optionKind, previousOption, optionName);
+						const name = optionName.trim();
+						if (optionKind === 'unit' && unit === previousOption) unit = name;
+						if (optionKind === 'category') {
+							if (newItemCategory === previousOption) newItemCategory = name;
+							if (categoryFilter === 'category:' + previousOption) categoryFilter = 'category:' + name;
+						}
+					} else {
+						addStockOption(optionKind, optionName);
+					}
+					optionDialog?.close();
+				}, renamingOption ? 'Inventory option renamed.' : optionKind === 'unit' ? 'Unit added.' : 'Category added.');
+			}}>
+				<h3 id="stock-option-title">Manage units and categories</h3>
+				{#if error}<p class="error" role="alert">{error}</p>{/if}
+				<div class="cols">
+					<label>Type
+						<select bind:value={optionKind} onchange={() => { renamingOption = false; resetStockOption(); }}>
+							<option value="unit">Unit</option>
+							<option value="category">Category</option>
+						</select>
+					</label>
+					<label>Action
+						<select bind:value={renamingOption} onchange={resetStockOption}>
+							<option value={false}>Add new</option>
+							<option value={true} disabled={!existingOptions.length}>Rename existing</option>
+						</select>
+					</label>
+				</div>
+				{#if renamingOption}
+					<label>Existing {optionKind}
+						<select bind:value={previousOption} onchange={(e) => optionName = e.currentTarget.value} required>
+							<option value="">Select {optionKind}</option>
+							{#each existingOptions as option (option)}<option value={option}>{option}</option>{/each}
+						</select>
+					</label>
+					<p class="small muted">Renaming updates every item using this {optionKind}.</p>
+				{/if}
+				<label>{renamingOption ? 'New name' : 'Name'}<input bind:value={optionName} required /></label>
+				<div class="row"><button class="btn sm">Save</button><button type="button" class="btn sm ghost" onclick={() => optionDialog?.close()}>Cancel</button></div>
 			</form>
-			<div class="card stack">
-				<h3>Update existing stock</h3>
-				<p class="muted">Add a delivery to an item’s current quantity, or record supplies used during a service.</p>
-				<div class="row"><button class="btn sm" onclick={() => openStock()}>Add stock</button><button class="btn sm ghost" onclick={() => openStock('', 'use')}>Record usage</button></div>
-				<p class="small muted">Every update is saved in stock history.</p>
-			</div>
-		</div>
+		</dialog>
+		<dialog bind:this={newItemDialog} aria-labelledby="new-item-dialog-title">
+			<form class="stack" onsubmit={(e) => {
+				e.preventDefault();
+				perform(() => {
+					addStock(stockName, unit, quantity, minimum, newItemCategory);
+					newItemCategory = '';
+					stockName = '';
+					unit = 'bottle';
+					quantity = 0;
+					minimum = 0;
+					newItemDialog?.close();
+				}, 'Stock item added.');
+			}}>
+				<div class="dialog-heading row"><h3 id="new-item-dialog-title">Create new inventory item</h3><button type="button" class="close-dialog" aria-label="Close new inventory item popup" onclick={() => newItemDialog?.close()}>×</button></div>
+				{#if error}<p class="error" role="alert">{error}</p>{/if}
+				<label>Item name<input bind:value={stockName} placeholder="e.g. Ceramic coating" required /></label>
+				<label>Category (optional)<select bind:value={newItemCategory}><option value="">Uncategorized</option>{#each categories as category (category)}<option value={category}>{category}</option>{/each}</select></label>
+				<div class="cols"><label>Unit<select bind:value={unit} required>{#each units as unitOption (unitOption)}<option value={unitOption}>{unitOption}</option>{/each}</select></label><label>Opening stock<input type="number" min="0" step="0.001" bind:value={quantity} required /></label><label>Low stock threshold<input type="number" min="0" step="0.001" bind:value={minimum} required /></label></div>
+				<div class="row"><button class="btn sm">Add item</button><button type="button" class="btn sm ghost" onclick={() => newItemDialog?.close()}>Cancel</button></div>
+			</form>
+		</dialog>
 		<div class="card stack">
 			<h3>Stock on hand</h3>
-			<label>Search supplies<input type="search" bind:value={stockSearch} placeholder="e.g. Ceramic coating" /></label>
+			<div class="cols">
+				<label>Search supplies<input type="search" bind:value={stockSearch} placeholder="e.g. Ceramic coating" /></label>
+				<label>Category
+					<select bind:value={categoryFilter}>
+						<option value="">All categories</option>
+						<option value="uncategorized">Uncategorized</option>
+						{#each categories as category (category)}<option value={'category:' + category}>{category}</option>{/each}
+					</select>
+				</label>
+				<label>Stock status
+					<select bind:value={stockFilter}>
+						<option value="all">All items</option>
+						<option value="healthy">In stock</option>
+						<option value="low">Low stock</option>
+						<option value="out">Out of stock</option>
+					</select>
+				</label>
+			</div>
 			{#each visibleStock as item (item.id)}
 				{@const health = stockHealth(item.quantity, item.minimum)}
 				<div class="ledger">
-					<div><b>{item.name}</b><p class="small muted">{item.quantity} {item.unit} on hand · Reorder at {item.minimum}</p></div>
+					<div><b>{item.name}</b><p class="small muted">{item.quantity} {item.unit} on hand · Reorder at {item.minimum}</p><p class="small muted">{item.category || 'Uncategorized'}</p></div>
 					<div class="row">
 						<span class="badge" data-status={health === 'out' ? 'cancelled' : health === 'low' ? 'pending' : 'done'}>{health === 'out' ? 'Out of stock' : health === 'low' ? 'Low stock' : 'In stock'}</span>
 						<button class="btn sm ghost" aria-label={'Stock in for ' + item.name} onclick={() => openStock(item.id)}>Stock in</button>
 						<button class="btn sm ghost" aria-label={'Stock out for ' + item.name} disabled={!item.quantity} onclick={() => openStock(item.id, 'use')}>Stock out</button>
+						<button type="button" class="btn sm ghost" aria-label={'Edit item ' + item.name} onclick={() => {
+							error = '';
+							itemDraft = { id: item.id, name: item.name, unit: item.unit, minimum: item.minimum, category: item.category ?? '' };
+							editItemDialog?.showModal();
+						}}>Edit</button>
 					</div>
 				</div>
 			{:else}<p class="muted">No supplies match this view.</p>{/each}
 		</div>
+		<dialog bind:this={editItemDialog} aria-labelledby="edit-item-dialog-title">
+			<form class="stack" onsubmit={(e) => {
+				e.preventDefault();
+				perform(() => {
+					editStockItem(itemDraft.id, itemDraft.name, itemDraft.unit, itemDraft.minimum, itemDraft.category);
+					if (categoryFilter.startsWith('category:') && !categories.includes(categoryFilter.slice('category:'.length))) categoryFilter = '';
+					editItemDialog?.close();
+				}, 'Inventory item updated.');
+			}}>
+				<h3 id="edit-item-dialog-title">Edit inventory item</h3>
+				{#if error}<p class="error" role="alert">{error}</p>{/if}
+				<label>Item name<input bind:value={itemDraft.name} required /></label>
+				<label>Category (optional)<select bind:value={itemDraft.category}><option value="">Uncategorized</option>{#each categories as category (category)}<option value={category}>{category}</option>{/each}</select></label>
+				<div class="cols">
+					<label>Unit<select bind:value={itemDraft.unit} required>{#each units as unitOption (unitOption)}<option value={unitOption}>{unitOption}</option>{/each}</select></label>
+					<label>Low stock threshold<input type="number" min="0" step="0.001" bind:value={itemDraft.minimum} required /></label>
+				</div>
+				<div class="row"><button class="btn sm">Save changes</button><button type="button" class="btn sm ghost" onclick={() => editItemDialog?.close()}>Cancel</button></div>
+			</form>
+		</dialog>
 		<dialog bind:this={stockDialog} aria-labelledby="stock-dialog-title">
 			<form class="stack" onsubmit={(e) => {
 				e.preventDefault();
@@ -320,7 +583,33 @@
 	{/if}
 </div>
 
+{#snippet pagination(label: string, page: number, total: number, goTo: (page: number) => void)}
+	{#if total > 1}
+		<nav class="row" aria-label={label + ' pagination'}>
+			<button type="button" class="btn sm ghost" disabled={page <= 1} onclick={() => goTo(page - 1)}>Previous</button>
+			<span class="small muted" aria-live="polite">Page {page} of {total}</span>
+			<button type="button" class="btn sm ghost" disabled={page >= total} onclick={() => goTo(page + 1)}>Next</button>
+		</nav>
+	{/if}
+{/snippet}
+
 <style>
+	.redemption-row { border-top: 1px solid var(--line); padding-block: .75rem; }
+	.redemption-row[open] summary { margin-bottom: .75rem; }
+	.redemption-summary { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem .9rem; vertical-align: middle; }
+	.redemption-meta { display: block; }
+	.fan-results { display: grid; gap: .4rem; list-style: none; padding: 0; margin: 0; max-height: 16rem; overflow: auto; }
+	.fan-results button { display: grid; width: 100%; overflow-wrap: anywhere; }
+	.rewards-heading, .reward-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; align-items: baseline; }
+	.rewards-heading { align-items: center; }
+	.rewards-heading .btn, .reward-points { white-space: nowrap; }
+	.reward-points { font-size: 1.2rem; text-align: right; }
+	.admin-points-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+	.rank-fan { overflow-wrap: anywhere; }
+	@media (max-width: 900px) { .admin-points-layout { grid-template-columns: minmax(0, 1fr); } }
+	.inventory-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .75rem; margin: 0; }
+	.inventory-metrics > div { display: grid; gap: .35rem; padding: .75rem; border-radius: .35rem; background: var(--panel-2); }
+	.inventory-metrics dd { margin: 0; font-size: 1.5rem; font-weight: 700; }
 	dialog {
 		width: min(560px, calc(100vw - 32px));
 		max-height: calc(100dvh - 48px);

@@ -2,7 +2,6 @@
 	import { page } from '$app/state';
 	import AdminBooking from '#lib/AdminBooking.svelte';
 	import AdminPricing from '#lib/AdminPricing.svelte';
-	import { resolve } from '$app/paths';
 	import OperationsAdmin from '#lib/OperationsAdmin.svelte';
 	import AdminCalendar from '#lib/AdminCalendar.svelte';
 	import SlotPicker from '#lib/SlotPicker.svelte';
@@ -37,10 +36,6 @@
 <svelte:head><title>Shop admin | HERCO Detailing Garage</title></svelte:head>
 
 <section class="section wrap stack">
-	<p class="eyebrow">HERCO / Shop admin</p>
-	<div class="row between">
-		<h2>Garage dashboard</h2><a class="btn sm" href={resolve('/book?walk-in=1')}>Walk-in intake</a>
-	</div>
 	{#if tab === 'Pricing'}
 		<AdminPricing />
 	{:else if tab === 'Change requests'}
