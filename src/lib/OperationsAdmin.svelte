@@ -2,6 +2,7 @@
 	import ActionIcon from '#lib/ActionIcon.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { adminPath } from './adminNavigation';
 	import { tick } from 'svelte';
 	import RewardReceipt from './RewardReceipt.svelte';
 	import { approveRewardReceipt, correctPoints, rewardStatus, type Member } from './operations.svelte';
@@ -9,12 +10,12 @@
 	import AdminReports from './AdminReports.svelte';
 	import { serviceLabel } from './coating';
 	import type { StockDetails } from './operations.svelte';
-	import { db } from './store.svelte';
+	import { bookingStatusLabels, db } from './store.svelte';
 	import { serviceOf, sizes } from './config';
-	import { fmtDate, fmtSlot, today } from './dates';
+	import { fmtDate, fmtSlot } from './dates';
 	import { addStock, addStockOption, adjustStock, claimRewardReceipt, editRewardTier, editStockItem, grantPoints, ops, fanRanking, pointBalance, renameStockOption, stockOptions } from './operations.svelte';
 
-	let { tab }: { tab: string } = $props();
+	let { tab, owner = false }: { tab: string; owner?: boolean } = $props();
 	const showRedemptions = $derived(page.url.searchParams.get('section') === 'Redemptions');
 	const pageSize = 10;
 	let search = $state('');
@@ -91,7 +92,11 @@
 	let error = $state('');
 	let statusFilter = $state('all');
 	const matchingBookings = $derived(db.bookings.filter((b) => (statusFilter === 'all' || b.status === statusFilter) && [b.id, b.name, b.phone, b.bike, b.plateNumber ?? ''].join(' ').toLowerCase().includes(search.toLowerCase())).toSorted((a, b) => (b.date + b.slot).localeCompare(a.date + a.slot)));
-	const customers = $derived(ops.data.members.filter((member) => (member.name + member.phone + member.id).toLowerCase().includes(search.toLowerCase())));
+	const customers = $derived(ops.data.members.filter(member => matchesFan(member, fanQuery)));
+	let customerPage = $state(1);
+	const customerPages = $derived(Math.max(1, Math.ceil(customers.length / pageSize)));
+	const currentCustomerPage = $derived(Math.min(customerPage, customerPages));
+	const customerOffset = $derived((currentCustomerPage - 1) * pageSize);
 	const selected = $derived(ops.data.members.find((member) => member.id === memberId));
 	const ranking = $derived(fanRanking());
 	const fanQuery = $derived(search.trim().toLowerCase());
@@ -192,30 +197,16 @@
 	{#if error}<p class="error" role="alert">{error}</p>{/if}
 	{#if notice}<p class="success" role="status">{notice}</p>{/if}
 
-	{#if tab === 'Overview'}
-		<div class="cols">
-			<div class="card stack"><span class="muted">Awaiting confirmation</span><b class="metric">{db.bookings.filter((b) => b.status === 'pending').length}</b></div>
-			<div class="card stack"><span class="muted">Confirmed bookings</span><b class="metric">{db.bookings.filter((b) => b.status === 'confirmed').length}</b></div>
-			<div class="card stack"><span class="muted">HERCO Points fans</span><b class="metric">{ops.data.members.length}</b></div>
-			<div class="card stack"><span class="muted">Items low on stock</span><b class="metric">{ops.data.stock.filter((item) => item.quantity <= item.minimum).length}</b></div>
-		</div>
-		<div class="card stack">
-			<h3>Upcoming visits</h3>
-			{#each db.bookings.filter((b) => b.date >= today() && ['pending', 'confirmed'].includes(b.status)).toSorted((a, b) => (a.date + a.slot).localeCompare(b.date + b.slot)).slice(0, 6) as b (b.id)}
-				<div class="ledger"><div><b>{b.name || 'Unnamed test booking'}</b><p class="muted small">{serviceOf(b.serviceId).name} · {b.bike || 'Bike not provided'}</p></div><span>{fmtDate(b.date, { month: 'short', day: 'numeric' })} · {fmtSlot(b.slot)}</span></div>
-			{:else}<p class="muted">No upcoming visits.</p>{/each}
-		</div>
-		<div class="card stack"><h3>HERCO Points</h3><p class="muted">{ops.data.members.length} fan accounts. Search for a fan in HERCO Points to add points and view the ranking.</p><a href={resolve('/points')}>Open customer points page ↗</a></div>
-	{:else if tab === 'Booking history'}
+	{#if tab === 'Booking history'}
 		<div class="cols">
 			<label>Search bookings<input type="search" bind:value={search} placeholder="Name, reference, mobile, bike or plate" /></label>
-			<label>Status<select bind:value={statusFilter}><option value="all">All bookings</option><option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="done">Completed</option><option value="cancelled">Cancelled</option></select></label>
+			<label>Status<select bind:value={statusFilter}><option value="all">All bookings</option><option value="pending">Pending</option><option value="confirmed">Booked</option><option value="done">Completed</option><option value="cancelled">Cancelled</option></select></label>
 		</div>
 		{#each matchingBookings as booking (booking.id)}
 			<details class="card booking-record">
 				<summary>
 					<span class="record-heading"><strong>{booking.name || 'Unnamed test booking'}</strong><span class="muted small">{booking.id} · {fmtDate(booking.date, { month: 'short', day: 'numeric', year: 'numeric' })} · {fmtSlot(booking.slot)}</span></span>
-					<span class="record-status"><span class="badge" data-status={booking.status}>{booking.status === 'done' ? 'Completed' : booking.status}</span><span class="expand-icon" aria-hidden="true">⌄</span></span>
+					<span class="record-status"><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span><span class="expand-icon" aria-hidden="true">⌄</span></span>
 				</summary>
 				<div class="record-body stack">
 				<div class="cols">
@@ -246,24 +237,35 @@
 		{:else}<p class="muted">No matching bookings.</p>{/each}
 	{:else if tab === 'Customers'}
 		<h3>Customers</h3>
-		<label>Search customers<input type="search" bind:value={search} placeholder="Customer name or mobile number" /></label>
-		{#each customers as customer (customer.id)}
-			<details class="card">
-				<summary><b>{customer.name}</b> <span class="muted small">· {customer.demoFan ? 'Sample fan account' : 'Fan account'}</span></summary>
+		<div class="card customer-total"><span class="muted small">Total accounts</span><b>{ops.data.members.length}</b></div>
+		<label>Search customers<input type="search" bind:value={search} oninput={() => customerPage = 1} placeholder="Name, email, mobile number or account ID" /></label>
+		{#each customers.slice(customerOffset, customerOffset + pageSize) as customer (customer.id)}
+			{@const bookings = db.bookings.filter(b => b.accountId === customer.id || b.customerId === customer.id || (!b.accountId && !b.customerId && ((customer.phone && b.phone === customer.phone) || b.name.trim().toLowerCase() === customer.name.toLowerCase()))).toSorted((a, b) => (b.date + b.slot).localeCompare(a.date + a.slot))}
+			<details class="card customer-record">
+				<summary><span><b>{customer.name}</b> <span class="muted small">{customer.id}</span></span><span class="customer-record-meta">{bookings[0]?.bike ?? ''} <span class="badge">{bookings.length} {bookings.length === 1 ? 'booking' : 'bookings'}</span></span></summary>
 				<div class="stack customer-profile">
-					<p>Mobile {customer.phone || 'Not provided'}</p>
-					<p class="muted small">Account {customer.id}</p>
-					<h3>Booking history</h3>
-					{#each db.bookings.filter((b) => b.customerId === customer.id || (!b.customerId && ((customer.phone && b.phone === customer.phone) || b.name.trim().toLowerCase() === customer.name.toLowerCase()))).toSorted((a, b) => b.date.localeCompare(a.date)) as b (b.id)}
-						<div class="ledger"><div><b>{serviceOf(b.serviceId).name}</b><p class="muted small">{b.bike} · {b.id}</p></div><span>{fmtDate(b.date, { month: 'short', day: 'numeric' })} · {fmtSlot(b.slot)} · {b.status}</span></div>
+					<div class="cols customer-details">
+						<div><span class="muted small">Mobile</span><p>{customer.phone || 'Not provided'}</p></div>
+						<div><span class="muted small">Email</span><p>{customer.email || 'Not provided'}</p></div>
+						<div><span class="muted small">HERCO Points</span><p>{pointBalance(customer.id).toLocaleString('en-PH')}</p></div>
+					</div>
+					<h3>Booking history ({bookings.length})</h3>
+					{#each bookings as b (b.id)}
+						<div class="ledger"><div><span class="badge" data-status={b.status === 'confirmed' ? 'booked' : b.status}>{bookingStatusLabels[b.status]}</span> <b>{b.selection ? serviceLabel(b.selection) : serviceOf(b.serviceId).name}</b><p class="muted small">{b.bike} · {b.id}</p></div><span class="small">{fmtDate(b.date, { month: 'short', day: 'numeric' })} · {fmtSlot(b.slot)}</span></div>
 					{:else}<p class="muted">No linked bookings yet.</p>{/each}
 				</div>
 			</details>
 		{:else}<p class="muted">No matching customers.</p>{/each}
+		{#if customers.length}
+			<div class="row between">
+				<span class="small muted" aria-live="polite">Showing {customerOffset + 1}–{Math.min(customerOffset + pageSize, customers.length)} of {customers.length} accounts</span>
+				{@render pagination('Customers', currentCustomerPage, customerPages, page => customerPage = page)}
+			</div>
+		{/if}
 	{:else if tab === 'HERCO Points'}
 		<nav class="row" aria-label="HERCO Points sections">
-			<a class="btn sm" class:ghost={showRedemptions} href={resolve('/admin?tab=HERCO%20Points')} aria-current={!showRedemptions ? 'page' : undefined}><ActionIcon name="ranking" />Ranking &amp; rewards</a>
-			<a class="btn sm" class:ghost={!showRedemptions} href={resolve('/admin?tab=HERCO%20Points&section=Redemptions')} aria-current={showRedemptions ? 'page' : undefined}
+			<a class="btn sm" class:ghost={showRedemptions} href={resolve(adminPath('HERCO Points', owner))} aria-current={!showRedemptions ? 'page' : undefined}><ActionIcon name="ranking" />Ranking &amp; rewards</a>
+			<a class="btn sm" class:ghost={!showRedemptions} href={resolve(adminPath('HERCO Points', owner, 'Redemptions'))} aria-current={showRedemptions ? 'page' : undefined}
 				aria-label={'Redemptions, ' + redemptionCounts.pending + ' pending approval'}><ActionIcon name="gift" />
 				Redemptions <span class="tab-count" aria-hidden="true">{redemptionCounts.pending}</span>
 			</a>
@@ -536,7 +538,7 @@
 			</div>
 			{#if visibleStock.length}
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users need to scroll the ledger horizontally.) -->
-			<div class="stock-table" class:paged-stock-list={stockPages > 1} role="region" aria-labelledby="stock-on-hand-title" tabindex="0">
+			<div class="stock-table" role="region" aria-labelledby="stock-on-hand-title" tabindex="0">
 			<table>
 				<thead><tr><th scope="col">Item</th><th scope="col">Category</th><th scope="col">Stock status</th><th scope="col">Reorder threshold</th><th scope="col">Inventory actions</th></tr></thead>
 				<tbody>
@@ -614,14 +616,11 @@
 		</dialog>
 		<details class="card stock-history" open><summary>Stock history</summary>
 			<label>Filter stock history<select bind:value={historyItem} onchange={() => historyPage = 1}><option value="">All items</option>{#each ops.data.stock as item (item.id)}<option value={item.id}>{item.name}</option>{/each}</select></label>
-			<!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users need to scroll the paginated history.) -->
-			<div class:paged-stock-list={historyPages > 1} role="region" aria-label="Stock movements" tabindex={historyPages > 1 ? 0 : undefined}>
 			{#each stockHistory.slice((currentHistoryPage - 1) * pageSize, currentHistoryPage * pageSize) as entry (entry.id)}<div class="ledger"><div><b>{ops.data.stock.find((item) => item.id === entry.itemId)?.name}</b><p class="small muted">{entry.reason} · {new Date(entry.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short', hour12: true })}</p></div><b class="badge" data-status={entry.amount < 0 ? 'cancelled' : 'done'}>{entry.amount > 0 ? '+' : ''}{entry.amount}</b></div>{:else}<p class="muted">No stock movements for this view.</p>{/each}
-			</div>
 			{@render pagination('Stock history', currentHistoryPage, historyPages, page => historyPage = page)}
 		</details>
 	{:else if tab === 'Reports'}
-		<AdminReports />
+		<AdminReports {owner} />
 	{/if}
 </div>
 
@@ -645,6 +644,14 @@
 {/snippet}
 
 <style>
+	.customer-total { display: grid; gap: .25rem; }
+	.customer-total b { font-size: 1.6rem; }
+	.customer-record { padding: 0; overflow-wrap: anywhere; }
+	.customer-record > summary { padding: .65rem .9rem; cursor: pointer; }
+	.customer-record[open] > summary { background: var(--panel-2); border-radius: 6px 6px 0 0; }
+	.customer-record-meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-inline-start: .55rem; color: var(--muted); font-size: .85rem; }
+	.customer-record .customer-profile { padding: .9rem; }
+	.customer-details { background: var(--bg); border: 1px solid var(--line); padding: .7rem; border-radius: 4px; }
 	.inventory-metrics.redemption-metrics > div {
 		background: var(--panel);
 		border: 1px solid var(--status-border);
@@ -671,7 +678,6 @@
 	.stock-metrics > div:nth-child(3) { border-color: var(--warn-line); }
 	.stock-metrics dd { font-variant-numeric: tabular-nums; }
 	.stock-table { overflow-x: auto; border: 1px solid var(--line); border-radius: .35rem; }
-	.paged-stock-list { block-size: 36rem; overflow: auto; scrollbar-gutter: stable; }
 	.stock-table table { width: 100%; min-width: 850px; border-collapse: collapse; font-size: .9rem; }
 	.stock-table th, .stock-table td { padding: .55rem .65rem; text-align: left; border-bottom: 1px solid var(--line); }
 	.stock-table thead th { background: var(--panel-2); text-transform: uppercase; font-size: .75rem; letter-spacing: .03em; }
@@ -770,7 +776,7 @@
 	.record-details dt { color: var(--muted); font-size: 0.85rem; }
 	.record-details dd { margin: 0; overflow-wrap: anywhere; }
 	.booking-notes { white-space: pre-wrap; overflow-wrap: anywhere; }
-	.metric { font: italic 800 2.4rem var(--display); }
+
 	.ledger { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-block: 12px; border-bottom: 1px solid var(--line); }
 	.success { color: var(--ok); }
 	summary { cursor: pointer; }

@@ -2,17 +2,28 @@
  import ActionIcon from '#lib/ActionIcon.svelte';
  import CoatingFields from './CoatingFields.svelte';
  import BookingCatalog from './BookingCatalog.svelte';
- import { estimatePrice, selection } from './coating';
+ import { estimatePrice, olderPowderParts, selection } from './coating';
  import { coatingOf, editCoating, estimateServiceEdit, type Booking } from './store.svelte';
- let { booking, staff = false }: { booking: Booking; staff?: boolean } = $props();
+ let { booking }: { booking: Booking } = $props();
  let editing = $state(false);
  let value = $state(selection());
  let error = $state('');
- const estimate = $derived(estimateServiceEdit(booking, value));
+ let initialSelection = $state('');
+ const olderParts = $derived(olderPowderParts(coatingOf(booking).powderParts));
+ const changed = $derived(JSON.stringify(value) !== initialSelection);
+ const estimate = $derived((!changed && booking.estimate) || estimateServiceEdit(booking, value));
+
+ function openEditor() {
+  value = coatingOf(booking);
+  initialSelection = JSON.stringify(value);
+  error = '';
+  editing = true;
+ }
+
  function save(event: SubmitEvent) {
   event.preventDefault();
   try {
-   editCoating(booking, $state.snapshot(value), staff ? 'Demo admin' : 'Customer');
+   if (changed) editCoating(booking, $state.snapshot(value), 'Customer');
    editing = false;
   } catch (e) { error = (e as Error).message; }
  }
@@ -20,7 +31,7 @@
 {#if editing}
  <form class="stack card" onsubmit={save}>
   {#if value.catalog}
-   <BookingCatalog bind:value bike={booking.bike} year={booking.modelYear} />
+   <BookingCatalog bind:value bike={booking.bike} year={booking.modelYear} {olderParts} />
   {:else}
    <CoatingFields bind:value bike={booking.bike} />
   {/if}
@@ -30,5 +41,5 @@
   <div class="row"><button class="btn sm"><ActionIcon name="save" />Save services</button><button type="button" class="btn sm ghost" onclick={() => editing = false}><ActionIcon name="close" />Close</button></div>
  </form>
 {:else}
- <div><button type="button" class="btn sm ghost" onclick={() => { value = coatingOf(booking); error = ''; editing = true; }}><ActionIcon name="edit" />Edit services</button></div>
+ <div><button type="button" class="btn sm ghost" onclick={openEditor}><ActionIcon name="edit" />Edit services</button></div>
 {/if}

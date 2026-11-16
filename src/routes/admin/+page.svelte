@@ -2,16 +2,17 @@
 	import ActionIcon from '#lib/ActionIcon.svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { adminNavigation, bookingSections } from '#lib/adminNavigation.ts';
+	import { adminNavigation, adminPath, bookingSections } from '#lib/adminNavigation.ts';
 	import AdminBooking from '#lib/AdminBooking.svelte';
 	import AdminActivity from '#lib/AdminActivity.svelte';
 	import AdminPricing from '#lib/AdminPricing.svelte';
 	import OperationsAdmin from '#lib/OperationsAdmin.svelte';
 	import AdminCalendar from '#lib/AdminCalendar.svelte';
 	import SlotPicker from '#lib/SlotPicker.svelte';
-	import { shop, sizes } from '#lib/config.ts';
-	import { fmtDate, fmtSlot, isOpenDay, slots, today, upcoming } from '#lib/dates.ts';
-	import { bookingsOn, db, dayStatus, isSlotBlocked, reschedule, setDateAvailability, slotsFor, toggleSlotBlock } from '#lib/store.svelte.ts';
+	import { serviceOf, sizes } from '#lib/config.ts';
+	import { addDays, fmtDate, fmtSlot, isOpenDay, today, upcoming } from '#lib/dates.ts';
+	import { serviceLabel } from '#lib/coating.ts';
+	import { bookingStatusLabels, bookingsOn, db, dayStatus, isSlotBlocked, reschedule, setDateAvailability, slotsFor, toggleSlotBlock } from '#lib/store.svelte.ts';
 
 	const navigation = $derived(adminNavigation(page.url.searchParams));
 	const tab = $derived(navigation.tab === 'Booking' ? navigation.section : navigation.tab);
@@ -21,12 +22,35 @@
 	let date = $state(upcoming().find(isOpenDay)!);
 	let moving = $state<{ id: string; date: string; slot: string }>();
 	let error = $state('');
+	let slotFilter = $state<'all' | 'pending' | 'confirmed' | 'done' | 'open'>('all');
+	let slotFilterMenu = $state<HTMLDetailsElement>();
+	let slotFilterTrigger = $state<HTMLElement>();
 
 	const queue = $derived(bookingsOn(date));
 	const availability = $derived(dayStatus(date));
+	const pastDate = $derived(date < today());
 	const closed = $derived(availability === 'closed' || availability === 'blocked');
 	const override = $derived(db.blocked.includes(date) ? 'Closed by admin' : db.opened.includes(date) ? 'Opened by admin' : 'Regular hours');
-	const count = (status: string) => queue.filter((b) => b.status === status).length;
+	const count = (status: string) => db.bookings.filter(booking => booking.date === date && booking.status === status).length;
+	const daySlots = $derived(slotsFor(date).map(({ time, free }) => ({
+		time, booking: queue.find(booking => booking.slot === time), blocked: isSlotBlocked(date, time),
+		open: date >= today() && free && availability === 'open'
+	})));
+	const slotFilters = $derived([
+		{ id: 'all', label: 'All slots', count: daySlots.length },
+		{ id: 'pending', label: 'Pending', count: daySlots.filter(slot => slot.booking?.status === 'pending').length },
+		{ id: 'confirmed', label: 'Booked', count: daySlots.filter(slot => slot.booking?.status === 'confirmed').length },
+		{ id: 'done', label: 'Completed', count: daySlots.filter(slot => slot.booking?.status === 'done').length },
+		{ id: 'open', label: 'Open', count: daySlots.filter(slot => slot.open).length }
+	] as const);
+	const selectedSlotFilter = $derived(slotFilters.find(filter => filter.id === slotFilter)!);
+	const visibleSlots = $derived(daySlots.filter(slot => slotFilter === 'all' || (slotFilter === 'open' ? slot.open : slot.booking?.status === slotFilter)));
+
+	function pickDate(day: string) {
+		date = day;
+		moving = undefined;
+		error = '';
+	}
 
 	function move() {
 		try {
@@ -41,11 +65,20 @@
 
 <svelte:head><title>Shop admin | HERCO Detailing Garage</title></svelte:head>
 
-<section class="section wrap stack admin-content">
+<svelte:window onclick={(event) => {
+	if (slotFilterMenu?.open && event.target instanceof Node && !slotFilterMenu.contains(event.target)) slotFilterMenu.open = false;
+}} onkeydown={(event) => {
+	if (event.key === 'Escape' && slotFilterMenu?.open) {
+		slotFilterMenu.open = false;
+		slotFilterTrigger?.focus();
+	}
+}} />
+
+<section class="section wrap stack admin-content" class:booking-workspace={tab === 'Bookings'}>
 	{#if navigation.tab === 'Booking'}
 		<nav class="row booking-sections" aria-label="Booking sections">
 			{#each bookingSections as section (section)}
-				<a class="btn sm" class:ghost={navigation.section !== section} href={resolve(`/admin?tab=Booking&section=${encodeURIComponent(section)}`)} aria-current={navigation.section === section ? 'page' : undefined}><ActionIcon name={section === "Overview" ? "ranking" : section === "Bookings" ? "calendar" : section === "Change requests" ? "edit" : "history"} />
+				<a class="btn sm" class:ghost={navigation.section !== section} href={resolve(adminPath('Booking', navigation.owner, section))} aria-current={navigation.section === section ? 'page' : undefined}><ActionIcon name={section === "Bookings" ? "calendar" : section === "Change requests" ? "edit" : "history"} />
 					{section === 'Bookings' ? 'Booking' : section}
 					{#if section === 'Change requests'}
 						<span class="tab-count" aria-label={pendingRequests + ' awaiting review'}>{pendingRequests}</span>
@@ -63,31 +96,40 @@
 		{#each db.bookings.filter(b => b.requests?.some(r => r.state === 'Pending')) as booking (booking.id)}
 			<article class="card stack"><p><strong>{booking.name}</strong> · {booking.id} · {fmtDate(booking.date)} at {fmtSlot(booking.slot)}</p><AdminBooking {booking} /></article>
 		{:else}<p class="card">No requests awaiting review.</p>{/each}
-	{:else if tab === 'Activity log'}
+	{:else if tab === 'Activity log' && navigation.owner}
 		<AdminActivity />
 	{:else if tab !== 'Bookings'}
-		<OperationsAdmin {tab} />
+		<OperationsAdmin {tab} owner={navigation.owner} />
 	{:else}
-		<p class="eyebrow">Shop admin / {date === today() ? 'Today' : 'Upcoming'}</p>
-		<h2>{fmtDate(date)}</h2>
-		<AdminCalendar value={date} onpick={(d) => { date = d; moving = undefined; error = ''; }} />
-
-		<div class="tiles">
-			<div class="card"><b class="display">{queue.length}/{shop.dailyLimit}</b><span class="muted small">Booked</span></div>
-			<div class="card"><b class="display">{count('pending')}</b><span class="muted small">Awaiting confirmation</span></div>
-			<div class="card"><b class="display">{count('confirmed')}</b><span class="muted small">Confirmed</span></div>
+		<div class="row between day-heading">
+			<div><p class="eyebrow">Booking schedule</p><h2>{fmtDate(date)}</h2></div>
+			<div class="row day-controls" role="group" aria-label="Select booking day">
+				<button type="button" class="btn sm ghost" aria-label="Previous day" onclick={() => pickDate(addDays(date, -1))}><ActionIcon name="left" /></button>
+				<button type="button" class="btn sm ghost" aria-label="Next day" onclick={() => pickDate(addDays(date, 1))}><ActionIcon name="right" /></button>
+			</div>
 		</div>
-
-		<p class="muted small">Confirm a pending booking after reviewing its details. Mark it as done once the service is finished.</p>
-
-		<section class="card stack" aria-label="Date availability">
-			<h3>Date availability</h3>
-			<p><strong>{fmtDate(date)}</strong> · {override} · {availability === 'open' ? 'Available' : availability === 'full' ? 'Full' : 'Closed to new bookings'}</p>
+		<div class="tiles">
+			<div class="card pending-tile"><b class="display">{count('pending')}</b><span class="small">Pending</span></div>
+			<div class="card booked-tile"><b class="display">{count('confirmed')}</b><span class="small">Booked</span></div>
+			<div class="card completed-tile"><b class="display">{count('done')}</b><span class="small">Completed</span></div>
+			<div class="card blocked-tile"><b class="display">{daySlots.filter(slot => slot.blocked).length}</b><span class="small">Blocked slots</span></div>
+		</div>
+		<section class="card row between availability-banner" aria-label="Date availability">
+			<div class="row">
+				<span class="availability-icon"><ActionIcon name="calendar" /></span>
+				<div>
+					<div class="row">
+						<h3>Date availability</h3>
+						<span class="badge" data-status={pastDate ? undefined : closed ? 'cancelled' : availability === 'full' ? 'pending' : 'done'}>{pastDate ? 'Past date' : closed ? 'Closed to new bookings' : availability === 'full' ? 'Full' : 'Available'}</span>
+					</div>
+					<p class="small muted">{fmtDate(date)} · {override}</p>
+				</div>
+			</div>
 			{#if date >= today()}
 				<div class="row">
 
 					{#if closed}
-						<button class="btn sm confirm-action" onclick={() => setDateAvailability(date, 'open')}><ActionIcon name="check" />Open this date</button>
+						<button class="btn sm" onclick={() => setDateAvailability(date, 'open')}><ActionIcon name="check" />Open this date</button>
 					{:else}
 						<button class="btn sm danger" onclick={() => setDateAvailability(date, 'closed')}><ActionIcon name="block" />Close this date</button>
 					{/if}
@@ -95,37 +137,72 @@
 						<button class="btn sm ghost" onclick={() => setDateAvailability(date, 'regular')}><ActionIcon name="reset" />Restore regular hours</button>
 					{/if}
 				</div>
-				<p class="small muted">Closing the date stops new bookings. Existing appointments stay scheduled.</p>
 			{/if}
 		</section>
 
+		<div class="booking-layout">
+		<div class="stack booking-column">
+			{#key date.slice(0, 7)}
+				<AdminCalendar value={date} onpick={pickDate} />
+			{/key}
+		</div>
+		<section class="stack booking-column" aria-labelledby="time-slots-heading">
+		<div class="card row between schedule-heading">
+			<div><h3 id="time-slots-heading">Time slots</h3><p class="small muted">Philippine time · Blocking a slot keeps existing bookings scheduled.</p></div>
+			<details class="slot-filter" bind:this={slotFilterMenu}>
+				<summary bind:this={slotFilterTrigger} aria-label={'Filter slots, ' + selectedSlotFilter.label + ', ' + selectedSlotFilter.count}>
+					<ActionIcon name="adjust" />
+					<span>{selectedSlotFilter.label}</span><span class="slot-filter-count">{selectedSlotFilter.count}</span>
+					<span class="slot-filter-chevron" aria-hidden="true"></span>
+				</summary>
+				<div class="slot-filter-options" role="group" aria-label="Filter time slots">
+					{#each slotFilters as filter (filter.id)}
+						<button type="button" aria-pressed={slotFilter === filter.id} onclick={() => {
+							slotFilter = filter.id;
+							if (slotFilterMenu) slotFilterMenu.open = false;
+							slotFilterTrigger?.focus();
+						}}>
+							<span class="slot-filter-check">{#if slotFilter === filter.id}<ActionIcon name="check" />{/if}</span>
+							<span>{filter.label}</span><span class="slot-filter-count">{filter.count}</span>
+						</button>
+					{/each}
+				</div>
+			</details>
+			{#if date >= today()}
+				<a class="btn sm" href={resolve(`/book?walk-in=1&date=${date}${navigation.owner ? '&view=owner' : ''}`)}><ActionIcon name="add" />Manual booking</a>
+			{/if}
+		</div>
 		{#each db.bookings.filter(b => b.date === date && b.walkIn?.immediate && b.status !== 'cancelled') as booking (booking.id)}
 			<article class="card stack">
-				<p><strong>Walk-in · {booking.name}</strong> · {fmtSlot(booking.slot)} · <span class="badge" data-status={booking.status}>{booking.status}</span></p>
+				<p><strong>Walk-in · {booking.name}</strong> · {fmtSlot(booking.slot)} · <span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span></p>
 				<AdminBooking {booking} />
 			</article>
 		{/each}
-		<h3>Time slots · Philippine time</h3>
-		<p class="small muted">Blocked times are hidden from booking. Existing appointments stay scheduled.</p>
 		<ol class="stack">
-			{#each slotsFor(date) as { time, free } (time)}
-				{@const b = queue.find((x) => x.slot === time)}
-				<li>
-					<div class="stack">
-						<b class="display time">{fmtSlot(time)}</b>
+			{#each visibleSlots as { time, open, blocked, booking: b } (date + time)}
+				<li class="card slot-card" data-slot-status={b?.status ?? (blocked ? 'blocked' : open ? 'open' : 'unavailable')}>
+					<div class="row between slot-heading">
+						<div class="slot-summary">
+							<time class="display time" datetime={time}>{fmtSlot(time)}</time>
+							<div class="slot-identity">
+								{#if b}
+									<b>{b.name}</b>
+									<p class="small muted">{b.selection ? serviceLabel(b.selection) : serviceOf(b.serviceId).name} · {b.bike}</p>
+								{:else}
+									<b>{blocked ? 'Blocked' : closed ? 'Closed' : pastDate ? 'Past slot' : open ? 'Open slot' : 'Unavailable'}</b>
+								{/if}
+								{#if b}<span class="badge" data-status={b.status === 'confirmed' ? 'booked' : b.status}>{bookingStatusLabels[b.status]}</span>{/if}
+								{#if b && blocked}<span class="badge">Time blocked</span>{/if}
+							</div>
+						</div>
 						{#if date >= today()}
-							<button class="btn sm ghost" aria-label={(isSlotBlocked(date, time) ? 'Unblock ' : 'Block ') + fmtSlot(time)} onclick={() => toggleSlotBlock(date, time)}><ActionIcon name={isSlotBlocked(date, time) ? "check" : "block"} />{isSlotBlocked(date, time) ? 'Unblock time' : 'Block time'}</button>
+							<button class="btn sm ghost" aria-label={(blocked ? 'Unblock ' : 'Block ') + fmtSlot(time)} onclick={() => toggleSlotBlock(date, time)}><ActionIcon name={blocked ? 'check' : 'block'} />{blocked ? 'Unblock' : 'Block'}</button>
 						{/if}
 					</div>
-					{#if !b}
-						<p class="muted open">{isSlotBlocked(date, time) ? 'Blocked' : closed ? 'Closed' : free && availability === 'open' ? 'Open' : 'Unavailable'}</p>
-					{:else}
-						<div class="card stack">
-							<div class="row between">
-								<h3>{b.name}</h3>
-								{#if isSlotBlocked(date, time)}<span class="badge" data-status="cancelled">Time blocked</span>{/if}
-								<span class="badge" data-status={b.status}>{b.status}</span>
-							</div>
+					{#if b}
+						<details class="slot-details">
+							<summary>Booking details</summary>
+							<div class="stack slot-detail-body">
 							<p class="muted small">
 								{b.bike}{#if b.finish} · Finish: {b.finish}{/if}{#if b.size} ({sizes[b.size]}){/if}<br />
 								{#if b.plateNumber}Plate number {b.plateNumber}<br />{/if}
@@ -143,63 +220,102 @@
 							{:else if (b.status === 'pending' || b.status === 'confirmed') && !b.requests?.some(r => r.state === 'Pending')}
 								<div><button class="btn sm ghost" onclick={() => (moving = { id: b.id, date: '', slot: '' })}><ActionIcon name="calendar" />Reschedule as admin</button></div>
 							{/if}
-						</div>
+							</div>
+						</details>
 					{/if}
 				</li>
+			{:else}
+				<li class="card muted">No time slots match this filter.</li>
 			{/each}
 		</ol>
-
+		</section>
+		</div>
 	{/if}
 </section>
 
 <style>
 	.admin-content { grid-template-columns: minmax(0, 1fr); }
+	.booking-workspace { max-width: 1420px; }
+	.booking-workspace :is(.booking-sections, .day-controls, .availability-banner, .schedule-heading, .slot-heading, .slot-detail-body) :global(.btn) {
+		clip-path: none;
+		border-radius: 6px;
+		font-style: normal;
+	}
+	.day-heading h2 { font-size: clamp(2rem, 4vw, 3.5rem); margin-top: .35rem; }
+	.day-controls { gap: .35rem; }
+	.day-controls button { min-width: 40px; padding-inline: .65rem; }
 	.tiles {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 8px;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: .65rem;
 	}
 
 	.tiles .card {
 		display: grid;
-		padding: 12px;
+		gap: .22rem;
+		padding: .7rem .85rem;
 	}
 
 	.tiles b {
 		font-size: 2rem;
 	}
+	.pending-tile { color: var(--warn); border-color: var(--warn-line); background: color-mix(in srgb, var(--warn-bg) 45%, var(--panel)); }
+	.booked-tile { color: var(--accent); border-color: var(--bad-line); background: color-mix(in srgb, var(--bad-bg) 45%, var(--panel)); }
+	.completed-tile { color: var(--ok); border-color: var(--ok-line); background: color-mix(in srgb, var(--ok-bg) 45%, var(--panel)); }
+	.blocked-tile { color: var(--muted); background: var(--panel-2); }
+	.availability-banner { padding: .75rem .85rem; }
+	.availability-banner h3, .schedule-heading h3 { font-size: 1.35rem; }
+	.availability-icon { display: grid; place-items: center; background: var(--panel-2); color: var(--accent); border-radius: .35rem; width: 2.2rem; height: 2.2rem; }
+	.booking-layout { display: grid; align-items: start; gap: .9rem; }
+	.booking-column { min-width: 0; }
+	.slot-filter { position: relative; min-width: 10rem; font-size: .85rem; }
+	.slot-filter summary { display: flex; align-items: center; gap: .5rem; min-height: 40px; padding: .32rem .6rem; list-style: none; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); font-weight: 700; cursor: pointer; }
+	.slot-filter summary::-webkit-details-marker { display: none; }
+	.slot-filter[open] summary, .slot-filter summary:hover { border-color: var(--accent); }
+	.slot-filter-chevron { width: .44rem; height: .44rem; margin-inline: .1rem; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: translateY(-2px) rotate(45deg); }
+	.slot-filter summary .slot-filter-count { margin-inline-start: auto; }
+	.slot-filter[open] .slot-filter-chevron { transform: translateY(2px) rotate(225deg); }
+	.slot-filter-options { display: grid; position: absolute; inset: calc(100% + .3rem) auto auto 0; z-index: 2; min-width: max(100%, 9rem); gap: .15rem; padding: .25rem; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); box-shadow: 0 4px 14px var(--card-shadow); }
+	.slot-filter-options button { display: grid; grid-template-columns: 1em minmax(0, 1fr) auto; align-items: center; gap: .4rem; border: 0; border-radius: 4px; background: transparent; padding: .35rem .45rem; color: var(--text); font: inherit; text-align: start; cursor: pointer; }
+	.slot-filter-options button:hover, .slot-filter-options button[aria-pressed='true'] { background: var(--panel-2); }
+	.slot-filter-check { color: var(--accent); }
+	.slot-filter-count { min-width: 1.3rem; padding-inline: .2rem; border-radius: .25rem; background: var(--bg); color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+	.schedule-heading { padding: .75rem .85rem; }
 
 	ol {
 		margin: 0;
 		padding: 0;
 		list-style: none;
+		gap: .55rem;
 	}
 
-	li {
-		display: grid;
-		grid-template-columns: 78px 1fr;
-		gap: 10px;
-		align-items: start;
-	}
-
+	.slot-card { padding: .6rem .8rem; border-inline-start: 4px solid var(--line); }
+	.slot-card[data-slot-status='pending'] { border-inline-start-color: var(--warn); }
+	.slot-card[data-slot-status='confirmed'] { border-inline-start-color: var(--accent); }
+	.slot-card[data-slot-status='done'] { border-inline-start-color: var(--ok); }
+	.slot-card[data-slot-status='blocked'] { background: var(--panel-2); }
+	.slot-card[data-slot-status='open'] { border-style: dashed; border-inline-start: 4px solid var(--ok-line); }
+	.slot-summary { display: grid; grid-template-columns: minmax(4rem, max-content) minmax(0, 1fr); gap: .7rem; align-items: start; flex: 1 1 14rem; min-width: 0; }
+	.slot-identity { overflow-wrap: anywhere; padding-inline-start: .7rem; border-inline-start: 1px solid var(--line); }
+	.slot-identity .badge { display: inline-block; margin-block-start: .25rem; }
+	.slot-details { border-top: 1px solid var(--line); margin-top: .55rem; }
+	.slot-details summary { width: fit-content; margin-inline-start: auto; padding: .35rem 0 0 .35rem; color: var(--muted); font-size: .8rem; font-weight: 700; cursor: pointer; }
+	.slot-detail-body { padding-block: .6rem .25rem; overflow-wrap: anywhere; }
 	.time {
-		padding-top: 14px;
 		color: var(--accent);
-		font-size: 1.25rem;
-	}
-
-	.open {
-		padding: 12px 16px;
-		border: 1px dashed var(--line);
-		border-radius: 6px;
+		font-size: 1.2rem;
+		line-height: 1.2;
+		white-space: nowrap;
 	}
 
 	.between {
 		justify-content: space-between;
 	}
 
-	@media (max-width: 400px) {
-		.tiles .card { padding: .4rem; overflow-wrap: anywhere; }
-		li { grid-template-columns: minmax(0, 1fr); }
+	@media (min-width: 1000px) {
+		.booking-layout { grid-template-columns: minmax(345px, 2fr) minmax(0, 4fr); }
+	}
+	@media (max-width: 600px) {
+		.tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	}
 </style>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ActionIcon from '#lib/ActionIcon.svelte';
+	import { afterNavigate } from '$app/navigation';
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { syncBookings } from '#lib/store.svelte.ts';
@@ -9,14 +10,18 @@
 	import { page } from '$app/state';
 	import { photos, shop } from '#lib/config.ts';
 	import type { LayoutProps } from './$types';
-	import { adminNavigation, adminTabs } from '#lib/adminNavigation.ts';
+	import { adminNavigation, adminPath, adminTabs } from '#lib/adminNavigation.ts';
 
 	let { children }: LayoutProps = $props();
+	let menuOpen = $state(false);
+	let menuTrigger: HTMLButtonElement;
+	let header: HTMLElement;
+	afterNavigate(() => { menuOpen = false; });
 	let theme = $state<'system' | 'light' | 'dark'>('system');
 	let themeMenu: HTMLDetailsElement;
 	let themeTrigger: HTMLElement;
 	const themes = [{ value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }] as const;
-	const activeAdminTab = $derived(adminNavigation(page.url.searchParams).tab);
+	const activeAdmin = $derived(adminNavigation(page.url.searchParams));
 
 	function syncTheme() {
 		const current = document.documentElement.dataset.theme;
@@ -62,10 +67,14 @@
 
 <svelte:window onclick={(event) => {
 	if (themeMenu?.open && event.target instanceof Node && !themeMenu.contains(event.target)) themeMenu.open = false;
+	if (menuOpen && event.target instanceof Node && !header.contains(event.target)) menuOpen = false;
 }} onkeydown={(event) => {
 	if (event.key === 'Escape' && themeMenu?.open) {
 		themeMenu.open = false;
 		themeTrigger.focus();
+	} else if (event.key === 'Escape' && menuOpen) {
+		menuOpen = false;
+		menuTrigger.focus();
 	}
 }} />
 
@@ -78,37 +87,43 @@
 			<div class="theme-options" role="group" aria-label="Appearance choices">
 				{#each themes as option (option.value)}
 					<button type="button" aria-pressed={theme === option.value} onclick={() => chooseTheme(option.value)}><ActionIcon name={option.value === "system" ? "system" : option.value === "light" ? "sun" : "moon"} />
-						{option.label}{#if theme === option.value}<span aria-hidden="true">✓</span>{/if}
+						<span class="theme-label">{option.label}</span>
+						{#if theme === option.value}<span class="theme-check" aria-hidden="true">✓</span>{/if}
 					</button>
 				{/each}
 			</div>
 		</details>
-		<a class="link" href={page.route.id === '/admin' ? resolve('/') : resolve('/admin')}>
-			{page.route.id === '/admin' ? 'Back to user view' : 'Admin view'}
-		</a>
+		<nav class="view-switch" aria-label="Demo views">
+			<a href={resolve('/')} aria-current={page.route.id !== '/admin' ? 'true' : undefined}>User view</a>
+			<a href={resolve('/admin')} aria-current={page.route.id === '/admin' && !activeAdmin.owner ? 'true' : undefined}>Admin view</a>
+			<a href={resolve(adminPath('Booking', true))} aria-current={page.route.id === '/admin' && activeAdmin.owner ? 'true' : undefined}>Owner view</a>
+		</nav>
 	</div>
 </div>
 
-<header>
+<header bind:this={header}>
 	<div class="wrap row" class:admin-header={page.route.id === '/admin'}>
 		<a class="logo" href={resolve('/')}>
 			<img class="mark" src={asset(photos.logo)} alt="" />
 			<span><b>Herco</b><small>Detailing Garage</small></span>
 		</a>
+		<button class="menu-trigger" type="button" bind:this={menuTrigger} aria-expanded={menuOpen} aria-controls="header-navigation" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'} onclick={() => menuOpen = !menuOpen}>
+			<ActionIcon name={menuOpen ? 'close' : 'menu'} />
+		</button>
 		{#if page.route.id !== '/admin'}
-		<nav class="row" aria-label="Customer navigation">
-			<a class="link wide" href={resolve('/#services')} aria-current={page.route.id === '/' && page.url.hash === '#services' ? 'location' : undefined}>Services</a>
+		<nav id="header-navigation" class="row main-nav" class:menu-open={menuOpen} aria-label="Customer navigation">
+			<a class="link" href={resolve('/#services')} aria-current={page.route.id === '/' && page.url.hash === '#services' ? 'location' : undefined}>Services</a>
 			<a class="link" href={resolve('/preview')} aria-current={page.route.id === '/preview' ? 'page' : undefined}>Showcase</a>
 			<a class="link" href={resolve('/points')} aria-current={page.route.id === '/points' ? 'page' : undefined}>HERCO Points</a>
 			<a class="link" href={resolve('/account')} aria-current={['/account', '/my-bookings'].includes(page.route.id ?? '') ? 'page' : undefined}>Account</a>
 			<a class="btn sm" href={resolve('/book')} aria-current={page.route.id === '/book' ? 'page' : undefined}><ActionIcon name="calendar" />Book</a>
 		</nav>
 		{:else}
-		<nav class="admin-sections" aria-label="Admin sections">
-			{#each adminTabs as tab}
+		<nav id="header-navigation" class="admin-sections main-nav" class:menu-open={menuOpen} aria-label="Admin sections">
+			{#each adminTabs.filter(tab => activeAdmin.owner || tab !== 'Activity log') as tab}
 				<a
-					href={resolve(`/admin?tab=${encodeURIComponent(tab)}`)}
-					aria-current={activeAdminTab === tab ? 'page' : undefined}
+					href={resolve(adminPath(tab, activeAdmin.owner))}
+					aria-current={activeAdmin.tab === tab ? 'page' : undefined}
 				>{tab}</a>
 			{/each}
 		</nav>
@@ -153,14 +168,15 @@
 	.theme-picker summary::-webkit-details-marker { display: none; }
 	.theme-picker summary:hover, .theme-picker[open] summary { color: var(--accent); }
 	.theme-options { position: absolute; inset-inline-end: 0; top: calc(100% + .35rem); display: grid; gap: .15rem; min-width: 7.5rem; padding: .25rem; background: var(--panel); border: 1px solid var(--line); border-radius: .4rem; box-shadow: 0 4px 12px var(--card-shadow); }
-	.theme-options button { display: flex; align-items: center; gap: .5rem; padding: .35rem .55rem; border: 0; border-radius: .2rem; background: transparent; color: var(--text); font: inherit; font-size: .85rem; cursor: pointer; }
+	.theme-options button { display: grid; grid-template-columns: 1em minmax(0, 1fr) 1em; align-items: center; gap: .5rem; padding: .35rem .55rem; border: 0; border-radius: .2rem; background: transparent; color: var(--text); font: inherit; font-size: .85rem; text-align: start; cursor: pointer; }
 	.theme-options button:hover, .theme-options button[aria-pressed='true'] { background: var(--panel-2); }
-	.theme-options button span { margin-inline-start: auto; color: var(--accent); }
+	.theme-check { color: var(--accent); text-align: center; }
 
-	.demo-switch .link {
-		padding-block: 6px;
-		font-size: 0.85rem;
-	}
+	.view-switch { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: .45rem; background: var(--panel); }
+	.view-switch a { padding: .3rem .55rem; border-radius: .29rem; color: var(--muted); font-size: .77rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+	.view-switch a:hover:not([aria-current]) { background: var(--panel-2); color: var(--text); }
+	.view-switch a[aria-current] { background: var(--accent-fill); color: var(--accent-ink); }
+	.view-switch a:focus-visible { outline-offset: -2px; outline-color: currentColor; }
 
 
 	.admin-sections {
@@ -192,11 +208,7 @@
 		border-bottom-color: var(--accent);
 	}
 
-	@media (max-width: 760px) {
-		header .admin-header { flex-wrap: wrap; gap: .25rem; }
-		.admin-header .logo { padding-block: .35rem; }
-		.admin-sections { width: 100%; }
-	}
+	.menu-trigger { display: none; }
 
 	header {
 		position: sticky;
@@ -283,21 +295,30 @@
 
 	@media (max-width: 960px) {
 		header .wrap {
-			flex-wrap: wrap;
 			gap: 8px;
 			padding-block: 8px;
 		}
 
-		nav {
-			flex-wrap: wrap;
+		header .menu-trigger { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); font-size: 1.35rem; cursor: pointer; }
+		.main-nav {
+			display: none;
+			position: absolute;
+			top: 100%;
+			inset-inline: 0;
+			padding: .5rem 16px;
+			background: var(--panel);
+			border-bottom: 1px solid var(--line);
+			box-shadow: 0 5px 12px var(--card-shadow);
+			max-height: 65dvh;
+			overflow-y: auto;
 		}
+		.main-nav.menu-open { display: grid; gap: .25rem; }
+		.main-nav a { padding: .5rem; }
+		.main-nav a[aria-current] { color: var(--accent); }
+		.main-nav .btn[aria-current] { color: var(--accent-ink); }
 		header .link {
 			font-size: 0.95rem;
 			letter-spacing: 0.04em;
-		}
-
-		.wide {
-			display: none;
 		}
 
 		.logo small {

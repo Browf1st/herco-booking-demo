@@ -1,11 +1,12 @@
 import { activityEvent, type ActivityEvent, type ActivityModule } from './activity';
 // Demo store: bookings live in this browser only, and this file is the one seam a real database replaces.
 import { demoFans, proFeatures, shop, type Size } from './config';
-import { defaultPricing, selection, validateSelection, quote, type Selection, type Pricing } from './coating';
-import { ceramicTierNames, defaultCeramicCatalogPricing, powderDay } from './bookingCatalog';
+import { applyServicePriceAdjustments, defaultPricing, olderPowderParts, selection, validateSelection, quote, type Selection, type Pricing } from './coating';
+import { ceramicTierNames, createCatalogOptions, defaultCeramicCatalogPricing, powderDay, wheels } from './bookingCatalog';
 import { addDays, isBookableDate, isOpenDay, nowHour, slots, today, upcoming } from './dates';
 
 export type Status = 'pending' | 'confirmed' | 'done' | 'cancelled';
+export const bookingStatusLabels: Record<Status, string> = { pending: 'Pending', confirmed: 'Booked', done: 'Completed', cancelled: 'Cancelled' };
 export type ChangeRequest = { kind: 'Cancel' | 'Reschedule'; reason: string; date?: string; slot?: string; state: 'Pending' | 'Approved' | 'Declined'; at: string; reviewedAt?: string };
 type DemoData = { bookings: Booking[]; blocked: string[]; opened?: string[]; blockedSlots?: Record<string, string[]>; scenarioVersion: number; pricing?: Pricing; events?: ActivityEvent[] };
 type ServiceSnapshot = { selection: Selection; estimate?: ReturnType<typeof quote> };
@@ -21,6 +22,7 @@ export type Booking = {
  completionNote?: string;
  photos?: string[];
  completedAt?: string;
+ finalPrice?: number;
  walkIn?: { signer: string; at: string; version: string; immediate?: boolean };
 	id: string;
 	date: string;
@@ -132,6 +134,22 @@ const sampleBooking: Booking = {
 };
 const loaded = load();
 if (!loaded.bookings.some(booking => booking.id === sampleServiceBookingId)) loaded.bookings.push(sampleBooking);
+// Final prices for the completed demo scenarios, including older saved copies.
+const sampleFinalPrices = new Map([
+ ['HG-DEMO-208', 2500],
+ ['HG-DEMO-COMPLETE', sampleBefore.estimate.total],
+ [sampleServiceBookingId, sampleAfter.estimate.total]
+]);
+let repairedSamplePrices = false;
+for (const booking of loaded.bookings) {
+ const price = sampleFinalPrices.get(booking.id);
+ if (booking.status !== 'done' || booking.finalPrice !== undefined || price === undefined) continue;
+ booking.finalPrice = price;
+ repairedSamplePrices = true;
+}
+if (repairedSamplePrices && typeof localStorage !== 'undefined' && localStorage.getItem(KEY)) {
+ localStorage.setItem(KEY, JSON.stringify(loaded));
+}
 export const db = $state({ ...loaded, opened: loaded.opened ?? [], blockedSlots: loaded.blockedSlots ?? {}, pricing: loaded.pricing ?? structuredClone(defaultPricing), events: loaded.events ?? [] });
 const save = () => localStorage.setItem(KEY, JSON.stringify(db));
 
@@ -192,27 +210,50 @@ export function coatingOf(booking: Booking): Selection {
  return { ...selection(powder, booking.finish), ceramicFinish: booking.serviceId === 'ceramic-matte' ? 'Stay Matte' : 'Glossy Finish', powderParts: powder ? ['Wheels / mags'] : [], front: powder ? 'Not sure' : '' };
 }
 
+export function catalogSelectionOf(booking: Booking) {
+ const value = coatingOf(booking);
+ const catalog = value.catalog ?? {
+  ...createCatalogOptions(),
+  bigBike: booking.size === 'large' || /^Kawasaki Dominar 400\b/i.test(booking.bike),
+  wheelType: value.powderParts.includes(wheels) ? 'Not sure' : '',
+  ceramicAddons: value.ceramicFinish === 'Matte to Glossy' ? ['Matte to Glossy'] : []
+ };
+ return { ...value, catalog };
+}
+
 function active(booking: Booking) {
  if (booking.status !== 'pending' && booking.status !== 'confirmed') throw Error('This booking is already closed.');
 }
 
-export function editCoating(booking: Booking, input: Selection, actor = 'Demo admin') {
+type ServiceVehicle = Pick<Booking, 'bike' | 'size' | 'modelYear'>;
+type StaffServiceEdit = ServiceVehicle & { notes: string; adjustments: Record<string, number | undefined> };
+
+export function editCoating(booking: Booking, input: Selection, actor = 'Demo admin', staffEdit?: StaffServiceEdit) {
  active(booking);
- validateSelection(input, booking.bike);
- if (!booking.selection?.powder && !booking.walkIn?.immediate) assertServiceDay(input, booking.date);
  const before = { selection: coatingOf(booking), estimate: $state.snapshot(booking.estimate) };
- const estimate = estimateServiceEdit(booking, input);
- if (JSON.stringify(before.selection) === JSON.stringify(input)) return;
+ const vehicle = staffEdit ?? booking;
+ if (!vehicle.bike.trim()) throw Error('Enter the motorcycle model.');
+ validateSelection(input, vehicle.bike, olderPowderParts(before.selection.powderParts));
+ if (!before.selection.powder && !booking.walkIn?.immediate) assertServiceDay(input, booking.date);
+ const estimate = estimateServiceEdit(booking, input, vehicle, staffEdit?.adjustments);
+ const vehicleChanged = booking.bike !== vehicle.bike || booking.size !== vehicle.size || booking.modelYear !== vehicle.modelYear;
+ const priceChanged = Boolean(staffEdit && Object.values(staffEdit.adjustments).some(price => price !== undefined));
+ if (JSON.stringify(before.selection) === JSON.stringify(input) && !vehicleChanged && !priceChanged && (!staffEdit || staffEdit.notes === booking.notes)) return;
  const after = { selection: input, estimate };
  booking.serviceChanges = [...(booking.serviceChanges ?? []), { id: crypto.randomUUID(), at: new Date().toISOString(), actor, before, after }];
  booking.selection = input;
  booking.serviceId = input.ceramic ? 'ceramic' : 'wheel-colour';
  booking.estimate = estimate;
- audit('Updated services' + (before.estimate ? ' · ₱' + before.estimate.total + ' → ₱' + estimate.total : ''), booking.id, actor);
+ if (staffEdit) Object.assign(booking, { bike: staffEdit.bike, size: staffEdit.size, modelYear: staffEdit.modelYear, notes: staffEdit.notes });
+ const adjustedLines = staffEdit ? (estimate.lines ?? []).filter(line => staffEdit.adjustments[line.label] !== undefined)
+  .map(line => line.label + ' · ₱' + line.subtotal.toFixed(2)).join(' · ') : '';
+ audit('Updated services' + (before.estimate ? ' · ₱' + before.estimate.total + ' → ₱' + estimate.total : ''), booking.id, actor, 'Booking', adjustedLines || undefined);
 }
 
-export function estimateServiceEdit(booking: Booking, input: Selection) {
- return quote(input, booking.size ?? 'small', booking.bike, db.pricing, $state.snapshot(booking.estimate?.lines), booking.modelYear);
+export function estimateServiceEdit(booking: Booking, input: Selection, vehicle: ServiceVehicle = booking, adjustments?: Record<string, number | undefined>) {
+ const sameMotorcycle = vehicle.bike === booking.bike && vehicle.modelYear === booking.modelYear && vehicle.size === booking.size;
+ const estimate = quote(input, vehicle.size ?? 'small', vehicle.bike, db.pricing, sameMotorcycle ? $state.snapshot(booking.estimate?.lines) : [], vehicle.modelYear);
+ return adjustments ? applyServicePriceAdjustments(estimate, adjustments) : estimate;
 }
 
 export function requestChange(booking: Booking, kind: ChangeRequest['kind'], reason: string, date?: string, slot?: string) {
@@ -248,16 +289,18 @@ export function approveBooking(booking: Booking, note: string) {
  setStatus(booking.id, 'confirmed');
 }
 
-export function completeBooking(booking: Booking, note: string, photos: string[]) {
+export function completeBooking(booking: Booking, note: string, photos: string[], finalPrice: number | undefined) {
  if (booking.status !== 'confirmed') throw Error('Confirm this booking before completing it.');
  if (booking.requests?.some(r => r.state === 'Pending')) throw Error('Review the pending change request before completing this booking.');
- const previous = { completionNote: booking.completionNote, photos: booking.photos, completedAt: booking.completedAt, status: booking.status };
- Object.assign(booking, { completionNote: note, photos, completedAt: new Date().toISOString(), status: 'done' });
- try { audit('Confirmed → Done' + (photos.length ? ' · Added ' + photos.length + ' completion photo(s)' : ''), booking.id); }
+ if (finalPrice === undefined || finalPrice < 0 || !Number.isSafeInteger(Math.round(finalPrice * 100))) throw Error('Enter a valid final service price.');
+ const previous = { completionNote: booking.completionNote, photos: booking.photos, completedAt: booking.completedAt, status: booking.status, finalPrice: booking.finalPrice };
+ Object.assign(booking, { completionNote: note, photos, completedAt: new Date().toISOString(), status: 'done', finalPrice: Math.round(finalPrice * 100) / 100 });
+ try { audit('Confirmed → Done' + (photos.length ? ' · Added ' + photos.length + ' completion photo(s)' : ''), booking.id, 'Demo admin', 'Booking', 'Final service price: ₱' + booking.finalPrice?.toFixed(2)); }
  catch (error) { Object.assign(booking, previous); db.events.pop(); throw error; }
 }
 
 export const features = () => proFeatures;
+
 
 export const bookingsOn = (date: string) =>
 	db.bookings.filter((b) => b.date === date && b.status !== 'cancelled' && !b.walkIn?.immediate);

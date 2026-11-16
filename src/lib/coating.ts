@@ -3,6 +3,7 @@ import { catalogItems, powderParts, wheels, type CatalogOptions, type CeramicCat
 
 export const finishes = ['Stay Matte', 'Matte to Glossy', 'Enhance', 'Glossy Finish'] as const;
 export const parts = ['Wheels / mags', 'Frame', 'Subframe', 'Swingarm', 'Brackets', 'Foot pegs', 'Grab rails', 'Metal covers', 'Other metal parts'];
+export const olderPowderParts = (selected: string[]) => selected.filter(part => part !== wheels && parts.includes(part) && !Object.hasOwn(powderParts, part));
 export const bikes: Record<Size, string[]> = {
  small: ['Honda ADV150','Honda ADV160','Honda PCX150','Honda PCX160','Honda Click125','Honda Click160','Honda BeAT','Honda Giorno+','Honda AirBlade160','Honda Wave RSX','Honda XRM125','Honda Winner X','Yamaha NMAX','Yamaha Aerox','Yamaha Mio Gear','Yamaha Mio Fazzio','Yamaha Mio Gravis','Yamaha Mio i125','Suzuki Burgman Street','Suzuki Access','Suzuki Avenis','Suzuki Raider R150','Suzuki Smash','Kymco Like 150i','Kymco Dink R 150','Vespa Primavera 150','SYM Jet X 150'],
  medium: ['Honda ADV350','Honda CRF150L','Honda CB150X','Yamaha MT-15','Yamaha XSR155','Yamaha WR155R','Yamaha YZF-R3','Yamaha XMAX','Suzuki Gixxer 155','Suzuki Gixxer 250','Suzuki V-Strom 250 SX','Kawasaki Rouser NS160','Kawasaki Dominar 400','Kawasaki Ninja 400','Kawasaki KLX150','CFMOTO 300NK','CFMOTO 400NK','KTM 390 Duke','Royal Enfield Hunter 350'],
@@ -50,6 +51,19 @@ export type ServiceLine = { label: string; subtotal: number; discount: number; m
 export type Estimate = { subtotal: number; discount: number; total: number; lines?: ServiceLine[] };
 const round = (amount: number) => Math.round(amount * 100) / 100;
 
+export function applyServicePriceAdjustments(estimate: Estimate, adjustments: Record<string, number | undefined>): Estimate {
+ const lines = estimate.lines?.map(line => {
+  const amount = adjustments[line.label];
+  if (amount === undefined) return line;
+  if (amount < 0 || !Number.isSafeInteger(Math.round(amount * 100))) throw Error('Enter a valid adjusted price for ' + line.label + '.');
+  return { label: line.label, subtotal: round(amount), discount: 0 };
+ });
+ if (!lines) return estimate;
+ const subtotal = round(lines.reduce((sum, line) => sum + line.subtotal, 0));
+ const discount = round(lines.reduce((sum, line) => sum + line.discount, 0));
+ return { lines, subtotal, discount, total: round(subtotal - discount) };
+}
+
 export function linePrice(line: ServiceLine) {
  return line.pending ? 'Shop quote required' : line.maximum !== undefined ? money(line.subtotal) + '–' + money(line.maximum) : money(line.subtotal);
 }
@@ -63,7 +77,14 @@ export function estimatePrice(estimate: Estimate) {
 
 export function quote(s: Selection, size: Size, bike: string, pricing: Pricing, saved: ServiceLine[] = [], year?: number): Estimate {
  if (s.catalog) {
-  const lines = [...catalogItems(s, s.catalog, bike, year, pricing.ceramicCatalog)].map(([label, range]): ServiceLine =>
+  const items = catalogItems(s, s.catalog, bike, year, pricing.ceramicCatalog);
+  if (s.powder) {
+   for (const part of olderPowderParts(s.powderParts)) {
+    const price = pricing.powder[part];
+    items.set('Powder coating · ' + part + (s.finish.trim() ? ' · ' + s.finish.trim() : ''), price === undefined ? undefined : [price, price]);
+   }
+  }
+  const lines = [...items].map(([label, range]): ServiceLine =>
    saved.find(line => line.label === label) ?? {
     label, subtotal: range?.[0] ?? 0, discount: round((range?.[0] ?? 0) * pricing.promo / 100),
     maximum: range && range[0] !== range[1] ? range[1] : undefined, pending: !range
@@ -88,10 +109,10 @@ export function quote(s: Selection, size: Size, bike: string, pricing: Pricing, 
  const discount = round(lines.reduce((sum, line) => sum + line.discount, 0));
  return { subtotal, discount, total: round(subtotal - discount), lines };
 }
-export function validateSelection(s: Selection, bike: string) {
+export function validateSelection(s: Selection, bike: string, allowedOlderParts: string[] = []) {
  if (!s.ceramic && !s.powder) throw Error('Choose at least one service.');
  if (s.catalog) {
-  if (s.powder && (!s.powderParts.length || s.powderParts.some(part => part !== wheels && !Object.hasOwn(powderParts, part)))) throw Error('Choose wheels or small parts for powder coating.');
+  if (s.powder && (!s.powderParts.length || s.powderParts.some(part => part !== wheels && !Object.hasOwn(powderParts, part) && !allowedOlderParts.includes(part)))) throw Error('Choose wheels or small parts for powder coating.');
   if (s.powder && s.powderParts.includes(wheels) && !s.catalog.wheelType) throw Error('Choose a wheel category.');
   if (s.powder && s.powderParts.includes(wheels) && s.catalog.wheelType.startsWith('17') && !/Raider|Sniper/i.test(bike)) throw Error('The 17-inch mags price is for Raider and Sniper only. Check your motorcycle or choose another wheel category.');
   return;

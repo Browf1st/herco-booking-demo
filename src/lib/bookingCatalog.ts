@@ -76,6 +76,10 @@ export type CatalogOptions = {
  pcx2026?: boolean;
 };
 
+export function createCatalogOptions(): CatalogOptions {
+ return { ceramicAddons: [], wheelType: '', prismatic: false, wheelExtras: [], bigBike: false, otherBigBike: false };
+}
+
 type Range = readonly [number, number];
 export function ceramicTier(bike: string, bigBike: boolean): CeramicTier | undefined {
  const model = bike.split(' — ')[0];

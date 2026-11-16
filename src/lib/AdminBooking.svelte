@@ -1,7 +1,9 @@
 <script lang="ts">
  import ActionIcon from '#lib/ActionIcon.svelte';
  import BookingSummary from './BookingSummary.svelte';
- import EditCoating from './EditCoating.svelte';
+ import { page } from '$app/state';
+ import { resolve } from '$app/paths';
+ import { adminNavigation } from './adminNavigation';
  import { fmtDate, fmtSlot } from './dates';
  import { approveBooking, completeBooking, reviewChange, setStatus, type Booking } from './store.svelte';
  let { booking }: { booking: Booking } = $props();
@@ -9,9 +11,11 @@
  let note = $state('');
  let photos = $state<string[]>([]);
  let completing = $state(false);
+ let finalPrice = $state<number>();
  let reading = $state(false);
  let error = $state('');
  const active = $derived(booking.status === 'confirmed' || booking.status === 'pending');
+ const navigation = $derived(adminNavigation(page.url.searchParams));
  function run(action: () => void) {
   error = '';
   try { action(); } catch (e) { error = (e as Error).message; }
@@ -53,7 +57,7 @@
    {/if}
   </div>
  {/each}
- {#if active}<EditCoating {booking} staff />{/if}
+ {#if active}<div><a class="btn sm ghost" href={resolve(`/book?edit=${encodeURIComponent(booking.id)}&return=${encodeURIComponent(navigation.section)}${navigation.owner ? '&view=owner' : ''}`)}><ActionIcon name="edit" />Edit services</a></div>{/if}
  {#if booking.status === 'pending'}
   <form class="stack" onsubmit={(event) => { event.preventDefault(); run(() => approveBooking(booking, approval.trim())); }}>
    <label>Approval note for the customer (optional)<textarea rows="2" maxlength="1000" bind:value={approval}></textarea></label>
@@ -61,7 +65,9 @@
   </form>
  {:else if booking.status === 'confirmed'}
   {#if completing}
-   <form class="card stack" onsubmit={(event) => { event.preventDefault(); run(() => { completeBooking(booking, note.trim(), [...photos]); completing = false; }); }}>
+   <form class="card stack" onsubmit={(event) => { event.preventDefault(); run(() => { completeBooking(booking, note.trim(), [...photos], finalPrice); completing = false; }); }}>
+    <label>Final service price (₱)<input type="number" min="0" step="0.01" required bind:value={finalPrice} /></label>
+    <p class="muted small">Enter the final amount charged after any service changes or discounts.</p>
     <label>Completion details (optional)<textarea rows="2" maxlength="1000" bind:value={note}></textarea></label>
     <div class="cols"><label>Take a photo<input type="file" accept="image/*" capture="environment" onchange={addPhoto} disabled={reading || photos.length >= 3} /></label>
     <label>Upload a photo<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" onchange={addPhoto} disabled={reading || photos.length >= 3} /></label></div>

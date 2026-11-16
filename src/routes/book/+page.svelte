@@ -1,37 +1,52 @@
 <script lang="ts">
  import ActionIcon from '#lib/ActionIcon.svelte';
  import { resolve } from '$app/paths';
+ import { goto } from '$app/navigation';
  import { page } from '$app/state';
  import { tick } from 'svelte';
  import BookingCatalog from '#lib/BookingCatalog.svelte';
- import { ceramicModels, ceramicTierNames, defaultCeramicCatalogPricing } from '#lib/bookingCatalog.ts';
+ import { ceramicModels, ceramicTierNames, createCatalogOptions, defaultCeramicCatalogPricing } from '#lib/bookingCatalog.ts';
  import VisitPicker from '#lib/VisitPicker.svelte';
  import { account, rememberBooking } from '#lib/account.svelte.ts';
- import { estimatePrice, linePrice, money, quote, selection, serviceLabel } from '#lib/coating.ts';
+ import { applyServicePriceAdjustments, estimatePrice, linePrice, money, olderPowderParts, quote, selection, serviceLabel } from '#lib/coating.ts';
+ import { adminPath, bookingSections } from '#lib/adminNavigation.ts';
  import { type Size } from '#lib/config.ts';
  import { currentShopTime, fmtDate, fmtSlot, isBookableDate, today } from '#lib/dates.ts';
- import { book, db, type Booking } from '#lib/store.svelte.ts';
+ import { book, catalogSelectionOf, db, editCoating, estimateServiceEdit, type Booking } from '#lib/store.svelte.ts';
 
  const query = page.url.searchParams;
- const walkIn = query.get('walk-in') === '1';
+ const editId = query.get('edit');
+ const editedBooking = editId ? db.bookings.find(booking => booking.id === editId) : undefined;
+ const editing = Boolean(editId);
+ const canEdit = $derived(!editing || editedBooking?.status === 'pending' || editedBooking?.status === 'confirmed');
+ const returnSection = bookingSections.find(section => section === query.get('return')) ?? 'Booking history';
+ const returnToBooking = resolve(adminPath('Booking', query.get('view') === 'owner', returnSection));
+ const walkIn = !editing && query.get('walk-in') === '1';
  const preferredDate = query.get('date') ?? '';
  const requestedService = query.get('service');
- let coating = $state({
+ const editSelection = editedBooking ? catalogSelectionOf(editedBooking) : undefined;
+ let coating = $state(editSelection ?? {
   ...selection(['wheel-colour', 'Powder Coating'].includes(requestedService ?? ''), query.get('finish') ?? ''),
   ceramic: requestedService !== null && !['wheel-colour', 'Powder Coating'].includes(requestedService),
-  catalog: { ceramicAddons: [] as string[], wheelType: '', prismatic: false, wheelExtras: [] as string[], bigBike: false, otherBigBike: false }
+  catalog: createCatalogOptions()
  });
- let unit = $state('');
- let modelYear = $state<number>();
+ const groupedAliases = ['Honda ADV150', 'Honda PCX150', 'Suzuki Gixxer 250'];
+ const savedModel = editedBooking?.bike.split(' — ')[0] ?? '';
+ const initialUnit = !editedBooking ? '' : editSelection?.catalog.otherBigBike ? 'other-big-bike'
+  : Object.values(ceramicModels).flat().includes(savedModel) && !groupedAliases.includes(savedModel) ? savedModel : 'other';
+ let unit = $state(initialUnit);
+ let modelYear = $state<number | undefined>(editedBooking?.modelYear);
  const pcxYears = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018];
- let powderBike = $state('');
- let custom = $state('');
+ let powderBike = $state(editedBooking?.bike ?? '');
+ let custom = $state(initialUnit.startsWith('other') ? editedBooking?.bike ?? '' : '');
  const manualModel = $derived(unit === 'other' || unit === 'other-big-bike');
- const size = $derived<Size>(coating.catalog.bigBike ? 'large' : 'small');
- const bike = $derived(coating.ceramic ? (manualModel ? custom.trim() : unit) : powderBike.trim());
+ const bike = $derived(coating.ceramic ? (manualModel ? custom.trim() : unit === initialUnit && editedBooking ? editedBooking.bike : unit) : powderBike.trim());
+ const size = $derived<Size | undefined>(editedBooking && bike === editedBooking.bike ? editedBooking.size : coating.catalog.bigBike ? 'large' : 'small');
+ const olderParts = olderPowderParts(editSelection?.powderParts ?? []);
  function selectMotorcycle(model: string) {
   modelYear = undefined;
   custom = '';
+  adjustments = {};
   coating.catalog.otherBigBike = model === 'other-big-bike';
   coating.catalog.bigBike = coating.catalog.otherBigBike || model === 'Kawasaki Dominar 400';
  }
@@ -45,19 +60,22 @@
   'Kymco Like 150i': 'Kymco Like', 'Suzuki Gixxer 155': 'Gixxer', 'Vespa Primavera 150': 'Vespa',
   'Yamaha XMAX': 'XMAX'
  };
- const groupedAliases = ['Honda ADV150', 'Honda PCX150', 'Suzuki Gixxer 250'];
  const tierDescriptions: Record<string, string> = { 1799: 'Scooters and underbones', 1999: 'Maxi scooters and naked bikes', 2499: 'Vespa, 400 cc and up, and more' };
  const tiers = Object.entries(ceramicModels);
  const ceramicPricing = $derived(db.pricing.ceramicCatalog ?? defaultCeramicCatalogPricing);
  let form = $state({
-  name: walkIn ? '' : account.current?.name ?? '', email: walkIn ? '' : account.current?.email ?? '',
-  phone: walkIn ? '' : account.current?.phone ?? '', plateNumber: '', notes: query.get('notes') ?? '', date: isBookableDate(preferredDate) ? preferredDate : '', slot: ''
+  name: editedBooking?.name ?? (walkIn ? '' : account.current?.name ?? ''), email: editedBooking?.email ?? (walkIn ? '' : account.current?.email ?? ''),
+  phone: editedBooking?.phone ?? (walkIn ? '' : account.current?.phone ?? ''), plateNumber: editedBooking?.plateNumber ?? '',
+  notes: editedBooking?.notes ?? query.get('notes') ?? '', date: editedBooking?.date ?? (isBookableDate(preferredDate) ? preferredDate : ''), slot: editedBooking?.slot ?? ''
  });
  let signer = $state('');
  let acknowledged = $state(false);
  let immediate = $state(true);
  const isPcx = $derived(coating.ceramic && /^Honda PCX/i.test(bike));
- const estimate = $derived(quote(coating, size, bike, db.pricing, [], isPcx ? modelYear : undefined));
+ let adjustments = $state<Record<string, number | undefined>>({});
+ const vehicle = $derived({ bike, size, modelYear: isPcx || (editedBooking && bike === editedBooking.bike) ? modelYear : undefined });
+ const baseEstimate = $derived(editedBooking ? estimateServiceEdit(editedBooking, coating, vehicle) : quote(coating, size ?? 'small', bike, db.pricing, [], vehicle.modelYear));
+ const estimate = $derived(applyServicePriceAdjustments(baseEstimate, Object.fromEntries(Object.entries(adjustments).filter(([, value]) => value !== undefined && value >= 0 && Number.isSafeInteger(Math.round(value * 100))))));
  let error = $state('');
  let done = $state<Booking>();
  let heading = $state<HTMLHeadingElement>();
@@ -65,6 +83,13 @@
  async function submit(event: SubmitEvent) {
   event.preventDefault();
   error = '';
+  if (editedBooking) {
+   try {
+    editCoating(editedBooking, $state.snapshot(coating), 'Demo admin', { ...vehicle, notes: form.notes.trim(), adjustments: $state.snapshot(adjustments) });
+    await goto(returnToBooking);
+   } catch (e) { error = (e as Error).message; }
+   return;
+  }
   const name = form.name.trim();
   const phone = form.phone.trim();
   if (!name || !bike || !/^\+?[\d ()-]+$/.test(phone) || phone.replace(/\D/g, '').length < 7) {
@@ -106,10 +131,14 @@
    <p>{fmtDate(done.date)} at {fmtSlot(done.slot)} (Philippine time)</p>
    <p>Estimated service price <strong>{estimatePrice(done.estimate!)}</strong></p>
   </div>
-  <div><a class="btn" href={walkIn ? resolve('/admin?tab=Booking%20history') : resolve('/my-bookings')}><ActionIcon name="history" />{walkIn ? 'View booking history' : 'View my bookings'}</a></div>
+  <div><a class="btn" href={walkIn ? resolve(query.get('view') === 'owner' ? '/admin?tab=Booking%20history&view=owner' : '/admin?tab=Booking%20history') : resolve('/my-bookings')}><ActionIcon name="history" />{walkIn ? 'View booking history' : 'View my bookings'}</a></div>
+ {:else if !canEdit}
+  <h1>Edit services</h1>
+  <p class="muted">This booking is no longer available to edit.</p>
+  <div><a class="btn ghost" href={returnToBooking}><ActionIcon name="back" /> Back to bookings</a></div>
  {:else}
   <h1>{walkIn ? 'Walk-in intake' : 'Book a visit'}</h1>
-  <p class="small muted">Demo only. Use sample details. Requests stay in this browser.</p>
+  <p class="small muted">{editedBooking ? 'Editing services for ' + editedBooking.id : 'Demo only. Use sample details. Requests stay in this browser.'}</p>
   <form class="booking-layout" onsubmit={submit}>
    <div class="stack booking-steps">
    <fieldset class="card stack booking-panel">
@@ -156,14 +185,14 @@
     {/if}
     {#if isPcx}
      <label>PCX model year
-      <select bind:value={modelYear} required>
-       <option value={undefined} disabled>Select model year</option>
+      <select bind:value={modelYear} required={!editing}>
+       <option value={undefined} disabled={!editing}>{editing ? 'Not recorded' : 'Select model year'}</option>
        {#each pcxYears as year}<option value={year}>{year}</option>{/each}
       </select>
      </label>
     {/if}
     {#if bike || !coating.ceramic}
-     <BookingCatalog bind:value={coating} {bike} year={isPcx ? modelYear : undefined} serviceControls={false}>
+     <BookingCatalog bind:value={coating} {bike} year={isPcx ? modelYear : undefined} serviceControls={false} {olderParts}>
       {#snippet powderDetails()}
        {#if !coating.ceramic}
         <label>Motorcycle brand and model <input bind:value={powderBike} placeholder="e.g. Yamaha Sniper 155" maxlength="100" required /></label>
@@ -178,24 +207,28 @@
    <fieldset class="card stack booking-panel contact-panel">
     <legend><span>3</span> Contact details and vehicle plate</legend>
     <div class="cols">
-     <label>Full name <input bind:value={form.name} autocomplete="name" placeholder="e.g. Jamie Reyes" maxlength="70" required /></label>
-     <label>Mobile number <input type="tel" bind:value={form.phone} autocomplete="tel" placeholder="e.g. 0917 000 0000" maxlength="20" required /></label>
+     <label>Full name <input bind:value={form.name} autocomplete="name" placeholder="e.g. Jamie Reyes" maxlength="70" readonly={editing} required={!editing} /></label>
+     <label>Mobile number <input type="tel" bind:value={form.phone} autocomplete="tel" placeholder="e.g. 0917 000 0000" maxlength="20" readonly={editing} required={!editing} /></label>
      <label>
-      <span>Email <span class:required-label={!walkIn}>{walkIn ? '(optional)' : '(required)'}</span></span>
-      <input type="email" bind:value={form.email} autocomplete="email" placeholder="e.g. jamie@example.com" maxlength="254" required={!walkIn} aria-describedby={walkIn ? undefined : 'booking-email-help'} />
-      {#if !walkIn}<span id="booking-email-help" class="small muted email-help">Used for booking reminders.</span>{/if}
+      <span>Email {#if !editing}<span class:required-label={!walkIn}>{walkIn ? '(optional)' : '(required)'}</span>{/if}</span>
+      <input type="email" bind:value={form.email} autocomplete="email" placeholder="e.g. jamie@example.com" maxlength="254" readonly={editing} required={!walkIn && !editing} aria-describedby={walkIn || editing ? undefined : 'booking-email-help'} />
+      {#if !walkIn && !editing}<span id="booking-email-help" class="small muted email-help">Used for booking reminders.</span>{/if}
      </label>
-     <label>Plate number (optional) <input bind:value={form.plateNumber} placeholder="e.g. ABC 1234" maxlength="20" /></label>
+     <label>Plate number (optional) <input bind:value={form.plateNumber} placeholder="e.g. ABC 1234" maxlength="20" readonly={editing} /></label>
     </div>
    </fieldset>
    <fieldset class="card stack booking-panel">
-    <legend><span>4</span> Preferred date and time</legend>
+    <legend><span>4</span> {editing ? 'Scheduled date and time' : 'Preferred date and time'}</legend>
+    {#if editing}
+     <p>{fmtDate(form.date)} · {fmtSlot(form.slot)} (Philippine time)</p>
+    {:else}
     {#if walkIn}<label class="check"><input type="checkbox" bind:checked={immediate} /> Customer is at the shop now</label>{/if}
     {#if !walkIn || !immediate}<VisitPicker bind:date={form.date} bind:slot={form.slot} powder={coating.powder} />{/if}
     {#if walkIn}
      <p class="small muted">Demo intake acknowledgement. The customer checks the motorcycle and service details above before signing.</p>
      <label class="check"><input type="checkbox" bind:checked={acknowledged} required /> I reviewed the details on this intake form.</label>
      <label>Customer signature (type full name for this demo) <input bind:value={signer} required /></label>
+    {/if}
     {/if}
    </fieldset>
    {/if}
@@ -208,17 +241,25 @@
      {#if form.date && form.slot}<div class="cart-line"><span>Preferred visit</span><strong>{fmtDate(form.date)} · {fmtSlot(form.slot)}</strong></div>{/if}
      {#each estimate.lines ?? [] as line (line.label)}
       <div class="cart-line"><span>{line.label}</span><strong>{linePrice(line)}</strong></div>
+      {#if editing}
+       <label class="price-adjustment">
+        Adjusted price (₱)
+        <input type="number" min="0" step="0.01" placeholder="Use current price" aria-label={'Adjusted price for ' + line.label} bind:value={adjustments[line.label]} />
+       </label>
+      {/if}
      {:else}
       <p>Choose a service to add it to your booking.</p>
      {/each}
      {#if estimate.lines?.length}
       {#if estimate.discount}<div class="cart-line"><span>Estimated promo savings</span><strong>{money(estimate.discount)}</strong></div>{/if}
       <div class="cart-line cart-total"><span>Estimated total</span><strong>{estimatePrice(estimate)}</strong></div>
-      <p class="small muted">Your estimate may change after an in-shop inspection. The shop will confirm any price changes with you before starting the work.</p>
+      {#if editing}<p class="small muted">Leave a field blank to keep its current price. An adjusted price is the amount for that item after any discount.</p>
+      {:else}<p class="small muted">Your estimate may change after an in-shop inspection. The shop will confirm any price changes with you before starting the work.</p>{/if}
      {/if}
     </div>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
-    <button class="btn" disabled={!bike || (!coating.ceramic && !coating.powder)}><ActionIcon name={walkIn ? "save" : "send"} />{walkIn ? 'Save walk-in intake' : 'Submit booking'}</button>
+    <button class="btn" disabled={!bike || (!coating.ceramic && !coating.powder)}><ActionIcon name={walkIn || editing ? "save" : "send"} />{editing ? 'Save service changes' : walkIn ? 'Save walk-in intake' : 'Submit booking'}</button>
+    {#if editing}<a class="btn sm ghost" href={returnToBooking}><ActionIcon name="back" />Cancel edit</a>{/if}
    </aside>
   </form>
  {/if}
@@ -280,6 +321,8 @@
  .cart-title { padding-bottom: 12px; border-bottom: 1px solid var(--line); font-family: var(--body); font-size: 1.15rem; font-weight: 900; font-style: italic; letter-spacing: -.03em; }
  .cart-line { display: flex; justify-content: space-between; gap: 10px; }
  .cart-line strong { text-align: right; }
+ .price-adjustment { grid-template-columns: 1fr minmax(0, 8.5rem); align-items: center; gap: .4rem; font-size: .8rem; }
+ .price-adjustment input { min-height: 38px; padding: .35rem .5rem; }
  .cart-total { border-top: 1px solid var(--line); padding-top: 10px; }
  .check { display: flex; align-items: center; gap: 8px; }
  .contact-panel > .cols { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); }

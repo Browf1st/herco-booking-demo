@@ -5,7 +5,7 @@
  import { db } from './store.svelte';
  import { linePrice, money, type Selection } from './coating';
 
- let { value = $bindable(), bike, year, serviceControls = true, powderDetails }: { value: Selection; bike: string; year?: number; serviceControls?: boolean; powderDetails?: Snippet } = $props();
+ let { value = $bindable(), bike, year, serviceControls = true, powderDetails, olderParts = [] }: { value: Selection; bike: string; year?: number; serviceControls?: boolean; powderDetails?: Snippet; olderParts?: string[] } = $props();
  let showSmallParts = $state(false);
  const hasMags = $derived(value.powderParts.includes(wheels));
  const showParts = $derived(showSmallParts || value.powderParts.some(part => part !== wheels));
@@ -114,6 +114,9 @@
     <p>Bring detached parts. Small parts have no warranty. Walk-ins are Wednesday, Saturday, and Sunday, 9 AM to noon.</p>
     {#each Object.keys(powderParts) as part}
      <label class="option"><input type="checkbox" value={part} bind:group={value.powderParts} /> {part} <strong>{price(part)}</strong></label>
+    {/each}
+    {#each olderParts as part (part)}
+     <label class="option"><input type="checkbox" value={part} bind:group={value.powderParts} /> {part} <span class="small muted">From original booking</span></label>
     {/each}
    {/if}
   </fieldset>

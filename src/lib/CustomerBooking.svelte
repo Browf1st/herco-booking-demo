@@ -4,7 +4,7 @@
  import BookingSummary from './BookingSummary.svelte';
  import EditCoating from './EditCoating.svelte';
  import { fmtDate, fmtSlot } from './dates';
- import { requestChange, type Booking, type ChangeRequest } from './store.svelte';
+ import { bookingStatusLabels, requestChange, type Booking, type ChangeRequest } from './store.svelte';
  let { booking }: { booking: Booking } = $props();
  let kind = $state<ChangeRequest['kind']>();
  let date = $state('');
@@ -24,7 +24,7 @@
  }
 </script>
 <article class="card stack">
- <div class="row"><h2>{booking.id}</h2><span class="badge" data-status={booking.status}>{booking.status}</span></div>
+ <div class="row"><h2>{booking.id}</h2><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span></div>
  <p>{fmtDate(booking.date)} · {fmtSlot(booking.slot)} · Philippine time</p>
  <BookingSummary {booking} />
  {#each booking.requests ?? [] as request}
