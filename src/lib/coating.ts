@@ -1,5 +1,5 @@
 import type { Size } from './config';
-import { catalogItems, powderParts, wheels, type CatalogOptions } from './bookingCatalog';
+import { catalogItems, powderParts, wheels, type CatalogOptions, type CeramicCatalogPricing } from './bookingCatalog';
 
 export const finishes = ['Stay Matte', 'Matte to Glossy', 'Enhance', 'Glossy Finish'] as const;
 export const parts = ['Wheels / mags', 'Frame', 'Subframe', 'Swingarm', 'Brackets', 'Foot pegs', 'Grab rails', 'Metal covers', 'Other metal parts'];
@@ -37,7 +37,7 @@ export function modelAdjustment(models: Record<string, number>, bike: string) {
  return Object.hasOwn(models, base) ? models[base] : 0;
 }
 export const selection = (powder = false, finish = ''): Selection => ({ ceramic: !powder, powder, ceramicFinish: 'Glossy Finish', red: false, powderParts: [], front: '', rear: '', finish });
-export type Pricing = { ceramic: Record<string, number>; powder: Record<string, number>; size: Record<Size, number>; models: Record<string, number>; promo: number };
+export type Pricing = { ceramic: Record<string, number>; powder: Record<string, number>; size: Record<Size, number>; models: Record<string, number>; promo: number; ceramicCatalog?: CeramicCatalogPricing };
 export const defaultPricing: Pricing = {
  ceramic: { 'Stay Matte': 1800, 'Matte to Glossy': 2200, Enhance: 2100, 'Glossy Finish': 1500 },
  powder: Object.fromEntries(parts.map((part, i) => [part, [2500,3000,1300,1600,400,500,700,700,700][i]])),
@@ -63,7 +63,7 @@ export function estimatePrice(estimate: Estimate) {
 
 export function quote(s: Selection, size: Size, bike: string, pricing: Pricing, saved: ServiceLine[] = [], year?: number): Estimate {
  if (s.catalog) {
-  const lines = [...catalogItems(s, s.catalog, bike, year)].map(([label, range]): ServiceLine =>
+  const lines = [...catalogItems(s, s.catalog, bike, year, pricing.ceramicCatalog)].map(([label, range]): ServiceLine =>
    saved.find(line => line.label === label) ?? {
     label, subtotal: range?.[0] ?? 0, discount: round((range?.[0] ?? 0) * pricing.promo / 100),
     maximum: range && range[0] !== range[1] ? range[1] : undefined, pending: !range

@@ -4,7 +4,9 @@
 	import RewardReceipt from './RewardReceipt.svelte';
 	import { approveRewardReceipt, correctPoints, rewardStatus, type Member } from './operations.svelte';
 	import AdminBooking from './AdminBooking.svelte';
+	import AdminReports from './AdminReports.svelte';
 	import { money, serviceLabel } from './coating';
+	import type { StockDetails } from './operations.svelte';
 	import { audit, db } from './store.svelte';
 	import { serviceOf, sizes } from './config';
 	import { fmtDate, fmtSlot, today } from './dates';
@@ -24,6 +26,10 @@
 	let rewardCost = $state(1);
 	let stockName = $state('');
 	let stockSearch = $state('');
+	let newStockDetails = $state<StockDetails>({});
+	let editStockDetails = $state<StockDetails>({});
+	const valuedStock = $derived(ops.data.stock.filter(item => item.details?.unitCost !== undefined));
+	const stockValue = $derived(valuedStock.reduce((total, item) => total + item.quantity * (item.details?.unitCost ?? 0), 0));
 	let stockFilter = $state('all');
 	let categoryFilter = $state('');
 	let newItemCategory = $state('');
@@ -34,6 +40,7 @@
 	let optionDialog = $state<HTMLDialogElement>();
 	let optionKind = $state<'unit' | 'category'>('unit');
 	let optionName = $state('');
+	let addingOptionToNewItem = $state(false);
 	let renamingOption = $state(false);
 	let previousOption = $state('');
 	const existingOptions = $derived(optionKind === 'unit' ? units : categories);
@@ -43,13 +50,21 @@
 		previousOption = '';
 		optionName = '';
 	}
+
+	function openInventoryOptions(kind: 'unit' | 'category', forNewItem = false) {
+		optionKind = kind;
+		renamingOption = false;
+		addingOptionToNewItem = forNewItem;
+		resetStockOption();
+		optionDialog?.showModal();
+	}
 	let historyItem = $state('');
 	const stockHealth = (quantity: number, minimum: number) => quantity === 0 ? 'out' : quantity <= minimum ? 'low' : 'healthy';
 	const lowStock = $derived(ops.data.stock.filter(item => stockHealth(item.quantity, item.minimum) === 'low').length);
 	const outOfStock = $derived(ops.data.stock.filter(item => item.quantity === 0).length);
 	const inStock = $derived(ops.data.stock.length - lowStock - outOfStock);
 	const visibleStock = $derived(ops.data.stock.filter(item =>
-		item.name.toLowerCase().includes(stockSearch.trim().toLowerCase()) &&
+		[item.name, item.category, item.details?.location].some(value => value?.toLowerCase().includes(stockSearch.trim().toLowerCase())) &&
 		(!categoryFilter || categoryFilter === (item.category ? 'category:' + item.category : 'uncategorized')) &&
 		(stockFilter === 'all' || stockHealth(item.quantity, item.minimum) === stockFilter)
 	));
@@ -64,18 +79,12 @@
 	let newItemDialog = $state<HTMLDialogElement>();
 	let stockMode = $state<'add' | 'use'>('add');
 	const selectedStock = $derived(ops.data.stock.find((item) => item.id === stockId));
-	let from = $state(today().slice(0, 7) + '-01');
-	let to = $state(today());
 	let notice = $state('');
 	let error = $state('');
 	let statusFilter = $state('all');
 	const matchingBookings = $derived(db.bookings.filter((b) => (statusFilter === 'all' || b.status === statusFilter) && [b.id, b.name, b.phone, b.bike, b.plateNumber ?? ''].join(' ').toLowerCase().includes(search.toLowerCase())).toSorted((a, b) => (b.date + b.slot).localeCompare(a.date + a.slot)));
 	const customers = $derived(ops.data.members.filter((member) => (member.name + member.phone + member.id).toLowerCase().includes(search.toLowerCase())));
 	const selected = $derived(ops.data.members.find((member) => member.id === memberId));
-	const filteredBookings = $derived(db.bookings.filter((booking) => booking.date >= from && booking.date <= to));
-	const completed = $derived(db.bookings.filter(b => { const date = b.completedAt ? new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Manila'}).format(new Date(b.completedAt)) : b.date; return b.status === 'done' && date >= from && date <= to; }));
-	const valued = $derived(completed.filter(b => b.estimate));
-	const income = $derived(valued.reduce((sum, b) => sum + b.estimate!.total, 0));
 	const ranking = $derived(fanRanking());
 	const fanQuery = $derived(search.trim().toLowerCase());
 	let pointsSearch = $state('');
@@ -169,23 +178,6 @@
 		notice = '';
 		try { action(); notice = message; if (['HERCO Points', 'Inventory', 'Customers'].includes(tab)) audit(message); }
 		catch (e) { error = (e as Error).message; }
-	}
-	function exportBookings() {
-		const rows = [
-			['Reference', 'Date', 'Time', 'Name', 'Phone', 'Bike model', 'Plate', 'Service', 'Status'],
-			...filteredBookings.map((b) => [b.id, b.date, fmtSlot(b.slot), b.name, b.phone, b.bike, b.plateNumber ?? '', b.selection ? serviceLabel(b.selection) : serviceOf(b.serviceId).name, b.status])
-		];
-		const csv = rows.map((row) => row.map((value) => {
-			const safe = /^[=+\-@\t\r]/.test(value) ? "'" + value : value;
-			return '"' + safe.replaceAll('"', '""') + '"';
-		}).join(',')).join('\r\n');
-		const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }));
-		const link = document.createElement('a');
-		link.href = url;
-		link.download = `herco-bookings-${from}-${to}.csv`;
-		link.click();
-		audit('Exported booking report');
-		setTimeout(() => URL.revokeObjectURL(url), 1000);
 	}
 </script>
 
@@ -393,29 +385,28 @@
 			{@render pagination('Redemptions', currentRedemptionPage, redemptionPages, page => redemptionPage = page)}
 		</div>
 	{:else if tab === 'Inventory'}
-		<section class="card stack" aria-labelledby="inventory-overview-title">
-			<h3 id="inventory-overview-title">Inventory overview</h3>
-			<dl class="inventory-metrics">
-				<div><dt>All items</dt><dd>{ops.data.stock.length}</dd></div>
-				<div><dt><span class="badge" data-status="done">In stock</span></dt><dd>{inStock}</dd></div>
-				<div><dt><span class="badge" data-status="pending">Low stock</span></dt><dd>{lowStock}</dd></div>
-				<div><dt><span class="badge" data-status="cancelled">Out of stock</span></dt><dd>{outOfStock}</dd></div>
-			</dl>
-		</section>
-		<div class="row">
+		<div class="row inventory-heading">
+		<h3>Workshop supplies &amp; inventory</h3>
+		<div class="row inventory-actions">
 			<button type="button" class="btn sm" onclick={() => {
 				error = '';
 				if (!units.includes(unit)) unit = units[0] ?? '';
 				newItemDialog?.showModal();
 			}}>Create new inventory item</button>
 			<button type="button" class="btn sm ghost" onclick={() => openStock()}>Update existing stock</button>
-			<button type="button" class="btn sm ghost" onclick={() => {
-				optionKind = 'unit';
-				renamingOption = false;
-				resetStockOption();
-				optionDialog?.showModal();
-			}}>Manage units and categories</button>
+			<button type="button" class="btn sm ghost" onclick={() => openInventoryOptions('unit')}>Manage units and categories</button>
 		</div>
+		</div>
+		<section class="card stack" aria-labelledby="inventory-overview-title">
+			<h3 id="inventory-overview-title">Inventory overview</h3>
+			<dl class="inventory-metrics stock-metrics">
+				<div><dt>All items</dt><dd>{ops.data.stock.length}</dd></div>
+				<div><dt><span class="badge" data-status="done">In stock</span></dt><dd>{inStock}</dd></div>
+				<div><dt><span class="badge" data-status="pending">Low stock</span></dt><dd>{lowStock}</dd></div>
+				<div><dt><span class="badge" data-status="cancelled">Out of stock</span></dt><dd>{outOfStock}</dd></div>
+				<div><dt>Stock value</dt><dd>{valuedStock.length ? money(stockValue) : '—'}</dd><span class="small muted">{valuedStock.length} of {ops.data.stock.length} items priced</span></div>
+			</dl>
+		</section>
 		<dialog bind:this={optionDialog} aria-labelledby="stock-option-title">
 			<form class="stack" onsubmit={(e) => {
 				e.preventDefault();
@@ -430,12 +421,17 @@
 						}
 					} else {
 						addStockOption(optionKind, optionName);
+						if (addingOptionToNewItem) {
+							if (optionKind === 'unit') unit = optionName.trim();
+							else newItemCategory = optionName.trim();
+						}
 					}
 					optionDialog?.close();
 				}, renamingOption ? 'Inventory option renamed.' : optionKind === 'unit' ? 'Unit added.' : 'Category added.');
 			}}>
-				<h3 id="stock-option-title">Manage units and categories</h3>
+				<h3 id="stock-option-title">{addingOptionToNewItem ? 'New ' + optionKind : 'Manage units and categories'}</h3>
 				{#if error}<p class="error" role="alert">{error}</p>{/if}
+				{#if !addingOptionToNewItem}
 				<div class="cols">
 					<label>Type
 						<select bind:value={optionKind} onchange={() => { renamingOption = false; resetStockOption(); }}>
@@ -450,6 +446,7 @@
 						</select>
 					</label>
 				</div>
+				{/if}
 				{#if renamingOption}
 					<label>Existing {optionKind}
 						<select bind:value={previousOption} onchange={(e) => optionName = e.currentTarget.value} required>
@@ -463,11 +460,12 @@
 				<div class="row"><button class="btn sm">Save</button><button type="button" class="btn sm ghost" onclick={() => optionDialog?.close()}>Cancel</button></div>
 			</form>
 		</dialog>
-		<dialog bind:this={newItemDialog} aria-labelledby="new-item-dialog-title">
+		<dialog class="inventory-form" bind:this={newItemDialog} aria-labelledby="new-item-dialog-title">
 			<form class="stack" onsubmit={(e) => {
 				e.preventDefault();
 				perform(() => {
-					addStock(stockName, unit, quantity, minimum, newItemCategory);
+					addStock(stockName, unit, quantity, minimum, newItemCategory, $state.snapshot(newStockDetails));
+					newStockDetails = {};
 					newItemCategory = '';
 					stockName = '';
 					unit = 'bottle';
@@ -479,13 +477,29 @@
 				<div class="dialog-heading row"><h3 id="new-item-dialog-title">Create new inventory item</h3><button type="button" class="close-dialog" aria-label="Close new inventory item popup" onclick={() => newItemDialog?.close()}>×</button></div>
 				{#if error}<p class="error" role="alert">{error}</p>{/if}
 				<label>Item name<input bind:value={stockName} placeholder="e.g. Ceramic coating" required /></label>
-				<label>Category (optional)<select bind:value={newItemCategory}><option value="">Uncategorized</option>{#each categories as category (category)}<option value={category}>{category}</option>{/each}</select></label>
-				<div class="cols"><label>Unit<select bind:value={unit} required>{#each units as unitOption (unitOption)}<option value={unitOption}>{unitOption}</option>{/each}</select></label><label>Opening stock<input type="number" min="0" step="0.001" bind:value={quantity} required /></label><label>Low stock threshold<input type="number" min="0" step="0.001" bind:value={minimum} required /></label></div>
-				<div class="row"><button class="btn sm">Add item</button><button type="button" class="btn sm ghost" onclick={() => newItemDialog?.close()}>Cancel</button></div>
+				<div class="cols">
+					<div>
+						<div class="row inventory-heading"><label for="new-stock-category">Category (optional)</label><button type="button" class="inventory-option-link" onclick={() => openInventoryOptions('category', true)}>+ New category</button></div>
+						<select id="new-stock-category" bind:value={newItemCategory}><option value="">Uncategorized</option>{#each categories as category (category)}<option value={category}>{category}</option>{/each}</select>
+					</div>
+					<div>
+						<div class="row inventory-heading"><label for="new-stock-unit">Unit of measure</label><button type="button" class="inventory-option-link" onclick={() => openInventoryOptions('unit', true)}>+ New unit</button></div>
+						<select id="new-stock-unit" bind:value={unit} required>{#each units as unitOption (unitOption)}<option value={unitOption}>{unitOption}</option>{/each}</select>
+					</div>
+				</div>
+				<fieldset class="inventory-fields"><legend>Stock levels</legend>
+					<div class="cols stock-level-fields">
+						<label>Opening stock<input type="number" min="0" step="0.001" bind:value={quantity} required /></label>
+						<label>Reorder threshold<input type="number" min="0" step="0.001" bind:value={minimum} required /></label>
+						<label>Storage capacity (optional)<input type="number" min="0" step="0.001" bind:value={newStockDetails.capacity} /></label>
+					</div>
+				</fieldset>
+				{@render stockDetailsFields(newStockDetails)}
+				<div class="row inventory-form-footer"><button type="button" class="btn sm ghost" onclick={() => newItemDialog?.close()}>Cancel</button><button class="btn sm">Create inventory item</button></div>
 			</form>
 		</dialog>
-		<div class="card stack">
-			<h3>Stock on hand</h3>
+		<section class="card stack stock-panel" aria-labelledby="stock-on-hand-title">
+			<div class="row inventory-heading"><h3 id="stock-on-hand-title">Stock on hand</h3><span class="small muted">{visibleStock.length} of {ops.data.stock.length} items shown</span></div>
 			<div class="cols">
 				<label>Search supplies<input type="search" bind:value={stockSearch} placeholder="e.g. Ceramic coating" /></label>
 				<label>Category
@@ -504,28 +518,44 @@
 					</select>
 				</label>
 			</div>
+			{#if visibleStock.length}
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users need to scroll the ledger horizontally.) -->
+			<div class="stock-table" role="region" aria-labelledby="stock-on-hand-title" tabindex="0">
+			<table>
+				<thead><tr><th scope="col">Item</th><th scope="col">Category</th><th scope="col">Stock status</th><th scope="col">Reorder threshold</th><th scope="col">Inventory actions</th></tr></thead>
+				<tbody>
 			{#each visibleStock as item (item.id)}
 				{@const health = stockHealth(item.quantity, item.minimum)}
-				<div class="ledger">
-					<div><b>{item.name}</b><p class="small muted">{item.quantity} {item.unit} on hand · Reorder at {item.minimum}</p><p class="small muted">{item.category || 'Uncategorized'}</p></div>
-					<div class="row">
-						<span class="badge" data-status={health === 'out' ? 'cancelled' : health === 'low' ? 'pending' : 'done'}>{health === 'out' ? 'Out of stock' : health === 'low' ? 'Low stock' : 'In stock'}</span>
-						<button class="btn sm ghost" aria-label={'Stock in for ' + item.name} onclick={() => openStock(item.id)}>Stock in</button>
-						<button class="btn sm ghost" aria-label={'Stock out for ' + item.name} disabled={!item.quantity} onclick={() => openStock(item.id, 'use')}>Stock out</button>
+				<tr class:low-stock={health === 'low'}>
+					<th scope="row"><b>{item.name}</b><p class="small muted">{item.quantity} {item.unit} on hand{item.details?.location ? ' · ' + item.details.location : ''}</p></th>
+					<td>{item.category || 'Uncategorized'}</td>
+					<td><span class="badge" data-status={health === 'out' ? 'cancelled' : health === 'low' ? 'pending' : 'done'}>{health === 'out' ? 'Out of stock' : health === 'low' ? 'Low stock' : 'In stock'}</span></td>
+					<td class="stock-gauge">
+						<progress aria-label={'Stock compared with reorder threshold for ' + item.name} max={Math.max(item.minimum * 2, item.quantity, 1)} value={item.quantity} data-health={health}></progress>
+						<span class="small muted">{item.quantity} on hand · Reorder at {item.minimum}</span>
+					</td>
+					<td><div class="row stock-row-actions">
+						<button class="btn sm ghost stock-in" aria-label={'Stock in for ' + item.name} onclick={() => openStock(item.id)}>Stock in</button>
+						<button class="btn sm ghost stock-out" aria-label={'Stock out for ' + item.name} disabled={!item.quantity} onclick={() => openStock(item.id, 'use')}>Stock out</button>
 						<button type="button" class="btn sm ghost" aria-label={'Edit item ' + item.name} onclick={() => {
 							error = '';
 							itemDraft = { id: item.id, name: item.name, unit: item.unit, minimum: item.minimum, category: item.category ?? '' };
+							editStockDetails = { ...item.details };
 							editItemDialog?.showModal();
 						}}>Edit</button>
-					</div>
-				</div>
-			{:else}<p class="muted">No supplies match this view.</p>{/each}
-		</div>
-		<dialog bind:this={editItemDialog} aria-labelledby="edit-item-dialog-title">
+					</div></td>
+				</tr>
+			{/each}
+				</tbody>
+			</table>
+			</div>
+			{:else}<p class="muted">No supplies match this view.</p>{/if}
+		</section>
+		<dialog class="inventory-form" bind:this={editItemDialog} aria-labelledby="edit-item-dialog-title">
 			<form class="stack" onsubmit={(e) => {
 				e.preventDefault();
 				perform(() => {
-					editStockItem(itemDraft.id, itemDraft.name, itemDraft.unit, itemDraft.minimum, itemDraft.category);
+					editStockItem(itemDraft.id, itemDraft.name, itemDraft.unit, itemDraft.minimum, itemDraft.category, $state.snapshot(editStockDetails));
 					if (categoryFilter.startsWith('category:') && !categories.includes(categoryFilter.slice('category:'.length))) categoryFilter = '';
 					editItemDialog?.close();
 				}, 'Inventory item updated.');
@@ -537,7 +567,9 @@
 				<div class="cols">
 					<label>Unit<select bind:value={itemDraft.unit} required>{#each units as unitOption (unitOption)}<option value={unitOption}>{unitOption}</option>{/each}</select></label>
 					<label>Low stock threshold<input type="number" min="0" step="0.001" bind:value={itemDraft.minimum} required /></label>
+					<label>Storage capacity (optional)<input type="number" min="0" step="0.001" bind:value={editStockDetails.capacity} /></label>
 				</div>
+				{@render stockDetailsFields(editStockDetails)}
 				<div class="row"><button class="btn sm">Save changes</button><button type="button" class="btn sm ghost" onclick={() => editItemDialog?.close()}>Cancel</button></div>
 			</form>
 		</dialog>
@@ -563,23 +595,12 @@
 				<div class="row"><button class="btn sm">{stockMode === 'add' ? 'Add stock' : 'Save usage'}</button><button type="button" class="btn sm ghost" onclick={() => stockDialog?.close()}>Cancel</button></div>
 			</form>
 		</dialog>
-		<details class="card"><summary>Stock history</summary>
+		<details class="card stock-history" open><summary>Stock history</summary>
 			<label>Filter stock history<select bind:value={historyItem}><option value="">All items</option>{#each ops.data.stock as item (item.id)}<option value={item.id}>{item.name}</option>{/each}</select></label>
-			{#each stockHistory as entry (entry.id)}<div class="ledger"><div>{ops.data.stock.find((item) => item.id === entry.itemId)?.name}<p class="small muted">{entry.reason} · {new Date(entry.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short', hour12: true })}</p></div><b>{entry.amount > 0 ? '+' : ''}{entry.amount}</b></div>{:else}<p class="muted">No stock movements for this view.</p>{/each}
+			{#each stockHistory as entry (entry.id)}<div class="ledger"><div><b>{ops.data.stock.find((item) => item.id === entry.itemId)?.name}</b><p class="small muted">{entry.reason} · {new Date(entry.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short', hour12: true })}</p></div><b class="badge" data-status={entry.amount < 0 ? 'cancelled' : 'done'}>{entry.amount > 0 ? '+' : ''}{entry.amount}</b></div>{:else}<p class="muted">No stock movements for this view.</p>{/each}
 		</details>
 	{:else if tab === 'Reports'}
-		<div class="row"><label>From<input type="date" bind:value={from} max={to} /></label><label>To<input type="date" bind:value={to} min={from} /></label><button class="btn sm ghost" onclick={exportBookings}>Export bookings CSV</button></div>
-		<div class="cols">
-			<div class="card stack"><span class="muted">Bookings in period</span><b class="metric">{filteredBookings.length}</b></div>
-			<div class="card stack"><span class="muted">Completed services</span><b class="metric">{completed.length}</b></div>
-			<div class="card stack"><span class="muted">Cancelled bookings</span><b class="metric">{filteredBookings.filter((b) => b.status === 'cancelled').length}</b></div>
-			<div class="card stack"><span class="muted">Estimated income from completed services</span><b class="metric">{money(income)}</b></div>
-			<div class="card stack"><span class="muted">Average completed service value</span><b class="metric">{money(valued.length ? income / valued.length : 0)}</b></div>
-			<div class="card stack"><span class="muted">Pending and confirmed bookings</span><b class="metric">{filteredBookings.filter(b => b.status === 'pending' || b.status === 'confirmed').length}</b></div>
-			<div class="card stack"><span class="muted">Walk-in bookings</span><b class="metric">{filteredBookings.filter(b => b.walkIn).length}</b></div>
-			<div class="card stack"><span class="muted">Promo discounts on completed work</span><b class="metric">{money(valued.reduce((sum, b) => sum + b.estimate!.discount, 0))}</b></div>
-		</div>
-		<p class="small muted">Philippine time. Income is based on saved service estimates for completed work. Older jobs without an estimate are excluded from value totals.</p>
+		<AdminReports />
 	{/if}
 </div>
 
@@ -593,7 +614,78 @@
 	{/if}
 {/snippet}
 
+{#snippet stockDetailsFields(details: StockDetails)}
+	<fieldset class="inventory-fields"><legend>Supplier &amp; costs <span class="small muted">(optional)</span></legend>
+		<div class="cols">
+			<label>Unit cost (₱)<input type="number" min="0" step="0.01" bind:value={details.unitCost} /></label>
+			<label>Supplier<input bind:value={details.supplier} /></label>
+		</div>
+	</fieldset>
+{/snippet}
+
 <style>
+	.inventory-heading { justify-content: space-between; }
+	.inventory-option-link { border: 0; background: transparent; color: var(--accent); font: inherit; font-size: .85rem; font-weight: 700; cursor: pointer; padding: .25rem; }
+	.inventory-option-link:hover { text-decoration: underline; }
+	.inventory-actions, .stock-row-actions { gap: .35rem; }
+	.inventory-actions .btn, .stock-row-actions .btn, .inventory-form .btn {
+		clip-path: none; border-radius: .25rem; font-style: normal;
+	}
+	.stock-panel { min-width: 0; }
+	.stock-metrics > div { align-content: start; border: 1px solid var(--line); }
+	.stock-metrics > div:nth-child(2) { border-color: #a6d3bb; }
+	.stock-metrics > div:nth-child(3) { border-color: #e6ca85; }
+	.stock-metrics dd { font-variant-numeric: tabular-nums; }
+	.stock-table { overflow-x: auto; border: 1px solid var(--line); border-radius: .35rem; }
+	.stock-table table { width: 100%; min-width: 850px; border-collapse: collapse; font-size: .9rem; }
+	.stock-table th, .stock-table td { padding: .55rem .65rem; text-align: left; border-bottom: 1px solid var(--line); }
+	.stock-table thead th { background: var(--panel-2); text-transform: uppercase; font-size: .75rem; letter-spacing: .03em; }
+	.stock-table tbody th { font-weight: 400; }
+	.stock-table tr:last-child td, .stock-table tbody tr:last-child th { border-bottom: 0; }
+	.stock-table .low-stock { background: color-mix(in srgb, #eeb546 9%, var(--panel)); }
+	.stock-row-actions { justify-content: flex-end; flex-wrap: nowrap; }
+	.stock-table th:last-child { text-align: right; }
+	.stock-gauge progress { display: block; width: 100%; height: .5rem; accent-color: #19845b; }
+	.stock-gauge progress[data-health="low"] { accent-color: #ad6600; }
+	.stock-gauge span { white-space: nowrap; }
+	.stock-panel, .stock-table {
+		--stock-border: #eddcd7;
+		--stock-blue: #edf3ff;
+		--stock-muted: #765851;
+		border-color: var(--stock-border);
+	}
+	.stock-panel input, .stock-panel select { background: var(--stock-blue); border-color: var(--stock-border); color: #15253a; }
+	.stock-table { background: #fff; color: #15253a; }
+	.stock-table th, .stock-table td { border-color: #f0e7e4; }
+	.stock-table thead th { background: #f5f8fd; color: var(--stock-muted); }
+	.stock-table .muted, .stock-table td:nth-child(2) { color: var(--stock-muted); }
+	.stock-table .low-stock { background: #fffbf0; }
+	.stock-table .low-stock .muted { color: #85510c; }
+	.stock-table .badge { display: inline-block; white-space: nowrap; border: 1px solid; border-radius: .18rem; padding: .2rem .4rem; font-family: inherit; font-size: .72rem; font-weight: 700; line-height: 1.2; letter-spacing: .025em; }
+	.stock-table .badge[data-status="done"] { background: #e9fbf3; color: #006447; border-color: #96e5c1; }
+	.stock-table .badge[data-status="pending"] { background: #fff2cb; color: #774400; border-color: #eac76b; }
+	.stock-table .badge[data-status="cancelled"] { background: #fff0ee; color: #a12029; border-color: #f3b4af; }
+	.stock-row-actions .btn { background: var(--stock-blue); color: #15253a; border: 1px solid var(--stock-border); white-space: nowrap; padding: .35rem .55rem; font-family: inherit; font-size: .75rem; font-weight: 700; line-height: 1.2; }
+	.stock-row-actions .btn:last-child { background: white; color: var(--stock-muted); }
+	.stock-row-actions .stock-in { background: #e9fbf3; color: #006447; border-color: #a6ddc5; }
+	.stock-row-actions .stock-out { background: #fff0ee; color: #a12029; border-color: #efc2bd; }
+	.stock-row-actions .stock-in:hover:not(:disabled) { background: #d1f3e3; }
+	.stock-row-actions .stock-out:hover:not(:disabled) { background: #fbded9; }
+	.stock-gauge progress { appearance: none; border: 0; border-radius: 1rem; background: #d9e6ff; overflow: hidden; }
+	.stock-gauge progress::-webkit-progress-bar { background: #d9e6ff; border-radius: 1rem; }
+	.stock-gauge progress::-webkit-progress-value { background: #00936b; border-radius: 1rem; }
+	.stock-gauge progress::-moz-progress-bar { background: #00936b; border-radius: 1rem; }
+	.stock-gauge progress[data-health="low"] { background: #f9e396; }
+	.stock-gauge progress[data-health="low"]::-webkit-progress-bar { background: #f9e396; }
+	.stock-gauge progress[data-health="low"]::-webkit-progress-value { background: #d78300; }
+	.stock-gauge progress[data-health="low"]::-moz-progress-bar { background: #d78300; }
+	.stock-history label { max-width: 20rem; margin-block: .65rem; }
+	dialog.inventory-form { width: min(860px, calc(100vw - 32px)); }
+	.inventory-fields { min-inline-size: 0; margin: 0; padding: .8rem; border: 1px solid var(--line); border-radius: .4rem; }
+	.inventory-fields legend { padding-inline: .35rem; font-weight: 700; }
+	.stock-level-fields label { background: var(--panel-2); padding: .6rem; border-radius: .3rem; }
+	.stock-level-fields label:nth-child(2) { border-inline-start: 3px solid var(--accent); }
+	.inventory-form-footer { justify-content: space-between; border-top: 1px solid var(--line); padding-top: .75rem; }
 	.redemption-row { border-top: 1px solid var(--line); padding-block: .75rem; }
 	.redemption-row[open] summary { margin-bottom: .75rem; }
 	.redemption-summary { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem .9rem; vertical-align: middle; }

@@ -14,6 +14,25 @@ export const ceramicAddons = {
  'Decals removal': [99, 499]
 } as const;
 
+export const ceramicTierNames = {
+ 1799: 'Standard / Underbone', 1999: 'Mid-Range / Maxi', 2499: 'Big Bike / Premium'
+};
+type CeramicTier = keyof typeof ceramicModels;
+type CeramicAddon = keyof typeof ceramicAddons;
+export const listedCeramicAddons = ['Matte to Glossy', 'Inner coating', 'Graphene coating'] as const;
+export type CeramicCatalogPricing = {
+ tiers: Record<CeramicTier, number>;
+ addons: Record<CeramicAddon, [number, number]>;
+ listedAddons: Record<typeof listedCeramicAddons[number], number>;
+ premiumGloss: number;
+};
+export const defaultCeramicCatalogPricing: CeramicCatalogPricing = {
+ tiers: { 1799: 1799, 1999: 1999, 2499: 2499 },
+ addons: Object.fromEntries(Object.entries(ceramicAddons).map(([name, range]) => [name, [...range]])) as CeramicCatalogPricing['addons'],
+ listedAddons: { 'Matte to Glossy': 499, 'Inner coating': 499, 'Graphene coating': 499 },
+ premiumGloss: 999
+};
+
 export const powderParts = {
  'Swingarm': [799, 999],
  'Handlebar / grab bar': [799, 999],
@@ -58,29 +77,35 @@ export type CatalogOptions = {
 };
 
 type Range = readonly [number, number];
-export function ceramicPrice(bike: string, bigBike: boolean) {
+export function ceramicTier(bike: string, bigBike: boolean): CeramicTier | undefined {
  const model = bike.split(' — ')[0];
  if (!model.trim()) return bigBike ? 2499 : undefined;
  const listed = Object.entries(ceramicModels).find(([, models]) => models.includes(model));
- return listed ? Number(listed[0]) : bigBike ? 2499 : undefined;
+ return listed ? Number(listed[0]) as CeramicTier : bigBike ? 2499 : undefined;
 }
 
 export function catalogItems(
  selection: { ceramic: boolean; powder: boolean; powderParts: string[]; finish: string },
  options: CatalogOptions,
  bike: string,
- year?: number
+ year?: number,
+ pricing = defaultCeramicCatalogPricing
 ) {
  const items = new Map<string, Range | undefined>();
- const base = options.otherBigBike ? 2499 : ceramicPrice(bike, options.bigBike);
+ const tier = options.otherBigBike ? 2499 : ceramicTier(bike, options.bigBike);
+ const base = tier === undefined ? undefined : pricing.tiers[tier];
  if (selection.ceramic) {
   items.set('Ceramic coating', base === undefined ? undefined : [base, base]);
   for (const addon of options.ceramicAddons) {
    if (!Object.hasOwn(ceramicAddons, addon)) continue;
    const pcxGloss = addon === 'Matte to Glossy' && /^Honda PCX/i.test(bike);
-   const premium = addon === 'Matte to Glossy' && (base === 2499 || (pcxGloss && (year === 2026 || (year === undefined && options.pcx2026))));
-   const fixed499 = (base === 1799 || base === 1999 || base === 2499) && ['Matte to Glossy', 'Inner coating', 'Graphene coating'].includes(addon);
-   items.set(addon, premium ? [999, 999] : pcxGloss && year === undefined ? [499, 999] : fixed499 ? [499, 499] : ceramicAddons[addon as keyof typeof ceramicAddons]);
+   const premium = addon === 'Matte to Glossy' && (tier === 2499 || (pcxGloss && (year === 2026 || (year === undefined && options.pcx2026))));
+   const listedRate = pricing.listedAddons[addon as keyof CeramicCatalogPricing['listedAddons']];
+   const gloss = pricing.listedAddons['Matte to Glossy'];
+   items.set(addon, premium ? [pricing.premiumGloss, pricing.premiumGloss]
+    : pcxGloss && year === undefined ? [gloss, pricing.premiumGloss]
+    : tier !== undefined && listedRate !== undefined ? [listedRate, listedRate]
+    : pricing.addons[addon as CeramicAddon]);
   }
  }
  if (selection.powder) {

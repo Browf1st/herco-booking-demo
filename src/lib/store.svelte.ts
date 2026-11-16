@@ -153,6 +153,16 @@ export function audit(action: string, bookingId?: string, actor = 'Demo admin') 
 export function updatePricing(pricing: Pricing) {
  const amounts = [...Object.values(pricing.ceramic), ...Object.values(pricing.powder), ...Object.values(pricing.size), ...Object.values(pricing.models)];
  if (amounts.some(n => !Number.isFinite(n) || n < 0) || !Number.isFinite(pricing.promo) || pricing.promo < 0 || pricing.promo > 100) throw Error('Use nonnegative amounts and a promotion between 0 and 100%.');
+ const catalog = pricing.ceramicCatalog;
+ if (catalog) {
+  const ranges = Object.values(catalog.addons);
+  const rates = [...Object.values(catalog.tiers), ...Object.values(catalog.listedAddons), catalog.premiumGloss];
+  if (rates.some(rate => !Number.isFinite(rate) || rate < 0) ||
+      ranges.some(([min, max]) => !Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) ||
+      catalog.premiumGloss < catalog.listedAddons['Matte to Glossy']) {
+   throw Error('Enter nonnegative prices. Maximum and premium prices must be at least the corresponding lower price.');
+  }
+ }
  db.pricing = pricing;
  audit('Updated pricing and promotion (' + pricing.promo + '%)');
 }

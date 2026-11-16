@@ -18,7 +18,8 @@ export type RewardReceipt = {
 export type Member = { id: string; name: string; phone: string; email?: string; demoFan?: boolean };
 type PointEntry = { id: string; memberId: string; amount: number; reason: string; at: string };
 type Redemption = { id: string; memberId: string; service: RewardService; cost: number; status: 'requested' | 'fulfilled' | 'rejected'; at: string };
-type StockItem = { id: string; name: string; unit: string; quantity: number; minimum: number; category?: string };
+export type StockDetails = { unitCost?: number; billingRate?: number; capacity?: number; supplier?: string; location?: string };
+type StockItem = { id: string; name: string; unit: string; quantity: number; minimum: number; category?: string; details?: StockDetails };
 type StockEntry = { id: string; itemId: string; amount: number; reason: string; at: string };
 
 export type RewardTier = { points: number; name: string; scope?: string };
@@ -265,16 +266,24 @@ function stockCategory(data: Operations, category: string) {
 	return stockOptions(data, 'category').find(option => option.toLowerCase() === name.toLowerCase()) ?? name;
 }
 
-export function addStock(name: string, unit: string, quantity: number, minimum: number, category = '') {
+function validateStockDetails(details: StockDetails) {
+	if ([details.unitCost, details.billingRate, details.capacity].some(value => value !== undefined && (!Number.isFinite(value) || value < 0))) {
+		throw new Error('Enter nonnegative costs, billing rates, and capacity.');
+	}
+}
+
+export function addStock(name: string, unit: string, quantity: number, minimum: number, category = '', details: StockDetails = {}) {
+	validateStockDetails(details);
 	if (!name.trim() || !unit.trim() || ![quantity, minimum].every((n) => Number.isFinite(n) && n >= 0)) throw new Error('Enter an item, unit, and valid stock amounts.');
 	commit((data) => {
 		if (data.stock.some((item) => item.name.toLowerCase() === name.trim().toLowerCase())) throw new Error('This item already exists. Use Add stock to increase its quantity.');
 		const itemId = id();
-		data.stock.push({ id: itemId, name: name.trim(), unit: unit.trim(), quantity, minimum, category: stockCategory(data, category) });
+		data.stock.push({ id: itemId, name: name.trim(), unit: unit.trim(), quantity, minimum, category: stockCategory(data, category), details });
 		data.stockEntries.push({ id: id(), itemId, amount: quantity, reason: 'Opening stock', at: timestamp() });
 	});
 }
-export function editStockItem(itemId: string, name: string, unit: string, minimum: number, category: string) {
+export function editStockItem(itemId: string, name: string, unit: string, minimum: number, category: string, details?: StockDetails) {
+	if (details) validateStockDetails(details);
 	const trimmedName = name.trim();
 	const trimmedUnit = unit.trim();
 	if (!trimmedName || !trimmedUnit || !Number.isFinite(minimum) || minimum < 0) {
@@ -290,6 +299,7 @@ export function editStockItem(itemId: string, name: string, unit: string, minimu
 		item.unit = trimmedUnit;
 		item.minimum = minimum;
 		item.category = stockCategory(data, category);
+		if (details) item.details = details;
 	});
 }
 

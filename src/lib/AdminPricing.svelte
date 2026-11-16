@@ -1,43 +1,94 @@
 <script lang="ts">
- import { finishes, modelAdjustment, motorcycleOptions, parts, type Pricing } from './coating';
- import { sizes, type Size } from './config';
+ import { ceramicAddons, ceramicModels, ceramicTierNames, defaultCeramicCatalogPricing, listedCeramicAddons } from './bookingCatalog';
  import { db, updatePricing } from './store.svelte';
- let draft = $state<Pricing>($state.snapshot(db.pricing));
- let model = $state('');
- let adjustment = $state<number | undefined>();
- let message = $state('');
- let error = $state('');
- const models = (Object.keys(sizes) as Size[]).flatMap(motorcycleOptions).toSorted();
- function save(event: SubmitEvent) {
+
+ let draft = $state($state.snapshot(db.pricing.ceramicCatalog ?? defaultCeramicCatalogPricing));
+ let promo = $state(db.pricing.promo);
+ let priceMessage = $state('');
+ let priceError = $state('');
+ let promoMessage = $state('');
+ let promoError = $state('');
+ const tiers = (Object.keys(ceramicModels).map(Number) as (keyof typeof ceramicModels)[]);
+ const addons = Object.keys(ceramicAddons) as (keyof typeof ceramicAddons)[];
+
+ function savePrices(event: SubmitEvent) {
   event.preventDefault();
+  priceError = '';
+  priceMessage = '';
   try {
-   const pricing = $state.snapshot(draft);
-   if (model) pricing.models[model] = adjustment ?? 0;
-   updatePricing(pricing);
-   draft = $state.snapshot(db.pricing);
-   message = 'Prices saved. New and edited bookings use these prices.';
-   error = '';
-  } catch (e) { error = (e as Error).message; message = ''; }
+   updatePricing({ ...$state.snapshot(db.pricing), ceramicCatalog: $state.snapshot(draft) });
+   priceMessage = 'Ceramic coating prices saved.';
+  } catch (error) {
+   priceError = (error as Error).message;
+  }
+ }
+
+ function savePromotion(event: SubmitEvent) {
+  event.preventDefault();
+  promoError = '';
+  promoMessage = '';
+  try {
+   updatePricing({ ...$state.snapshot(db.pricing), promo });
+   promoMessage = 'Booking promotion saved.';
+  } catch (error) {
+   promoError = (error as Error).message;
+  }
  }
 </script>
-<form class="card stack" onsubmit={save}>
- <h3>Service prices and promotion</h3>
- <p class="muted">Demo prices in Philippine pesos. Saved estimates stay with existing bookings until their services are edited.</p>
- <label>Promotion discount (%)<input type="number" min="0" max="100" step="0.01" bind:value={draft.promo} required /></label>
- <details open><summary>Ceramic finish prices</summary><div class="cols">
-  {#each finishes as finish}<label>{finish}<input type="number" min="0" step="0.01" bind:value={draft.ceramic[finish]} required /></label>{/each}
- </div></details>
- <details><summary>Powder coating prices by part</summary><div class="cols">
-  {#each parts as part}<label>{part}<input type="number" min="0" step="0.01" bind:value={draft.powder[part]} required /></label>{/each}
- </div></details>
- <details><summary>Ceramic motorcycle price adjustments</summary><div class="stack">
-  <div class="cols">{#each Object.keys(sizes) as size}<label>{sizes[size as Size]}<input type="number" min="0" step="0.01" bind:value={draft.size[size as Size]} required /></label>{/each}</div>
+
+<form class="card stack" onsubmit={savePrices}>
+ <h3>Ceramic coating prices</h3>
+ <p class="muted">Amounts are in Philippine pesos before discounts. Saved booking line items keep their quoted prices.</p>
+ <fieldset class="stack">
+  <legend>Motorcycle tiers</legend>
   <div class="cols">
-   <label>Model override<select bind:value={model} onchange={(e) => adjustment = modelAdjustment(draft.models, e.currentTarget.value)}><option value="">Choose a model</option>{#each models as bike}<option>{bike}</option>{/each}</select></label>
-   {#if model}<label>Additional charge for {model}<input type="number" min="0" step="0.01" bind:value={adjustment} required /></label>{/if}
+   {#each tiers as tier (tier)}
+    <label>{ceramicTierNames[tier]}<input type="number" min="0" step="0.01" bind:value={draft.tiers[tier]} required /></label>
+   {/each}
   </div>
- </div></details>
- {#if message}<p role="status">{message}</p>{/if}
- {#if error}<p class="error" role="alert">{error}</p>{/if}
- <div><button class="btn">Save pricing</button></div>
+ </fieldset>
+ <fieldset class="stack">
+  <legend>Add-on prices</legend>
+  <p class="small muted">Matte to Glossy, Inner coating, and Graphene coating use these ranges when the motorcycle has no pricing tier.</p>
+  {#each addons as addon (addon)}
+   <div class="addon-row">
+    <strong>{addon}</strong>
+    <label>Minimum<input aria-label={addon + ' minimum price'} type="number" min="0" step="0.01" bind:value={draft.addons[addon][0]} required /></label>
+    <label>Maximum<input aria-label={addon + ' maximum price'} type="number" min="0" step="0.01" bind:value={draft.addons[addon][1]} required /></label>
+   </div>
+  {/each}
+ </fieldset>
+ <fieldset class="stack">
+  <legend>Add-on rates for priced tiers</legend>
+  <div class="cols">
+   {#each listedCeramicAddons as addon (addon)}
+    <label>{addon}<input type="number" min="0" step="0.01" bind:value={draft.listedAddons[addon]} required /></label>
+   {/each}
+   <label>Matte to Glossy · Premium tier or 2026 Honda PCX
+    <input type="number" min="0" step="0.01" bind:value={draft.premiumGloss} required />
+   </label>
+  </div>
+ </fieldset>
+ {#if priceMessage}<p role="status">{priceMessage}</p>{/if}
+ {#if priceError}<p class="error" role="alert">{priceError}</p>{/if}
+ <div><button class="btn">Save ceramic prices</button></div>
 </form>
+
+<form class="card stack" onsubmit={savePromotion}>
+ <h3>Booking promotion</h3>
+ <p class="muted">Applies to ceramic and powder coating estimates. Set to 0% to turn it off.</p>
+ <label>Discount (%)<input type="number" min="0" max="100" step="0.01" bind:value={promo} required /></label>
+ {#if promoMessage}<p role="status">{promoMessage}</p>{/if}
+ {#if promoError}<p class="error" role="alert">{promoError}</p>{/if}
+ <div><button class="btn">Save promotion</button></div>
+</form>
+
+<style>
+ fieldset { min-inline-size: 0; border: 1px solid var(--line); border-radius: .4rem; }
+ legend { padding-inline: .4rem; font-weight: 700; }
+ .addon-row { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); gap: .6rem; align-items: center; }
+ @media (max-width: 560px) {
+  .addon-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .addon-row strong { grid-column: 1 / -1; }
+ }
+</style>

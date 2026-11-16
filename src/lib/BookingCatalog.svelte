@@ -1,7 +1,8 @@
 <script lang="ts">
  import { asset } from '$app/paths';
  import type { Snippet } from 'svelte';
- import { basicColors, catalogItems, ceramicAddons, powderParts, powderPhotos, wheelExtras, wheelRates, wheels } from './bookingCatalog';
+ import { basicColors, catalogItems, ceramicAddons, ceramicTier, powderParts, powderPhotos, wheelExtras, wheelRates, wheels } from './bookingCatalog';
+ import { db } from './store.svelte';
  import { linePrice, money, type Selection } from './coating';
 
  let { value = $bindable(), bike, year, serviceControls = true, powderDetails }: { value: Selection; bike: string; year?: number; serviceControls?: boolean; powderDetails?: Snippet } = $props();
@@ -11,7 +12,7 @@
  const options = $derived(value.catalog!);
  const allOptions = $derived(catalogItems(
   { ...value, ceramic: true, powder: true, powderParts: Object.keys(powderParts), finish: '' },
-  { ...options, ceramicAddons: Object.keys(ceramicAddons) }, bike, year
+  { ...options, ceramicAddons: Object.keys(ceramicAddons) }, bike, year, db.pricing.ceramicCatalog
  ));
 
  function price(label: string) {
@@ -32,7 +33,7 @@
  <strong class="package-price">{price('Ceramic coating')}</strong>
  {#if value.ceramic}
   <div class="package-meta small muted">
-   <span><b aria-hidden="true">◷</b> {allOptions.get('Ceramic coating')?.[0] === 1999 ? '3–4 hours' : '2–3 hours'} turnover</span>
+   <span><b aria-hidden="true">◷</b> {!options.otherBigBike && ceramicTier(bike, options.bigBike) === 1999 ? '3–4 hours' : '2–3 hours'} turnover</span>
    <span>Wait at the shop or pick up later</span>
    <strong>2–5 years with proper care</strong>
   </div>

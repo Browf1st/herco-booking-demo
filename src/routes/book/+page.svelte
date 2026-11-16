@@ -3,7 +3,7 @@
  import { page } from '$app/state';
  import { tick } from 'svelte';
  import BookingCatalog from '#lib/BookingCatalog.svelte';
- import { ceramicModels } from '#lib/bookingCatalog.ts';
+ import { ceramicModels, ceramicTierNames, defaultCeramicCatalogPricing } from '#lib/bookingCatalog.ts';
  import VisitPicker from '#lib/VisitPicker.svelte';
  import { account, rememberBooking } from '#lib/account.svelte.ts';
  import { estimatePrice, linePrice, money, quote, selection, serviceLabel } from '#lib/coating.ts';
@@ -45,9 +45,9 @@
   'Yamaha XMAX': 'XMAX'
  };
  const groupedAliases = ['Honda ADV150', 'Honda PCX150', 'Suzuki Gixxer 250'];
- const tierNames: Record<string, string> = { 1799: 'Standard / Underbone', 1999: 'Mid-Range / Maxi', 2499: 'Big Bike / Premium' };
  const tierDescriptions: Record<string, string> = { 1799: 'Scooters and underbones', 1999: 'Maxi scooters and naked bikes', 2499: 'Vespa, 400 cc and up, and more' };
  const tiers = Object.entries(ceramicModels);
+ const ceramicPricing = $derived(db.pricing.ceramicCatalog ?? defaultCeramicCatalogPricing);
  let form = $state({
   name: walkIn ? '' : account.current?.name ?? '', email: walkIn ? '' : account.current?.email ?? '',
   phone: walkIn ? '' : account.current?.phone ?? '', plateNumber: '', notes: query.get('notes') ?? '', date: isBookableDate(preferredDate) ? preferredDate : '', slot: ''
@@ -126,16 +126,17 @@
      <p class="small muted">Prices shown are for ceramic coating.</p>
      <div class="model-groups">
       {#each tiers as [price, models], index}
+       {@const tier = Number(price) as keyof typeof ceramicModels}
        <div class="model-group" class:selected={models.includes(unit) || (price === '2499' && unit === 'other-big-bike')}>
         <div class="tier-heading">
          <div class="tier-label">Tier {index + 1}<span class="tier-indicator" aria-hidden="true"></span></div>
-         <strong>{tierNames[price]}</strong>
+         <strong>{ceramicTierNames[tier]}</strong>
          <p class="small muted">{tierDescriptions[price]}</p>
-         <div class="tier-price"><span class="small muted">From</span> <strong>{money(Number(price))}</strong></div>
+         <div class="tier-price"><span class="small muted">From</span> <strong>{money(ceramicPricing.tiers[tier])}</strong></div>
         </div>
         <div class="model-options">
        {#each models.filter(model => !groupedAliases.includes(model)) as model}
-        <label class="model"><input type="radio" name="motorcycle" value={model} bind:group={unit} onchange={() => selectMotorcycle(model)} aria-label={(modelLabels[model] ?? model) + ', ceramic coating ' + money(Number(price))} /> {modelLabels[model] ?? model}</label>
+        <label class="model"><input type="radio" name="motorcycle" value={model} bind:group={unit} onchange={() => selectMotorcycle(model)} aria-label={(modelLabels[model] ?? model) + ', ceramic coating ' + money(ceramicPricing.tiers[tier])} /> {modelLabels[model] ?? model}</label>
        {/each}
         {#if price === '2499'}
          <label class="model"><input type="radio" name="motorcycle" value="other-big-bike" bind:group={unit} onchange={() => selectMotorcycle('other-big-bike')} /> Other big bike (400 cc and up)</label>
