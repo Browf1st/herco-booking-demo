@@ -1,6 +1,10 @@
 <script lang="ts">
+	import ActionIcon from '#lib/ActionIcon.svelte';
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
+	import { adminNavigation, bookingSections } from '#lib/adminNavigation.ts';
 	import AdminBooking from '#lib/AdminBooking.svelte';
+	import AdminActivity from '#lib/AdminActivity.svelte';
 	import AdminPricing from '#lib/AdminPricing.svelte';
 	import OperationsAdmin from '#lib/OperationsAdmin.svelte';
 	import AdminCalendar from '#lib/AdminCalendar.svelte';
@@ -9,9 +13,11 @@
 	import { fmtDate, fmtSlot, isOpenDay, slots, today, upcoming } from '#lib/dates.ts';
 	import { bookingsOn, db, dayStatus, isSlotBlocked, reschedule, setDateAvailability, slotsFor, toggleSlotBlock } from '#lib/store.svelte.ts';
 
-	const tabs = ['Overview', 'Bookings', 'Booking history', 'Customers', 'HERCO Points', 'Inventory', 'Reports', 'Pricing', 'Change requests', 'Activity log'];
-	const requestedTab = $derived(page.url.searchParams.get('tab') === 'Customers & points' ? 'HERCO Points' : page.url.searchParams.get('tab') ?? 'Overview');
-	const tab = $derived(tabs.includes(requestedTab) ? requestedTab : 'Overview');
+	const navigation = $derived(adminNavigation(page.url.searchParams));
+	const tab = $derived(navigation.tab === 'Booking' ? navigation.section : navigation.tab);
+	const pendingRequests = $derived(db.bookings.reduce((total, booking) =>
+		total + (booking.requests?.filter(request => request.state === 'Pending').length ?? 0), 0));
+	const pendingBookings = $derived(db.bookings.filter(booking => booking.status === 'pending').length);
 	let date = $state(upcoming().find(isOpenDay)!);
 	let moving = $state<{ id: string; date: string; slot: string }>();
 	let error = $state('');
@@ -35,7 +41,21 @@
 
 <svelte:head><title>Shop admin | HERCO Detailing Garage</title></svelte:head>
 
-<section class="section wrap stack">
+<section class="section wrap stack admin-content">
+	{#if navigation.tab === 'Booking'}
+		<nav class="row booking-sections" aria-label="Booking sections">
+			{#each bookingSections as section (section)}
+				<a class="btn sm" class:ghost={navigation.section !== section} href={resolve(`/admin?tab=Booking&section=${encodeURIComponent(section)}`)} aria-current={navigation.section === section ? 'page' : undefined}><ActionIcon name={section === "Overview" ? "ranking" : section === "Bookings" ? "calendar" : section === "Change requests" ? "edit" : "history"} />
+					{section === 'Bookings' ? 'Booking' : section}
+					{#if section === 'Change requests'}
+						<span class="tab-count" aria-label={pendingRequests + ' awaiting review'}>{pendingRequests}</span>
+					{:else if section === 'Bookings'}
+						<span class="tab-count" aria-label={pendingBookings + ' pending bookings'}>{pendingBookings}</span>
+					{/if}
+				</a>
+			{/each}
+		</nav>
+	{/if}
 	{#if tab === 'Pricing'}
 		<AdminPricing />
 	{:else if tab === 'Change requests'}
@@ -44,11 +64,7 @@
 			<article class="card stack"><p><strong>{booking.name}</strong> · {booking.id} · {fmtDate(booking.date)} at {fmtSlot(booking.slot)}</p><AdminBooking {booking} /></article>
 		{:else}<p class="card">No requests awaiting review.</p>{/each}
 	{:else if tab === 'Activity log'}
-		<h3>Admin activity</h3>
-		<p class="muted">All timestamps use Philippine time.</p>
-		{#each db.events.filter(event => event.actor === 'Demo admin').toReversed() as event (event.id)}
-			<p class="card"><strong>{event.action}</strong>{event.bookingId ? ' · ' + event.bookingId : ''}<br /><span class="muted small">{new Date(event.at).toLocaleString('en-PH', {timeZone:'Asia/Manila', dateStyle:'medium', timeStyle:'medium', hour12:true})} · {event.actor}</span></p>
-		{:else}<p class="card">No admin activity yet.</p>{/each}
+		<AdminActivity />
 	{:else if tab !== 'Bookings'}
 		<OperationsAdmin {tab} />
 	{:else}
@@ -71,12 +87,12 @@
 				<div class="row">
 
 					{#if closed}
-						<button class="btn sm confirm-action" onclick={() => setDateAvailability(date, 'open')}>Open this date</button>
+						<button class="btn sm confirm-action" onclick={() => setDateAvailability(date, 'open')}><ActionIcon name="check" />Open this date</button>
 					{:else}
-						<button class="btn sm danger" onclick={() => setDateAvailability(date, 'closed')}>Close this date</button>
+						<button class="btn sm danger" onclick={() => setDateAvailability(date, 'closed')}><ActionIcon name="block" />Close this date</button>
 					{/if}
 					{#if db.opened.includes(date) || db.blocked.includes(date)}
-						<button class="btn sm ghost" onclick={() => setDateAvailability(date, 'regular')}>Restore regular hours</button>
+						<button class="btn sm ghost" onclick={() => setDateAvailability(date, 'regular')}><ActionIcon name="reset" />Restore regular hours</button>
 					{/if}
 				</div>
 				<p class="small muted">Closing the date stops new bookings. Existing appointments stay scheduled.</p>
@@ -98,7 +114,7 @@
 					<div class="stack">
 						<b class="display time">{fmtSlot(time)}</b>
 						{#if date >= today()}
-							<button class="btn sm ghost" aria-label={(isSlotBlocked(date, time) ? 'Unblock ' : 'Block ') + fmtSlot(time)} onclick={() => toggleSlotBlock(date, time)}>{isSlotBlocked(date, time) ? 'Unblock time' : 'Block time'}</button>
+							<button class="btn sm ghost" aria-label={(isSlotBlocked(date, time) ? 'Unblock ' : 'Block ') + fmtSlot(time)} onclick={() => toggleSlotBlock(date, time)}><ActionIcon name={isSlotBlocked(date, time) ? "check" : "block"} />{isSlotBlocked(date, time) ? 'Unblock time' : 'Block time'}</button>
 						{/if}
 					</div>
 					{#if !b}
@@ -121,11 +137,11 @@
 								<SlotPicker bind:date={moving.date} bind:slot={moving.slot} />
 								{#if error}<p class="error">{error}</p>{/if}
 								<div class="row">
-									<button class="btn sm" disabled={!moving.slot} onclick={move}>Save new slot</button>
-									<button class="btn sm ghost" onclick={() => (moving = undefined)}>Close</button>
+									<button class="btn sm" disabled={!moving.slot} onclick={move}><ActionIcon name="save" />Save new slot</button>
+									<button class="btn sm ghost" onclick={() => (moving = undefined)}><ActionIcon name="close" />Close</button>
 								</div>
 							{:else if (b.status === 'pending' || b.status === 'confirmed') && !b.requests?.some(r => r.state === 'Pending')}
-								<div><button class="btn sm ghost" onclick={() => (moving = { id: b.id, date: '', slot: '' })}>Reschedule as admin</button></div>
+								<div><button class="btn sm ghost" onclick={() => (moving = { id: b.id, date: '', slot: '' })}><ActionIcon name="calendar" />Reschedule as admin</button></div>
 							{/if}
 						</div>
 					{/if}
@@ -137,9 +153,10 @@
 </section>
 
 <style>
+	.admin-content { grid-template-columns: minmax(0, 1fr); }
 	.tiles {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 8px;
 	}
 
@@ -179,5 +196,10 @@
 
 	.between {
 		justify-content: space-between;
+	}
+
+	@media (max-width: 400px) {
+		.tiles .card { padding: .4rem; overflow-wrap: anywhere; }
+		li { grid-template-columns: minmax(0, 1fr); }
 	}
 </style>

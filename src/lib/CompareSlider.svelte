@@ -56,7 +56,7 @@
 	.after {
 		left: auto;
 		right: 10px;
-		background: var(--accent);
+		background: var(--accent-fill);
 		color: var(--accent-ink);
 	}
 
@@ -66,7 +66,7 @@
 		bottom: 0;
 		left: var(--pos);
 		width: 3px;
-		background: var(--accent);
+		background: var(--accent-fill);
 		translate: -50% 0;
 	}
 
@@ -77,7 +77,7 @@
 		left: 50%;
 		width: 40px;
 		height: 40px;
-		background: var(--accent);
+		background: var(--accent-fill);
 		translate: -50% -50%;
 		clip-path: polygon(0 50%, 35% 15%, 35% 38%, 65% 38%, 65% 15%, 100% 50%, 65% 85%, 65% 62%, 35% 62%, 35% 85%);
 	}

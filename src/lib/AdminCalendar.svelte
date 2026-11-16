@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ActionIcon from '#lib/ActionIcon.svelte';
 	import { addDays, fmtDate, today } from './dates';
 	import { bookingsOn, dayStatus } from './store.svelte';
 
@@ -30,10 +31,10 @@
 		</div>
 		<div class="row calendar-controls">
 			<label class="month-picker"><span class="sr-only">Jump to month</span><input aria-label="Jump to month" type="month" value={displayedMonth} onchange={(e) => { if (/^\d{4}-\d{2}$/.test(e.currentTarget.value)) month = e.currentTarget.value; }} /></label>
-			<button type="button" class="today-button" onclick={goToday}>Today</button>
+			<button type="button" class="today-button" onclick={goToday}><ActionIcon name="calendar" />Today</button>
 			<div class="row month-arrows">
-			<button type="button" class="month-arrow" aria-label="Previous month" onclick={() => shiftMonth(-1)}>‹</button>
-			<button type="button" class="month-arrow" aria-label="Next month" onclick={() => shiftMonth(1)}>›</button>
+			<button type="button" class="month-arrow" aria-label="Previous month" onclick={() => shiftMonth(-1)}><ActionIcon name="left" /></button>
+			<button type="button" class="month-arrow" aria-label="Next month" onclick={() => shiftMonth(1)}><ActionIcon name="right" /></button>
 			</div>
 		</div>
 	</div>
@@ -92,7 +93,7 @@
 	.month-arrows { gap: 2px; }
 	.month-arrow, .today-button { min-width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--text); cursor: pointer; }
 	.month-arrow { font-size: 1.5rem; }
-	.today-button { padding-inline: 14px; font: 600 0.85rem var(--body); }
+	.today-button { display: inline-flex; align-items: center; gap: .3rem; padding-inline: 14px; font: 600 0.85rem var(--body); }
 	.month-arrow:hover, .today-button:hover { border-color: var(--accent); }
 	.month-picker input { min-height: 40px; margin: 0; padding: 6px 10px; font-size: 0.85rem; background: var(--bg); }
 	.month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 0 16px; }
@@ -106,11 +107,11 @@
 	.status-dot { display: inline-block; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; }
 	.pending { background: var(--warn); }
 	.confirmed { background: var(--ok); }
-	.closed { background: rgb(0 0 0 / 14%); }
+	.closed { background: color-mix(in srgb, var(--line) 24%, var(--panel)); }
 	.closed time { color: var(--muted); }
 	.outside time { color: var(--muted); opacity: 0.45; }
 	.selected { background: color-mix(in srgb, var(--accent) 9%, var(--panel)); border-radius: 6px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
-	.selected time { color: var(--accent-ink); background: var(--accent); }
+	.selected time { color: var(--accent-ink); background: var(--accent-fill); }
 	.is-today:not(.selected) time { border-color: var(--accent); color: var(--accent); }
 	.calendar-footer { justify-content: space-between; padding: 16px 24px; }
 	.legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -118,7 +119,7 @@
 	@media (max-width: 600px) {
 		.calendar-toolbar { padding: 16px; }
 		.calendar-controls { width: 100%; justify-content: space-between; gap: 6px; }
-		.month-picker { flex: 1; max-width: 180px; }
+		.month-picker { flex: 1; min-width: 0; max-width: 180px; }
 		.month-picker input { width: 100%; }
 		.month-grid { padding-inline: 6px; }
 		.weekday { padding: 8px 2px; text-align: center; font-size: 0.65rem; }
@@ -129,5 +130,10 @@
 		.day-caption { font-size: 0.58rem; gap: 3px; }
 		.empty-caption { display: none; }
 		.calendar-footer { padding: 12px; gap: 10px; }
+	}
+	@media (max-width: 380px) {
+		.month-picker { flex: 0 0 100%; max-width: none; }
+		.date-line { flex-direction: column; }
+		.day-caption { justify-content: center; }
 	}
 </style>

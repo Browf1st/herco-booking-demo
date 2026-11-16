@@ -1,4 +1,5 @@
 <script lang="ts">
+ import ActionIcon from '#lib/ActionIcon.svelte';
  import { resolve } from '$app/paths';
  import { page } from '$app/state';
  import { tick } from 'svelte';
@@ -105,7 +106,7 @@
    <p>{fmtDate(done.date)} at {fmtSlot(done.slot)} (Philippine time)</p>
    <p>Estimated service price <strong>{estimatePrice(done.estimate!)}</strong></p>
   </div>
-  <div><a class="btn" href={walkIn ? resolve('/admin?tab=Booking%20history') : resolve('/my-bookings')}>{walkIn ? 'View booking history' : 'View my bookings'}</a></div>
+  <div><a class="btn" href={walkIn ? resolve('/admin?tab=Booking%20history') : resolve('/my-bookings')}><ActionIcon name="history" />{walkIn ? 'View booking history' : 'View my bookings'}</a></div>
  {:else}
   <h1>{walkIn ? 'Walk-in intake' : 'Book a visit'}</h1>
   <p class="small muted">Demo only. Use sample details. Requests stay in this browser.</p>
@@ -162,7 +163,7 @@
      </label>
     {/if}
     {#if bike || !coating.ceramic}
-     <BookingCatalog bind:value={coating} {bike} year={isPcx ? modelYear : undefined} serviceControls={false} --ceramic-package-bg="#fdfafa">
+     <BookingCatalog bind:value={coating} {bike} year={isPcx ? modelYear : undefined} serviceControls={false}>
       {#snippet powderDetails()}
        {#if !coating.ceramic}
         <label>Motorcycle brand and model <input bind:value={powderBike} placeholder="e.g. Yamaha Sniper 155" maxlength="100" required /></label>
@@ -217,24 +218,24 @@
      {/if}
     </div>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
-    <button class="btn" disabled={!bike || (!coating.ceramic && !coating.powder)}>{walkIn ? 'Save walk-in intake' : 'Submit booking'}</button>
+    <button class="btn" disabled={!bike || (!coating.ceramic && !coating.powder)}><ActionIcon name={walkIn ? "save" : "send"} />{walkIn ? 'Save walk-in intake' : 'Submit booking'}</button>
    </aside>
   </form>
  {/if}
 </section>
 
 <style>
- .booking { max-width: 1280px; color-scheme: light; --bg: #f8fafc; --panel-2: #f1f5f9; --line: #cbd5e1; --text: #0f172a; --muted: #475569; --accent: #b91c1c; background: var(--bg); color: var(--text); }
+ .booking { max-width: 1280px; background: var(--bg); color: var(--text); }
 
  .booking-layout { display: grid; gap: 20px; align-items: start; }
  .booking-steps { min-width: 0; gap: 24px; }
- .booking-cart { border-top: 4px solid var(--accent); border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px #0f172a14; }
+ .booking-cart { border-top: 4px solid var(--accent); border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px var(--card-shadow); }
  .booking-cart .btn { width: 100%; clip-path: none; border-radius: 8px; }
  @media (min-width: 960px) {
   .booking-layout { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 24px; }
   .booking-cart { position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow: auto; }
  }
- legend span { display: inline-grid; place-items: center; width: 1.65em; aspect-ratio: 1; margin-inline-end: 6px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: .82em; }
+ legend span { display: inline-grid; place-items: center; width: 1.65em; aspect-ratio: 1; margin-inline-end: 6px; border-radius: 50%; background: var(--accent-fill); color: var(--accent-ink); font-size: .82em; }
  h1 { font-family: var(--body); font-size: clamp(2rem, 5vw, 3.25rem); font-weight: 900; font-style: italic; letter-spacing: -.03em; }
  fieldset { min-inline-size: 0; margin: 0; }
  legend { padding-inline: 6px; font-weight: 750; font-size: 1.2rem; }
@@ -242,7 +243,7 @@
   padding: clamp(16px, 3vw, 28px);
   gap: 18px;
   border-radius: 12px;
-  box-shadow: 0 1px 3px #0f172a14;
+  box-shadow: 0 1px 3px var(--card-shadow);
  }
  .booking-panel > .cols {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 235px), 1fr));

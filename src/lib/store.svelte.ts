@@ -1,13 +1,13 @@
+import { activityEvent, type ActivityEvent, type ActivityModule } from './activity';
 // Demo store: bookings live in this browser only, and this file is the one seam a real database replaces.
 import { demoFans, proFeatures, shop, type Size } from './config';
 import { defaultPricing, selection, validateSelection, quote, type Selection, type Pricing } from './coating';
-import { powderDay } from './bookingCatalog';
+import { ceramicTierNames, defaultCeramicCatalogPricing, powderDay } from './bookingCatalog';
 import { addDays, isBookableDate, isOpenDay, nowHour, slots, today, upcoming } from './dates';
 
 export type Status = 'pending' | 'confirmed' | 'done' | 'cancelled';
 export type ChangeRequest = { kind: 'Cancel' | 'Reschedule'; reason: string; date?: string; slot?: string; state: 'Pending' | 'Approved' | 'Declined'; at: string; reviewedAt?: string };
-type Event = { id: string; at: string; actor: string; action: string; bookingId?: string };
-type DemoData = { bookings: Booking[]; blocked: string[]; opened?: string[]; blockedSlots?: Record<string, string[]>; scenarioVersion: number; pricing?: Pricing; events?: Event[] };
+type DemoData = { bookings: Booking[]; blocked: string[]; opened?: string[]; blockedSlots?: Record<string, string[]>; scenarioVersion: number; pricing?: Pricing; events?: ActivityEvent[] };
 type ServiceSnapshot = { selection: Selection; estimate?: ReturnType<typeof quote> };
 type ServiceChange = { id: string; at: string; actor: string; before: ServiceSnapshot; after: ServiceSnapshot };
 export type Booking = {
@@ -145,12 +145,12 @@ export function syncBookings() {
  return () => window.removeEventListener('storage', sync);
 }
 
-export function audit(action: string, bookingId?: string, actor = 'Demo admin') {
- db.events.push({ id: crypto.randomUUID(), at: new Date().toISOString(), actor, action, bookingId });
+export function audit(action: string, bookingId?: string, actor = 'Demo admin', module: ActivityModule = 'Booking', detail?: string) {
+ db.events.push(activityEvent(module, action, { bookingId, detail }, actor));
  save();
 }
 
-export function updatePricing(pricing: Pricing) {
+export function updatePricing(pricing: Pricing, module: 'Pricing' | 'Promotion') {
  const amounts = [...Object.values(pricing.ceramic), ...Object.values(pricing.powder), ...Object.values(pricing.size), ...Object.values(pricing.models)];
  if (amounts.some(n => !Number.isFinite(n) || n < 0) || !Number.isFinite(pricing.promo) || pricing.promo < 0 || pricing.promo > 100) throw Error('Use nonnegative amounts and a promotion between 0 and 100%.');
  const catalog = pricing.ceramicCatalog;
@@ -163,8 +163,27 @@ export function updatePricing(pricing: Pricing) {
    throw Error('Enter nonnegative prices. Maximum and premium prices must be at least the corresponding lower price.');
   }
  }
+ const oldPromo = db.pricing.promo;
+ const previous = db.pricing.ceramicCatalog ?? defaultCeramicCatalogPricing;
+ const tierChanges = catalog ? Object.keys(ceramicTierNames).flatMap(key => {
+  const tier = Number(key) as keyof typeof ceramicTierNames;
+  return previous.tiers[tier] === catalog.tiers[tier] ? [] :
+   [ceramicTierNames[tier] + ': ₱' + previous.tiers[tier] + ' → ₱' + catalog.tiers[tier]];
+ }) : [];
+ const addonChanges = catalog ? Object.entries(catalog.addons).flatMap(([name, range]) => {
+  const old = previous.addons[name as keyof typeof previous.addons];
+  return old[0] === range[0] && old[1] === range[1] ? [] : [name + ': ' + old.join('–') + ' → ' + range.join('–')];
+ }) : [];
+ const listedChanges = catalog ? Object.entries(catalog.listedAddons).flatMap(([name, price]) => {
+  const old = previous.listedAddons[name as keyof typeof previous.listedAddons];
+  return old === price ? [] : [name + ' (priced tiers): ' + old + ' → ' + price];
+ }) : [];
+ const premiumChange = catalog && previous.premiumGloss !== catalog.premiumGloss
+  ? ['Premium Matte to Glossy: ' + previous.premiumGloss + ' → ' + catalog.premiumGloss] : [];
  db.pricing = pricing;
- audit('Updated pricing and promotion (' + pricing.promo + '%)');
+ audit(module === 'Promotion' ? 'Saved booking promotion' : 'Saved ceramic coating prices', undefined, 'Demo admin', module,
+  module === 'Promotion' ? oldPromo + '% → ' + pricing.promo + '%' :
+   [...tierChanges, ...addonChanges, ...listedChanges, ...premiumChange].join(' · ') || 'No rate changes');
 }
 
 export function coatingOf(booking: Booking): Selection {
@@ -204,7 +223,7 @@ export function requestChange(booking: Booking, kind: ChangeRequest['kind'], rea
   assertFree(date ?? '', slot ?? '');
  }
  booking.requests = [...(booking.requests ?? []), { kind, reason, date, slot, state: 'Pending', at: new Date().toISOString() }];
- audit(kind + ' requested', booking.id, 'Customer');
+ audit(kind + ' requested', booking.id, 'Customer', 'Change requests');
 }
 
 export function reviewChange(booking: Booking, request: ChangeRequest, approved: boolean) {
@@ -220,7 +239,7 @@ export function reviewChange(booking: Booking, request: ChangeRequest, approved:
  if (approved && request.kind === 'Cancel') booking.status = 'cancelled';
  request.state = approved ? 'Approved' : 'Declined';
  request.reviewedAt = new Date().toISOString();
- audit(request.kind + ' ' + request.state.toLowerCase() + (approved && request.kind === 'Reschedule' ? ' · ' + previous + ' → ' + booking.date + ' ' + booking.slot : ''), booking.id);
+ audit(request.kind + ' ' + request.state.toLowerCase() + (approved && request.kind === 'Reschedule' ? ' · ' + previous + ' → ' + booking.date + ' ' + booking.slot : ''), booking.id, 'Demo admin', 'Change requests');
 }
 
 export function approveBooking(booking: Booking, note: string) {
@@ -252,7 +271,7 @@ export function toggleSlotBlock(date: string, time: string) {
 	const blocked = isSlotBlocked(date, time);
 	const previous = db.blockedSlots[date] ?? [];
 	db.blockedSlots[date] = blocked ? previous.filter(slot => slot !== time) : [...previous, time];
-	audit((blocked ? 'Unblocked ' : 'Blocked ') + date + ' at ' + time);
+	audit((blocked ? 'Unblocked ' : 'Blocked ') + date + ' at ' + time, undefined, 'Demo admin', 'Booking calendar');
 }
 
 export function slotsFor(date: string) {
@@ -321,5 +340,5 @@ export function setDateAvailability(date: string, override: 'open' | 'closed' | 
  if (override === 'closed') db.blocked.push(date);
  if (override === 'open') db.opened.push(date);
  const action = { open: 'Opened bookings', closed: 'Closed bookings', regular: 'Restored regular hours' };
- audit(action[override] + ' for ' + date);
+ audit(action[override] + ' for ' + date, undefined, 'Demo admin', 'Booking calendar');
 }

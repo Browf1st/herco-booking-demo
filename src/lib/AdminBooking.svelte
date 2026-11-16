@@ -1,4 +1,5 @@
 <script lang="ts">
+ import ActionIcon from '#lib/ActionIcon.svelte';
  import BookingSummary from './BookingSummary.svelte';
  import EditCoating from './EditCoating.svelte';
  import { fmtDate, fmtSlot } from './dates';
@@ -48,7 +49,7 @@
    {#if request.date && request.slot}<p>Requested visit: {fmtDate(request.date)} at {fmtSlot(request.slot)}</p>{/if}
    {#if request.reason}<p>Reason: {request.reason}</p>{/if}
    {#if request.state === 'Pending' && active}
-    <div class="row"><button class="btn sm confirm-action" onclick={() => run(() => reviewChange(booking, request, true))}>Approve {request.kind.toLowerCase()}</button><button class="btn sm danger" onclick={() => run(() => reviewChange(booking, request, false))}>Decline request</button></div>
+    <div class="row"><button class="btn sm confirm-action" onclick={() => run(() => reviewChange(booking, request, true))}><ActionIcon name="check" />Approve {request.kind.toLowerCase()}</button><button class="btn sm danger" onclick={() => run(() => reviewChange(booking, request, false))}><ActionIcon name="close" />Decline request</button></div>
    {/if}
   </div>
  {/each}
@@ -56,7 +57,7 @@
  {#if booking.status === 'pending'}
   <form class="stack" onsubmit={(event) => { event.preventDefault(); run(() => approveBooking(booking, approval.trim())); }}>
    <label>Approval note for the customer (optional)<textarea rows="2" maxlength="1000" bind:value={approval}></textarea></label>
-   <div><button class="btn sm confirm-action">Confirm booking</button></div>
+   <div><button class="btn sm confirm-action"><ActionIcon name="check" />Confirm booking</button></div>
   </form>
  {:else if booking.status === 'confirmed'}
   {#if completing}
@@ -65,15 +66,15 @@
     <div class="cols"><label>Take a photo<input type="file" accept="image/*" capture="environment" onchange={addPhoto} disabled={reading || photos.length >= 3} /></label>
     <label>Upload a photo<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" onchange={addPhoto} disabled={reading || photos.length >= 3} /></label></div>
     {#if reading}<p role="status">Preparing photo…</p>{/if}
-    {#if photos.length}<div class="cols">{#each photos as photo, index}<div class="stack"><img src={photo} alt={'Photo ' + (index + 1)} /><button type="button" class="btn sm ghost" onclick={() => photos = photos.filter((_, i) => i !== index)}>Remove photo {index + 1}</button></div>{/each}</div>{/if}
-    <div class="row"><button class="btn sm complete-action" disabled={reading}>Mark as done</button><button type="button" class="btn sm ghost" onclick={() => completing = false}>Close</button></div>
+    {#if photos.length}<div class="cols">{#each photos as photo, index}<div class="stack"><img src={photo} alt={'Photo ' + (index + 1)} /><button type="button" class="btn sm ghost" onclick={() => photos = photos.filter((_, i) => i !== index)}><ActionIcon name="close" />Remove photo {index + 1}</button></div>{/each}</div>{/if}
+    <div class="row"><button class="btn sm complete-action" disabled={reading}><ActionIcon name="check" />Mark as done</button><button type="button" class="btn sm ghost" onclick={() => completing = false}><ActionIcon name="close" />Close</button></div>
    </form>
   {:else}
-   <div><button class="btn sm complete-action" onclick={() => completing = true}>Complete service</button></div>
+   <div><button class="btn sm complete-action" onclick={() => completing = true}><ActionIcon name="check" />Complete service</button></div>
   {/if}
  {/if}
  {#if active && !booking.requests?.some(r => r.state === 'Pending')}
-  <div><button class="btn sm danger" onclick={() => { if (confirm('Cancel this booking?')) run(() => setStatus(booking.id, 'cancelled')); }}>Cancel booking</button></div>
+  <div><button class="btn sm danger" onclick={() => { if (confirm('Cancel this booking?')) run(() => setStatus(booking.id, 'cancelled')); }}><ActionIcon name="block" />Cancel booking</button></div>
  {/if}
  {#if error}<p class="error" role="alert">{error}</p>{/if}
 </div>

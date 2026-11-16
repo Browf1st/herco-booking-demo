@@ -1,4 +1,5 @@
 <script lang="ts">
+ import ActionIcon from '#lib/ActionIcon.svelte';
  import VisitPicker from './VisitPicker.svelte';
  import BookingSummary from './BookingSummary.svelte';
  import EditCoating from './EditCoating.svelte';
@@ -39,10 +40,10 @@
     {#if kind === 'Reschedule'}<VisitPicker bind:date bind:slot powder={!!(booking.selection?.catalog && booking.selection.powder)} />{/if}
     <label>Reason (optional)<textarea bind:value={reason} maxlength="500" rows="2"></textarea></label>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
-    <div class="row"><button class="btn sm">Send request</button><button type="button" class="btn sm ghost" onclick={() => {kind = undefined; error = '';}}>Back</button></div>
+    <div class="row"><button class="btn sm"><ActionIcon name="send" />Send request</button><button type="button" class="btn sm ghost" onclick={() => {kind = undefined; error = '';}}><ActionIcon name="back" />Back</button></div>
    </form>
   {:else}
-   <div class="row"><button class="btn sm ghost" onclick={() => kind = 'Reschedule'}>Request reschedule</button><button class="btn sm danger" onclick={() => kind = 'Cancel'}>Request cancellation</button></div>
+   <div class="row"><button class="btn sm ghost" onclick={() => kind = 'Reschedule'}><ActionIcon name="calendar" />Request reschedule</button><button class="btn sm danger" onclick={() => kind = 'Cancel'}><ActionIcon name="block" />Request cancellation</button></div>
   {/if}
  {/if}
 </article>

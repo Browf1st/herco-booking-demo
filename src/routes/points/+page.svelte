@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ActionIcon from '#lib/ActionIcon.svelte';
 	import { resolve } from '$app/paths';
 	import { account } from '#lib/account.svelte.ts';
 	import { ops, fanRanking, pointBalance, redeemReward, rewardStatus } from '#lib/operations.svelte.ts';
@@ -8,6 +9,8 @@
 	const activeId = $derived(account.current?.id ?? '');
 	const fan = $derived(ops.data.members.find((member) => member.id === activeId));
 	const ranking = $derived(fanRanking());
+	const topRankCount = 10;
+	const ownRank = $derived(ranking.findIndex(member => member.id === activeId) + 1);
 	let selectedCost = $state(0);
 	let requestId = $state('');
 	let issuing = $state(false);
@@ -44,8 +47,10 @@
 			{#if fan}
 				<div class="card stack">
 					<p class="eyebrow">Your fan account</p>
-					<h2>{fan.name}</h2>
-					<p class="points">{pointBalance(fan.id)} <span class="small muted">HERCO Points</span></p>
+					<div class="fan-account-summary">
+						<h2>{fan.name}</h2>
+						<p class="points">{pointBalance(fan.id)} <span class="small muted">HERCO Points</span></p>
+					</div>
 				</div>
 				{#if selectedReward}
 					<div class="card stack" role="group" aria-label="Confirm reward redemption">
@@ -53,8 +58,8 @@
 						{#if selectedReward.scope}<p>{selectedReward.scope}</p>{/if}
 						<p>{selectedCost.toLocaleString('en-PH')} points will be deducted. Your remaining balance will be {(pointBalance(activeId) - selectedCost).toLocaleString('en-PH')} points.</p>
 						<div class="row">
-							<button class="btn sm" disabled={issuing || pointBalance(activeId) < selectedCost} onclick={confirmRedemption}>{issuing ? 'Submitting…' : 'Confirm redemption'}</button>
-							<button class="btn sm ghost" disabled={issuing} onclick={() => (selectedCost = 0)}>Cancel</button>
+							<button class="btn sm" disabled={issuing || pointBalance(activeId) < selectedCost} onclick={confirmRedemption}><ActionIcon name="check" />{issuing ? 'Submitting…' : 'Confirm redemption'}</button>
+							<button class="btn sm ghost" disabled={issuing} onclick={() => (selectedCost = 0)}><ActionIcon name="close" />Cancel</button>
 						</div>
 					</div>
 				{/if}
@@ -74,7 +79,7 @@
 							{#if reward.scope}<p class="muted">{reward.scope}</p>{/if}
 							<progress max={reward.points} value={Math.min(pointBalance(fan.id), reward.points)} aria-label={reward.name + ' ' + (reward.scope ?? '') + ' progress'}></progress>
 							<p class="small" class:muted={!reached}>{reached ? 'Points target reached' : (reward.points - pointBalance(fan.id)).toLocaleString('en-PH') + ' more points to reach this reward'}</p>
-							<button class="btn sm" disabled={!reached || issuing} onclick={() => { selectedCost = reward.points; requestId = crypto.randomUUID(); error = ''; issuedId = ''; }}>Redeem reward</button>
+							<button class="btn sm" disabled={!reached || issuing} onclick={() => { selectedCost = reward.points; requestId = crypto.randomUUID(); error = ''; issuedId = ''; }}><ActionIcon name="gift" />Redeem reward</button>
 						</div>
 					{/each}
 					</div>
@@ -98,12 +103,18 @@
 		<aside class="card stack leaderboard" aria-labelledby="leaderboard-title">
 			<h3 id="leaderboard-title">Rewards ranking</h3>
 			<p class="small muted">Ranked by current HERCO Points. The named sample accounts are fictional.</p>
-			{#each ranking as member, index (member.id)}
+			{#each ranking.slice(0, topRankCount) as member, index (member.id)}
 				<div class="ranking-row" class:current={member.id === activeId}>
 					<b class="rank">#{index + 1}</b><span class="member-name" title={member.name}>{member.name}</span>
 					<strong>{pointBalance(member.id)} points</strong>
 				</div>
-				{/each}
+			{/each}
+			{#if fan && ownRank > topRankCount}
+				<div class="ranking-row current own-ranking" aria-label="Your ranking">
+					<b class="rank">#{ownRank}</b><span class="member-name" title={fan.name}>{fan.name} <span class="small muted">(You)</span></span>
+					<strong>{pointBalance(fan.id)} points</strong>
+				</div>
+			{/if}
 		</aside>
 	</div>
 </section>
@@ -112,7 +123,7 @@
 		<div class="stack points-welcome">
 			<h1>HERCO Points</h1>
 			<p class="muted">Sign in to see your balance, redeem rewards, and check what’s ready to claim.</p>
-			<div><a class="btn" href={resolve('/account')}>Sign in to HERCO Points</a></div>
+			<div><a class="btn" href={resolve('/account')}><ActionIcon name="login" />Sign in to HERCO Points</a></div>
 		</div>
 		<aside class="card stack reward-preview" aria-labelledby="reward-preview-title">
 			<h2 id="reward-preview-title">Rewards to work toward</h2>
@@ -127,7 +138,7 @@
 
 <style>
 	.points-layout { display: grid; gap: 20px; align-items: start; }
-	.leaderboard { border-top: 4px solid var(--accent); border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px #0f172a14; }
+	.leaderboard { border-top: 4px solid var(--accent); border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px var(--card-shadow); }
 	@media (min-width: 960px) {
 		.points-layout { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 24px; }
 		.leaderboard { position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow: auto; }
@@ -146,11 +157,15 @@
 	}
 	.ranking-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding: 12px; border-bottom: 1px solid var(--line); }
 	.current { background: var(--panel-2); border-radius: 6px; }
+	.own-ranking { margin-top: .35rem; }
 	.leaderboard .ranking-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; }
 	.leaderboard .member-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.leaderboard strong { white-space: nowrap; }
 	.rank { color: var(--accent); }
 	.points { font: italic 800 2.6rem var(--display); }
+	.fan-account-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: .75rem; }
+	.fan-account-summary h2 { overflow-wrap: anywhere; }
+	.fan-account-summary .points { text-align: right; white-space: nowrap; font-size: clamp(1.5rem, 4vw, 2.6rem); }
 
 	progress { width: 100%; height: 12px; accent-color: var(--accent); }
 	.reward-reached { border-color: var(--ok); }

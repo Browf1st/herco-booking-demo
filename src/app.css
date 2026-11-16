@@ -1,21 +1,35 @@
 /* Brand tokens: change --accent to the shop's real brand colour once confirmed. */
 :root {
-	--bg: #f6f7fa;
-	--panel: #fff;
-	--panel-2: #e9edf3;
-	--line: #b5bfcd;
-	--text: #181e28;
-	--muted: #485567;
-	--accent: #b61632;
+	--bg: light-dark(#f6f7fa, #11151c);
+	--panel: light-dark(#fff, #1a202a);
+	--panel-2: light-dark(#e9edf3, #242d3a);
+	--line: light-dark(#b5bfcd, #465467);
+	--text: light-dark(#181e28, #f0f3f8);
+	--muted: light-dark(#485567, #b9c4d4);
+	--accent: light-dark(#b61632, #ff8798);
+	--accent-fill: light-dark(#b61632, #bf2847);
 	--accent-ink: #fff;
-	--ok: #17643c;
-	--warn: #795000;
-	--bad: #aa1831;
+	--ok: light-dark(#17643c, #8de1b2);
+	--warn: light-dark(#795000, #f7cf82);
+	--bad: light-dark(#aa1831, #ff9ca8);
+	--info: light-dark(#17498a, #a6caff);
+	--ok-bg: light-dark(#d9f3e3, #20392e);
+	--warn-bg: light-dark(#ffedb8, #403322);
+	--bad-bg: light-dark(#fbe1e7, #432832);
+	--info-bg: light-dark(#dceaff, #253955);
+	--ok-line: light-dark(#a6d3bb, #436e5a);
+	--warn-line: light-dark(#e6ca85, #805e34);
+	--bad-line: light-dark(#efc2bd, #8b4b58);
+	--info-line: light-dark(#c7d9f3, #506c95);
+	--card-shadow: light-dark(#0f172a14, #0005);
 	--display: 'Barlow Condensed', 'Arial Narrow', Impact, sans-serif;
 	--body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-	color-scheme: light;
+	color-scheme: light dark;
 	font-size: 112.5%;
 }
+
+:root[data-theme='light'] { color-scheme: light; }
+:root[data-theme='dark'] { color-scheme: dark; }
 
 * {
 	box-sizing: border-box;
@@ -137,7 +151,7 @@ img {
 	min-height: 48px;
 	padding: 0 26px;
 	border: 0;
-	background: var(--accent);
+	background: var(--accent-fill);
 	color: var(--accent-ink);
 	font: italic 800 1.2rem var(--display);
 	letter-spacing: 0.06em;
@@ -148,7 +162,7 @@ img {
 }
 
 .btn {
-	--button-bg: var(--accent);
+	--button-bg: var(--accent-fill);
 	background: var(--button-bg);
 	transition: background-color 150ms ease;
 }
@@ -163,7 +177,7 @@ img {
 }
 
 .btn.complete-action {
-	--button-bg: var(--ok);
+	--button-bg: light-dark(#17643c, #216548);
 	color: #fff;
 }
 
@@ -183,7 +197,7 @@ img {
 }
 
 .btn.danger {
-	--button-bg: #fbe5ea;
+	--button-bg: var(--bad-bg);
 	color: var(--bad);
 }
 
@@ -192,6 +206,29 @@ img {
 	padding: 0 18px;
 	font-size: 1rem;
 }
+
+.btn:has(> .action-icon) { gap: .35em; }
+button:where(:has(> .action-icon):not(.btn, .month-arrow, .arrow, .close-dialog)) {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: .35em;
+}
+
+.tab-count {
+	display: inline-grid;
+	place-items: center;
+	min-width: 1.35rem;
+	height: 1.35rem;
+	padding-inline: .25rem;
+	margin-inline-start: .3rem;
+	border-radius: 999px;
+	background: var(--accent-fill);
+	color: var(--accent-ink);
+	font: 700 .75rem/1 system-ui, sans-serif;
+}
+
+[aria-current='page'] .tab-count { background: var(--panel); color: var(--accent); }
 
 /* Selectable option tile used for services, sizes, models and finishes. */
 .opt {
@@ -250,10 +287,12 @@ textarea {
 	text-transform: uppercase;
 }
 
-.badge[data-status='pending'] { color: #754600; background: #ffedb8; }
-.badge[data-status='confirmed'] { color: #17498a; background: #dceaff; }
-.badge[data-status='done'], .badge[data-status='approved'] { color: #17643c; background: #d9f3e3; }
-.badge[data-status='cancelled'], .badge[data-status='declined'] { color: #9c1832; background: #fbe1e7; }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
+
+.badge[data-status='pending'] { color: var(--warn); background: var(--warn-bg); }
+.badge[data-status='confirmed'] { color: var(--info); background: var(--info-bg); }
+.badge[data-status='done'], .badge[data-status='approved'] { color: var(--ok); background: var(--ok-bg); }
+.badge[data-status='cancelled'], .badge[data-status='declined'] { color: var(--bad); background: var(--bad-bg); }
 .opt:hover:not(:disabled) { background: var(--panel-2); border-color: var(--accent); }
 
 .error {

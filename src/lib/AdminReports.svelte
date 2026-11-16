@@ -1,4 +1,5 @@
 <script lang="ts">
+ import ActionIcon from '#lib/ActionIcon.svelte';
  import { money, serviceLabel } from './coating';
  import { serviceOf } from './config';
  import { addDays, fmtDate, fmtSlot, today } from './dates';
@@ -75,10 +76,10 @@
   <div class="row report-actions">
   <div class="report-period" role="group" aria-label="Report period">
    {#each presets as option (option.value)}
-    <button type="button" aria-pressed={preset === option.value} onclick={() => preset = option.value}>{option.label}</button>
+    <button type="button" aria-pressed={preset === option.value} onclick={() => preset = option.value}><ActionIcon name="calendar" />{option.label}</button>
    {/each}
   </div>
-  <button type="button" class="report-reset" onclick={resetFilters}>Reset filters</button>
+  <button type="button" class="report-reset" onclick={resetFilters}><ActionIcon name="reset" />Reset filters</button>
   </div>
  </div>
  {#if preset === 'custom'}
@@ -148,7 +149,7 @@
  .report-actions { align-items: center; gap: .5rem; }
  .report-period { display: flex; flex-wrap: wrap; gap: .15rem; padding: .2rem; background: var(--panel-2); border: 1px solid var(--line); border-radius: .35rem; }
  .report-period button, .report-reset { font: inherit; font-size: .75rem; font-weight: 750; text-transform: uppercase; padding: .35rem .55rem; border: 1px solid transparent; border-radius: .25rem; cursor: pointer; color: var(--text); background: transparent; }
- .report-period button[aria-pressed="true"] { color: white; background: var(--accent); }
+ .report-period button[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-fill); }
  .report-period button:hover[aria-pressed="false"], .report-reset:hover { background: var(--panel-2); border-color: var(--line); }
  .report-reset { color: var(--accent); border-color: var(--line); }
  .report-filters { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: .75rem; }
@@ -157,7 +158,7 @@
  .report-metrics > div { display: flex; flex-direction: column; justify-content: space-between; padding: .85rem; }
  .report-metrics dt, th { font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
  .report-metrics dd { margin: .4rem 0 0; font-size: 1.5rem; font-weight: 750; font-variant-numeric: tabular-nums; }
- .report-metrics > div:nth-child(2) dd { color: #176343; }
+ .report-metrics > div:nth-child(2) dd { color: var(--ok); }
  .report-metrics > div:nth-child(3) dd { color: var(--accent); }
  .report-table { overflow-x: auto; border: 1px solid var(--line); border-radius: .35rem; }
  table { width: 100%; min-width: 920px; border-collapse: collapse; }

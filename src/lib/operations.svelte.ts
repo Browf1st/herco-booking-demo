@@ -1,4 +1,5 @@
 import { demoFans, rewardProgram } from './config';
+import { activityEvent, type ActivityEvent, type ActivityModule } from './activity';
 
 export type RewardService = 'ceramic' | 'powder';
 export type RewardReceipt = {
@@ -33,6 +34,7 @@ type Operations = {
 	rewardReceipts: RewardReceipt[];
 	stock: StockItem[];
 	stockEntries: StockEntry[];
+	events: ActivityEvent[];
 	stockUnits: string[];
 	stockCategories: string[];
 
@@ -43,7 +45,7 @@ const KEY = 'herco-operations-v1';
 const empty = (): Operations => ({
 	rewardProgram: rewardProgram.map((reward) => ({ ...reward })),
 	members: [], points: [], redemptions: [], rewardReceipts: [], stock: [], stockEntries: [],
-	stockUnits: ['bottle'], stockCategories: [],
+	stockUnits: ['bottle'], stockCategories: [], events: [],
 	rewardCosts: { ceramic: 0, powder: 0 }
 });
 function load(): Operations {
@@ -93,6 +95,10 @@ export const ops = $state<{ data: Operations }>({ data: load() });
 const id = () => crypto.randomUUID();
 const timestamp = () => new Date().toISOString();
 
+function logOperation(data: Operations, module: ActivityModule, action: string, target: string, detail?: string, actor?: string) {
+	data.events.push(activityEvent(module, action, { target, detail }, actor));
+}
+
 // Persist the complete change before publishing it to the UI.
 function commit(update: (draft: Operations) => void) {
 	const draft = load();
@@ -136,6 +142,7 @@ export async function redeemReward(memberId: string, rewardPoints: number, reque
 			};
 			data.rewardReceipts.push(receipt);
 			data.points.push({ id: id(), memberId, amount: -reward.points, reason: receipt.reward + ' redeemed · ' + receipt.reference, at });
+			logOperation(data, 'Redemptions', 'Requested reward redemption', receipt.reference, member.name + ' · ' + receipt.reward + ' · ' + receipt.cost + ' points', 'Customer');
 		});
 		return receipt!;
 	};
@@ -150,6 +157,7 @@ export function saveFanProfile({ id, name, email, phone = '' }: { id: string; na
 		const member = data.members.find(member => member.id === id);
 		if (member) Object.assign(member, { name, email, phone });
 		else data.members.push({ id, name, email, phone });
+		logOperation(data, 'Customers', member ? 'Updated fan profile' : 'Registered fan profile', name, undefined, 'Customer');
 	});
 }
 
@@ -163,6 +171,7 @@ export function approveRewardReceipt(receiptId: string) {
 		const receipt = data.rewardReceipts.find(item => item.id === receiptId);
 		if (!receipt || receipt.status !== 'pending') throw new Error('This request is no longer pending.');
 		receipt.status = 'approved';
+		logOperation(data, 'Redemptions', 'Approved redemption', receipt.reference, receipt.memberName + ' · ' + receipt.reward);
 	});
 }
 
@@ -173,6 +182,7 @@ export function claimRewardReceipt(receiptId: string) {
 		receipt.status = 'claimed';
 		receipt.claimedAt = timestamp();
 		receipt.claimedBy = 'Demo admin';
+		logOperation(data, 'Redemptions', 'Marked reward as claimed', receipt.reference, receipt.memberName + ' · ' + receipt.reward);
 	});
 }
 export function editRewardTier(index: number, reward: RewardTier) {
@@ -180,7 +190,11 @@ export function editRewardTier(index: number, reward: RewardTier) {
 	commit((data) => {
 		if (!Number.isInteger(index) || !data.rewardProgram[index]) throw new Error('Reward not found.');
 		if (data.rewardProgram.some((item, i) => i !== index && item.points === reward.points)) throw new Error('Each reward must have a different points requirement.');
-		data.rewardProgram[index] = { name: reward.name.trim(), points: reward.points, scope: reward.scope?.trim() || undefined };
+		const previous = data.rewardProgram[index];
+		const updated = { name: reward.name.trim(), points: reward.points, scope: reward.scope?.trim() || undefined };
+		data.rewardProgram[index] = updated;
+		const describe = (tier: RewardTier) => [tier.name, tier.scope, tier.points + ' points'].filter(Boolean).join(' · ');
+		logOperation(data, 'Rewards program', 'Edited reward tier', updated.name, describe(previous) + ' → ' + describe(updated));
 	});
 }
 export function grantPoints(memberId: string, amount: number, reason = 'HERCO Points added by admin') {
@@ -190,15 +204,18 @@ export function grantPoints(memberId: string, amount: number, reason = 'HERCO Po
 
 export function correctPoints(memberId: string, amount: number, reason: string) {
 	if (!Number.isSafeInteger(amount) || amount === 0 || !reason.trim()) throw new Error('Enter a nonzero whole-point adjustment and a reason.');
-	recordPointAdjustment(memberId, amount, 'Points correction · ' + reason.trim());
+	recordPointAdjustment(memberId, amount, 'Points correction · ' + reason.trim(), true);
 }
 
-function recordPointAdjustment(memberId: string, amount: number, reason: string) {
+function recordPointAdjustment(memberId: string, amount: number, reason: string, correction = false) {
 	commit((data) => {
-		if (!data.members.some((member) => member.id === memberId)) throw new Error('Member not found.');
+		const member = data.members.find(member => member.id === memberId);
+		if (!member) throw new Error('Member not found.');
 		const balance = balanceIn(data, memberId) + amount;
 		if (!Number.isSafeInteger(balance) || balance < 0) throw new Error('The resulting balance must be a valid non-negative whole number.');
 		data.points.push({ id: id(), memberId, amount, reason, at: timestamp() });
+		logOperation(data, 'HERCO Points', correction ? 'Corrected points' : 'Added points', member.name,
+			(balance - amount) + ' → ' + balance + ' points · ' + reason);
 	});
 }
 export function setRewardCosts(ceramic: number, powder: number) {
@@ -241,6 +258,7 @@ export function addStockOption(kind: 'unit' | 'category', value: string) {
 		}
 		const options = kind === 'unit' ? data.stockUnits : data.stockCategories;
 		options.push(name);
+		logOperation(data, 'Inventory', 'Added ' + kind, name);
 	});
 }
 
@@ -258,6 +276,7 @@ export function renameStockOption(kind: 'unit' | 'category', previous: string, v
 		for (const item of data.stock) {
 			if (item[kind] === previous) item[kind] = name;
 		}
+		logOperation(data, 'Inventory', 'Renamed ' + kind, name, previous + ' → ' + name);
 	});
 }
 
@@ -280,6 +299,7 @@ export function addStock(name: string, unit: string, quantity: number, minimum: 
 		const itemId = id();
 		data.stock.push({ id: itemId, name: name.trim(), unit: unit.trim(), quantity, minimum, category: stockCategory(data, category), details });
 		data.stockEntries.push({ id: id(), itemId, amount: quantity, reason: 'Opening stock', at: timestamp() });
+		logOperation(data, 'Inventory', 'Created stock item', name.trim(), 'Opening stock: ' + quantity + ' ' + unit.trim() + ' · Reorder threshold: ' + minimum);
 	});
 }
 export function editStockItem(itemId: string, name: string, unit: string, minimum: number, category: string, details?: StockDetails) {
@@ -295,11 +315,18 @@ export function editStockItem(itemId: string, name: string, unit: string, minimu
 		if (data.stock.some(other => other.id !== itemId && other.name.toLowerCase() === trimmedName.toLowerCase())) {
 			throw new Error('An item with this name already exists.');
 		}
-		item.name = trimmedName;
-		item.unit = trimmedUnit;
-		item.minimum = minimum;
-		item.category = stockCategory(data, category);
+		const updated = { name: trimmedName, unit: trimmedUnit, minimum, category: stockCategory(data, category) };
+		const changes = (Object.keys(updated) as (keyof typeof updated)[]).flatMap(key =>
+			(item[key] ?? '') === updated[key] ? [] : [key + ': ' + (item[key] ?? '—') + ' → ' + (updated[key] === '' ? '—' : updated[key])]);
+		if (details) {
+			const labels = { unitCost: 'Unit cost', capacity: 'Storage capacity', supplier: 'Supplier' } as const;
+			for (const key of Object.keys(labels) as (keyof typeof labels)[]) {
+				if ((item.details?.[key] ?? '') !== (details[key] ?? '')) changes.push(labels[key] + ': ' + (item.details?.[key] ?? '—') + ' → ' + (details[key] ?? '—'));
+			}
+		}
+		Object.assign(item, updated);
 		if (details) item.details = details;
+		if (changes.length) logOperation(data, 'Inventory', 'Edited stock item', item.name, changes.join(' · '));
 	});
 }
 
@@ -308,7 +335,10 @@ export function adjustStock(itemId: string, amount: number, reason: string) {
 	commit((data) => {
 		const item = data.stock.find((item) => item.id === itemId);
 		if (!item || item.quantity + amount < 0) throw new Error('Stock cannot go below zero.');
+		const previous = item.quantity;
 		item.quantity = Math.round((item.quantity + amount) * 1000) / 1000;
 		data.stockEntries.push({ id: id(), itemId, amount, reason: reason.trim(), at: timestamp() });
+		logOperation(data, 'Inventory', amount > 0 ? 'Stock in' : 'Stock out', item.name,
+			previous + ' → ' + item.quantity + ' ' + item.unit + ' · ' + reason.trim());
 	});
 }

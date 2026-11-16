@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ActionIcon from '#lib/ActionIcon.svelte';
 	import DayStrip from './DayStrip.svelte';
 	import { fmtDate, fmtSlot } from './dates';
 	import { slotsFor } from './store.svelte';
@@ -17,7 +18,7 @@
 	<div class="slots">
 		{#each slotsFor(date).filter(slot => slot.free) as s (s.time)}
 			<button type="button" class="opt" class:on={slot === s.time} disabled={!s.free} onclick={() => (slot = s.time)}>
-				<b>{fmtSlot(s.time)}</b>
+				<b><ActionIcon name="clock" /> {fmtSlot(s.time)}</b>
 				<span class="small muted">{s.free ? 'Open' : 'Taken'}</span>
 			</button>
 		{/each}

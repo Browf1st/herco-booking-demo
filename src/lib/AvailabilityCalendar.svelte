@@ -1,4 +1,5 @@
 <script lang="ts">
+ import ActionIcon from '#lib/ActionIcon.svelte';
  import { resolve } from '$app/paths';
  import { addDays, fmtDate, isBookableDate, today } from './dates';
  import { dayStatus } from './store.svelte';
@@ -19,8 +20,8 @@
  <div class="row heading">
   <strong aria-live="polite">{fmtDate(first, { month: 'long', year: 'numeric' })}</strong>
   <div class="row">
-   <button type="button" class="cell arrow" aria-label="Previous month" disabled={month === currentMonth} onclick={() => browsedMonth = addDays(first, -1).slice(0, 7)}>‹</button>
-   <button type="button" class="cell arrow" aria-label="Next month" onclick={() => browsedMonth = addDays(first, days).slice(0, 7)}>›</button>
+   <button type="button" class="cell arrow" aria-label="Previous month" disabled={month === currentMonth} onclick={() => browsedMonth = addDays(first, -1).slice(0, 7)}><ActionIcon name="left" /></button>
+   <button type="button" class="cell arrow" aria-label="Next month" onclick={() => browsedMonth = addDays(first, days).slice(0, 7)}><ActionIcon name="right" /></button>
   </div>
  </div>
  <div class="grid">
@@ -49,7 +50,7 @@
  .cell { display: grid; place-items: center; min-height: 42px; padding: 0; border: 1px solid var(--line); border-radius: 6px; font: inherit; text-decoration: none; }
  .available { background: color-mix(in srgb, var(--ok) 10%, var(--panel)); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--panel)); cursor: pointer; }
  .available:hover { background: color-mix(in srgb, var(--ok) 20%, var(--panel)); }
- .available[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 750; }
+ .available[aria-pressed='true'] { background: var(--accent-fill); color: var(--accent-ink); border-color: var(--accent); font-weight: 750; }
  .unavailable { color: var(--muted); background: var(--panel-2); }
  .arrow { width: 42px; color: var(--text); background: var(--panel); cursor: pointer; }
  .arrow:disabled { opacity: .45; cursor: default; }

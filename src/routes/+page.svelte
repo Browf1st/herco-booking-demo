@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ActionIcon from '#lib/ActionIcon.svelte';
 	import { asset, resolve } from '$app/paths';
 	import AvailabilityCalendar from '#lib/AvailabilityCalendar.svelte';
 	import CompareSlider from '#lib/CompareSlider.svelte';
@@ -28,8 +29,8 @@
 				Motorcycle detailing, ceramic coating and powder coating in Valenzuela. Find a service and choose a drop-off time.
 			</p>
 			<div class="row">
-				<a class="btn" href={resolve('/book')}>Book a slot</a>
-				<a class="btn ghost" href="#schedule">Check availability</a>
+				<a class="btn" href={resolve('/book')}><ActionIcon name="calendar" />Book a slot</a>
+				<a class="btn ghost" href="#schedule"><ActionIcon name="clock" />Check availability</a>
 			</div>
 		</div>
 		<img class="hero-photo" src={asset(photos.hero)} alt="" fetchpriority="high" />
@@ -45,13 +46,13 @@
 			<img src={asset(photos.ceramic)} alt="Ceramic coating application" loading="lazy" />
 			<h3>Ceramic coating</h3>
 			<p class="muted">For suitable painted surfaces and body panels. Share your motorcycle model and the panels you want coated so the garage can assess the job.</p>
-			<div><a class="btn sm ghost" href={resolve('/book?service=ceramic')}>Book ceramic coating</a></div>
+			<div><a class="btn sm ghost" href={resolve('/book?service=ceramic')}><ActionIcon name="calendar" />Book ceramic coating</a></div>
 		</article>
 		<article class="work-photo card stack">
 			<img src={asset(photos.powder)} alt="Motorcycle fitted with red coated wheels" loading="lazy" />
 			<h3>Powder coating</h3>
 			<p class="muted">For wheels and other suitable metal components. Tell the garage which parts you want coated and your preferred colour or finish.</p>
-			<div><a class="btn sm ghost" href={resolve('/book?service=wheel-colour')}>Book powder coating</a></div>
+			<div><a class="btn sm ghost" href={resolve('/book?service=wheel-colour')}><ActionIcon name="calendar" />Book powder coating</a></div>
 		</article>
 	</div>
 </section>
@@ -86,7 +87,7 @@
 					</li>
 				{/each}
 			</ul>
-			<div><button type="button" class="btn sm ghost" aria-expanded={calendarOpen} onclick={() => calendarOpen = !calendarOpen}>{calendarOpen ? 'Hide calendar' : 'See more dates'}</button></div>
+			<div><button type="button" class="btn sm ghost" aria-expanded={calendarOpen} onclick={() => calendarOpen = !calendarOpen}><ActionIcon name="calendar" />{calendarOpen ? 'Hide calendar' : 'See more dates'}</button></div>
 			{#if calendarOpen}
 				<AvailabilityCalendar />
 			{/if}
@@ -116,7 +117,7 @@
 			<p class="eyebrow">Showcase</p>
 			<h2>See the finish before you book</h2>
 			<p class="muted">Drag to compare a real bike before and after, then browse wheel colours coated by the shop.</p>
-			<div><a class="btn" href={resolve('/preview')}>Open showcase</a></div>
+			<div><a class="btn" href={resolve('/preview')}><ActionIcon name="view" />Open showcase</a></div>
 		</div>
 		<CompareSlider before={photos.before} after={photos.after} alt="Scooter coated by the shop" />
 	</section>
@@ -134,7 +135,7 @@
 		{/each}
 	</div>
 	<div class="row">
-		{#if features().preview}<a class="btn ghost" href={resolve('/preview')}>Open preview</a>{/if}
+		{#if features().preview}<a class="btn ghost" href={resolve('/preview')}><ActionIcon name="view" />Open preview</a>{/if}
 	</div>
 </section>
 
@@ -181,7 +182,7 @@
 				</div>
 			</div>
 		</div>
-		<a class="btn" href={resolve('/book')}>Book a slot</a>
+		<a class="btn" href={resolve('/book')}><ActionIcon name="calendar" />Book a slot</a>
 	</div>
 </section>
 
@@ -257,7 +258,7 @@
 	}
 
 	.hero {
-		background: linear-gradient(120deg, #fff, var(--bg));
+		background: linear-gradient(120deg, var(--panel), var(--bg));
 		color: var(--text);
 	}
 
@@ -370,8 +371,8 @@
 	.schedule-day time { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; }
 	.schedule-day time span { color: var(--muted); font-size: 0.85rem; }
 	.schedule-day time strong { white-space: nowrap; }
-	a.schedule-day { border-color: #91bea4; background: #f0f9f3; }
-	a.schedule-day:hover { background: #d9f3e3; border-color: var(--ok); }
+	a.schedule-day { border-color: var(--ok-line); background: color-mix(in srgb, var(--ok-bg) 55%, var(--panel)); }
+	a.schedule-day:hover { background: var(--ok-bg); border-color: var(--ok); }
 	.availability { font-size: 0.8rem; font-weight: 700; color: var(--muted); }
 	[data-status='open'] .availability { color: var(--ok); }
 	[data-status='full'] .availability { color: var(--warn); }

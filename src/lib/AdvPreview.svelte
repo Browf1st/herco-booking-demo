@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ActionIcon from '#lib/ActionIcon.svelte';
 	import { onMount } from 'svelte';
 	import * as THREE from 'three';
 	import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -195,7 +196,7 @@
 	{:else}
 		<button type="button" class="viewer" aria-label={paused ? 'Resume bike rotation' : 'Pause bike rotation'} onclick={() => (paused = !paused)}>
 			<canvas bind:this={canvas} aria-hidden="true"></canvas>
-			<span class="playback">{paused ? 'Resume rotation' : 'Pause rotation'}</span>
+			<span class="playback"><ActionIcon name={paused ? 'play' : 'pause'} /> {paused ? 'Resume rotation' : 'Pause rotation'}</span>
 		</button>
 	{/if}
 </div>

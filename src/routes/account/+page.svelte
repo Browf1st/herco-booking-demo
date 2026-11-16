@@ -1,4 +1,7 @@
 <script lang="ts">
+ import ActionIcon from '#lib/ActionIcon.svelte';
+ import { resolve } from '$app/paths';
+ import { page } from '$app/state';
  import CustomerBookingHistory from '#lib/CustomerBookingHistory.svelte';
  import { account, saveProfilePhone, signIn, signOut } from '#lib/account.svelte.ts';
  let mode = $state<'Log in' | 'Sign up'>('Log in');
@@ -10,6 +13,7 @@
  let phone = $state(account.current?.phone ?? '');
  let profileStatus = $state('');
  let phoneError = $state('');
+ const showHistory = $derived(page.url.searchParams.get('tab') === 'booking-history');
  function saveProfile(event: SubmitEvent) {
   event.preventDefault();
   const value = phone.trim();
@@ -35,8 +39,13 @@
 <section class="section wrap stack account">
  {#if account.current}
   <div class="account-heading">
-   <button class="btn ghost" onclick={signOut}>Sign out</button>
+   <nav class="row" aria-label="Account sections">
+    <a class="btn sm" class:ghost={showHistory} aria-current={!showHistory ? 'page' : undefined} href={resolve('/account')}><ActionIcon name="user" />Profile</a>
+    <a class="btn sm" class:ghost={!showHistory} aria-current={showHistory ? 'page' : undefined} href={resolve('/account?tab=booking-history')}><ActionIcon name="history" />Booking history</a>
+   </nav>
+   <button class="btn sm ghost" onclick={signOut}><ActionIcon name="logout" />Sign out</button>
   </div>
+  {#if !showHistory}
   <section class="card stack" aria-labelledby="profile-heading">
    <h1 id="profile-heading">Profile</h1>
    <p>Signed in as <strong>{account.current.name}</strong> via {account.current.provider}</p>
@@ -49,15 +58,16 @@
     </label>
     <p id="profile-phone-help" class="muted">Your email and saved mobile number will prefill future bookings.</p>
     {#if phoneError}<p role="alert">{phoneError}</p>{/if}
-    <div class="row"><button class="btn ghost" type="submit">Save profile</button></div>
+    <div class="row"><button class="btn ghost" type="submit"><ActionIcon name="save" />Save profile</button></div>
     {#if profileStatus}<p role="status">{profileStatus}</p>{/if}
    </form>
   </section>
+  {/if}
  {:else}
   <div class="login stack">
    <h1>{mode === 'Log in' ? 'Log In' : 'Sign Up'}</h1>
    <p>{mode === 'Log in' ? 'New to HERCO?' : 'Already have an account?'}
-    <button type="button" class="mode" onclick={() => { mode = mode === 'Log in' ? 'Sign up' : 'Log in'; showForm = false; }}>{mode === 'Log in' ? 'Sign Up' : 'Log In'}</button>
+    <button type="button" class="mode" onclick={() => { mode = mode === 'Log in' ? 'Sign up' : 'Log in'; showForm = false; }}><ActionIcon name={mode === "Log in" ? "add" : "login"} />{mode === 'Log in' ? 'Sign Up' : 'Log In'}</button>
    </p>
    {#if !showForm}
     <div class="providers stack">
@@ -74,29 +84,31 @@
       </button>
      {/each}
      <p class="divider">or</p>
-     <button type="button" class="provider email" onclick={() => { provider = 'Email'; showForm = true; }}>{mode} with Email</button>
+     <button type="button" class="provider email" onclick={() => { provider = 'Email'; showForm = true; }}><ActionIcon name="mail" />{mode} with Email</button>
     </div>
    {:else}
     <form class="stack demo-form" onsubmit={submit}>
      <p class="muted">{provider} demo. Use sample details.</p>
      {#if mode === 'Sign up'}<label>Name<input bind:value={name} autocomplete="name" required /></label>{/if}
      <label>Sample email<input type="email" bind:value={email} placeholder="rider@example.com" required /></label>
-     <button class="provider email" type="submit">{mode} with {provider}</button>
-     <button type="button" class="mode" onclick={() => showForm = false}>Back to sign-in options</button>
+     <button class="provider email" type="submit"><ActionIcon name="login" />{mode} with {provider}</button>
+     <button type="button" class="mode" onclick={() => showForm = false}><ActionIcon name="back" />Back to sign-in options</button>
     </form>
    {/if}
   </div>
  {/if}
+ {#if !account.current || showHistory}
  <section class="stack" aria-labelledby="booking-history">
   <h2 id="booking-history">Booking history</h2>
   <CustomerBookingHistory />
  </section>
+ {/if}
 </section>
 <style>
  .account { max-width: 680px; }
- .account-heading { display: flex; justify-content: flex-end; }
+ .account-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; }
  #profile-heading { font-size: 1.5rem; }
- .login { background: #fff; text-align: center; padding: clamp(20px, 5vw, 54px) 16px; border-radius: 8px; }
+ .login { background: var(--panel); text-align: center; padding: clamp(20px, 5vw, 54px) 16px; border-radius: 8px; }
  .login h1 { font: 750 clamp(2.6rem, 7vw, 4.4rem)/1.1 var(--body); text-transform: none; }
  .providers, .demo-form { width: min(100%, 440px); margin: 24px auto 0; }
  .demo-form label { text-align: left; }
@@ -104,7 +116,7 @@
  .mode:hover { text-decoration: underline; }
  .provider { position: relative; min-height: 56px; padding: 10px 42px; border: 1px solid transparent; border-radius: 3px; background: #2465ca; color: #fff; font: 650 1rem var(--body); cursor: pointer; }
  .provider.facebook { background: #395793; }
- .provider.email { background: #fff; color: var(--text); border-color: var(--line); }
+ .provider.email { background: var(--panel); color: var(--text); border-color: var(--line); }
  .provider:hover { filter: brightness(.94); }
  .logo { position: absolute; inset-inline-start: 10px; top: 50%; translate: 0 -50%; display: grid; place-items: center; width: 30px; height: 30px; background: #fff; border-radius: 2px; }
  .logo svg { width: 23px; height: 23px; }

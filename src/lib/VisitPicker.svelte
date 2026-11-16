@@ -1,4 +1,5 @@
 <script lang="ts">
+ import ActionIcon from '#lib/ActionIcon.svelte';
  import AvailabilityCalendar from './AvailabilityCalendar.svelte';
  import { fmtDate, fmtSlot, isBookableDate } from './dates';
  import { dayStatus, slotsFor } from './store.svelte';
@@ -17,7 +18,7 @@
  {#if times.some(t => t.free)}
   <div class="time-grid" role="group" aria-label={'Available times for ' + fmtDate(date)}>
    {#each times.filter(t => t.free) as time (time.time)}
-    <button type="button" class="time" aria-pressed={slot === time.time} onclick={() => slot = time.time}>{fmtSlot(time.time)}</button>
+    <button type="button" class="time" aria-pressed={slot === time.time} onclick={() => slot = time.time}><ActionIcon name="clock" />{fmtSlot(time.time)}</button>
    {/each}
   </div>
   {#if slot && !times.some(t => t.free && t.time === slot)}<p class="error">Choose one of the available times shown.</p>{/if}

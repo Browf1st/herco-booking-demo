@@ -1,4 +1,5 @@
 <script lang="ts">
+ import ActionIcon from '#lib/ActionIcon.svelte';
  import CoatingFields from './CoatingFields.svelte';
  import BookingCatalog from './BookingCatalog.svelte';
  import { estimatePrice, selection } from './coating';
@@ -26,8 +27,8 @@
   <p>Updated estimate <strong>{estimatePrice(estimate)}</strong></p>
   {#if booking.estimate && !booking.estimate.lines}<p class="small muted">This older booking has no saved prices per service. Saving a change uses current prices and keeps the previous estimate in history.</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
-  <div class="row"><button class="btn sm">Save services</button><button type="button" class="btn sm ghost" onclick={() => editing = false}>Close</button></div>
+  <div class="row"><button class="btn sm"><ActionIcon name="save" />Save services</button><button type="button" class="btn sm ghost" onclick={() => editing = false}><ActionIcon name="close" />Close</button></div>
  </form>
 {:else}
- <div><button type="button" class="btn sm ghost" onclick={() => { value = coatingOf(booking); error = ''; editing = true; }}>Edit services</button></div>
+ <div><button type="button" class="btn sm ghost" onclick={() => { value = coatingOf(booking); error = ''; editing = true; }}><ActionIcon name="edit" />Edit services</button></div>
 {/if}

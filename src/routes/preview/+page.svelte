@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ActionIcon from '#lib/ActionIcon.svelte';
 	import { asset, resolve } from '$app/paths';
 
 	import CompareSlider from '#lib/CompareSlider.svelte';
@@ -19,7 +20,7 @@
 				<p class="muted">Drag the slider to explore the before-and-after photos of a glossy black finish.</p>
 				<p class="eyebrow">Finish shown</p>
 				<h3>Glossy black</h3>
-				<div><a class="btn ghost" href={resolve('/book?service=ceramic')}>Book ceramic coating</a></div>
+				<div><a class="btn ghost" href={resolve('/book?service=ceramic')}><ActionIcon name="calendar" />Book ceramic coating</a></div>
 			</div>
 		</div>
 
@@ -37,7 +38,7 @@
 					<button class="swatch" class:on={colour === c} style:background={c.hex} aria-label={c.name} aria-pressed={colour === c} title={c.name} onclick={() => (colour = c)}></button>
 				{/each}
 			</div>
-				<div><a class="btn ghost" href={resolve(`/book?service=wheel-colour&finish=${encodeURIComponent(colour.name)}`)}>Book powder coating</a></div>
+				<div><a class="btn ghost" href={resolve(`/book?service=wheel-colour&finish=${encodeURIComponent(colour.name)}`)}><ActionIcon name="calendar" />Book powder coating</a></div>
 				<img class="photo" src={asset(photos.wheelSet)} alt="Wheels coated in red, purple, pink and blue by the shop" />
 				<p class="muted small">All four colours, fresh off the shop floor.</p>
 			</div>

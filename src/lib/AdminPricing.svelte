@@ -1,4 +1,5 @@
 <script lang="ts">
+ import ActionIcon from '#lib/ActionIcon.svelte';
  import { ceramicAddons, ceramicModels, ceramicTierNames, defaultCeramicCatalogPricing, listedCeramicAddons } from './bookingCatalog';
  import { db, updatePricing } from './store.svelte';
 
@@ -16,7 +17,7 @@
   priceError = '';
   priceMessage = '';
   try {
-   updatePricing({ ...$state.snapshot(db.pricing), ceramicCatalog: $state.snapshot(draft) });
+   updatePricing({ ...$state.snapshot(db.pricing), ceramicCatalog: $state.snapshot(draft) }, 'Pricing');
    priceMessage = 'Ceramic coating prices saved.';
   } catch (error) {
    priceError = (error as Error).message;
@@ -28,7 +29,7 @@
   promoError = '';
   promoMessage = '';
   try {
-   updatePricing({ ...$state.snapshot(db.pricing), promo });
+   updatePricing({ ...$state.snapshot(db.pricing), promo }, 'Promotion');
    promoMessage = 'Booking promotion saved.';
   } catch (error) {
    promoError = (error as Error).message;
@@ -71,7 +72,7 @@
  </fieldset>
  {#if priceMessage}<p role="status">{priceMessage}</p>{/if}
  {#if priceError}<p class="error" role="alert">{priceError}</p>{/if}
- <div><button class="btn">Save ceramic prices</button></div>
+ <div><button class="btn"><ActionIcon name="save" />Save ceramic prices</button></div>
 </form>
 
 <form class="card stack" onsubmit={savePromotion}>
@@ -80,7 +81,7 @@
  <label>Discount (%)<input type="number" min="0" max="100" step="0.01" bind:value={promo} required /></label>
  {#if promoMessage}<p role="status">{promoMessage}</p>{/if}
  {#if promoError}<p class="error" role="alert">{promoError}</p>{/if}
- <div><button class="btn">Save promotion</button></div>
+ <div><button class="btn"><ActionIcon name="save" />Save promotion</button></div>
 </form>
 
 <style>

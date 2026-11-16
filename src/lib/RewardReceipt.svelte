@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ActionIcon from '#lib/ActionIcon.svelte';
 	import { asset } from '$app/paths';
 	import { rewardStatus, type RewardReceipt } from './operations.svelte';
 	let { receipt }: { receipt: RewardReceipt } = $props();
@@ -125,7 +126,7 @@
 			<p class="small muted">Present this AR at HERCO to claim your reward.</p>
 		{/if}
 		{#if downloadError}<p class="error" role="alert">{downloadError}</p>{/if}
-		<div><button type="button" class="btn sm ghost" disabled={downloading} onclick={download}>{downloading ? 'Preparing image…' : 'Download AR (PNG)'}</button></div>
+		<div><button type="button" class="btn sm ghost" disabled={downloading} onclick={download}><ActionIcon name="download" />{downloading ? 'Preparing image…' : 'Download AR (PNG)'}</button></div>
 	</div>
 </article>
 
