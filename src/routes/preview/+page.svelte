@@ -14,7 +14,7 @@
 	<h2>Coating results</h2>
 	{#if features().preview}
 		<div class="layout">
-			<CompareSlider before={photos.before} after={photos.after} alt="Scooter coated by the shop" />
+			<CompareSlider before={photos.before} after={photos.after} alt="Scooter coated by the shop" loading="eager" />
 			<div class="stack">
 				<h3>Ceramic coating</h3>
 				<p class="muted">Drag the slider to explore the before-and-after photos of a glossy black finish.</p>
@@ -26,7 +26,7 @@
 
 		<div class="layout">
 			<div class="stack">
-				<img class="photo" src={asset(colour.photo as Parameters<typeof asset>[0])} alt="Wheel coated in {colour.name}" />
+				<img class="photo" src={asset(colour.photo as Parameters<typeof asset>[0])} alt="Wheel coated in {colour.name}" width="720" height="720" loading="lazy" decoding="async" />
 				<p class="muted small">Real photo from the shop.</p>
 			</div>
 			<div class="stack">
@@ -39,7 +39,7 @@
 				{/each}
 			</div>
 				<div><a class="btn ghost" href={resolve(`/book?service=wheel-colour&finish=${encodeURIComponent(colour.name)}`)}><ActionIcon name="calendar" />Book powder coating</a></div>
-				<img class="photo" src={asset(photos.wheelSet)} alt="Wheels coated in red, purple, pink and blue by the shop" />
+				<img class="photo" src={asset(photos.wheelSet)} alt="Wheels coated in red, purple, pink and blue by the shop" width="960" height="1280" loading="lazy" decoding="async" />
 				<p class="muted small">All four colours, fresh off the shop floor.</p>
 			</div>
 		</div>
@@ -59,6 +59,7 @@
 
 	.photo {
 		width: 100%;
+		height: auto;
 		border: 1px solid var(--line);
 		border-radius: 6px;
 	}

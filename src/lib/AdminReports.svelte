@@ -1,4 +1,5 @@
 <script lang="ts">
+ import BookingSummary from './BookingSummary.svelte';
  import ActionIcon from '#lib/ActionIcon.svelte';
  import { money, serviceLabel } from './coating';
  import { serviceOf } from './config';
@@ -130,7 +131,7 @@
       {#each pageRows as { booking, service, completion } (booking.id)}
        <tr>
         <td><strong>{booking.name}</strong><div class="small muted">{booking.id}</div></td>
-        <td>{service}<div class="small muted">{booking.bike}</div></td>
+        <td>{service}<div class="small muted">{booking.bike}</div><details><summary>Booking and service history</summary><div class="stack"><BookingSummary {booking} staff /></div></details></td>
         <td class="report-visit">
          <time datetime={booking.date}>{fmtDate(booking.date, dateOptions)}</time>
          <div class="small muted">{fmtSlot(booking.slot)}</div>

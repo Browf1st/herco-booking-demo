@@ -60,21 +60,21 @@ export const bookableServices = services.filter(({ id }) => id === 'ceramic' || 
 
 // Shop photos live in static/photos, with relative paths so they work under any base path since all routes are top-level.
 export const photos = {
-	logo: 'photos/logo.png',
-	hero: 'photos/herco-cruiser.png',
-	ceramic: 'photos/ceramic-application.jpg',
-	powder: 'photos/herco-red-wheels.jpg',
-	before: 'photos/bike-before.jpg',
-	after: 'photos/bike-after.jpg',
-	wheelSet: 'photos/wheel-set.jpg'
+	logo: 'photos/logo.webp',
+	hero: 'photos/herco-cruiser.webp',
+	ceramic: 'photos/ceramic-application.webp',
+	powder: 'photos/herco-red-wheels.webp',
+	before: 'photos/bike-before.webp',
+	after: 'photos/bike-after.webp',
+	wheelSet: 'photos/wheel-set.webp'
 } as const;
 
 // The wheel photos are square crops of the wheel set photo, one per colour.
 export const wheelColours = [
-	{ id: 'purple', name: 'Purple', hex: '#5a1fb5', photo: 'photos/wheel-purple.jpg' },
-	{ id: 'pink', name: 'Pink', hex: '#f2357f', photo: 'photos/wheel-pink.jpg' },
-	{ id: 'blue', name: 'Blue', hex: '#1a2fd0', photo: 'photos/wheel-blue.jpg' },
-	{ id: 'red', name: 'Red', hex: '#d81e1e', photo: 'photos/wheel-red.jpg' }
+	{ id: 'purple', name: 'Purple', hex: '#5a1fb5', photo: 'photos/wheel-purple.webp' },
+	{ id: 'pink', name: 'Pink', hex: '#f2357f', photo: 'photos/wheel-pink.webp' },
+	{ id: 'blue', name: 'Blue', hex: '#1a2fd0', photo: 'photos/wheel-blue.webp' },
+	{ id: 'red', name: 'Red', hex: '#d81e1e', photo: 'photos/wheel-red.webp' }
 ];
 
 export const serviceOf = (id: string) => services.find((s) => s.id === id) ?? services[0];

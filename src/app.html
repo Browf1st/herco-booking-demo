@@ -4,17 +4,14 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
-		<meta name="theme-color" content="#0a0b0d" />
+		<meta name="theme-color" content="#f6f7fa" />
+		<meta name="referrer" content="strict-origin-when-cross-origin" />
 		<meta name="color-scheme" content="light dark" />
-		<script>
-			try {
-				const theme = localStorage.getItem('herco-theme');
-				if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
-			} catch {}
-		</script>
+		<!-- Runs before paint without allowing arbitrary inline scripts in the CSP. -->
+		<script src="%sveltekit.assets%/theme.js"></script>
 		<!-- Demo only: remove the robots tag when the real site launches. -->
 		<meta name="robots" content="noindex" />
-		<link rel="icon" type="image/png" href="%sveltekit.assets%/photos/logo.png" />
+		<link rel="icon" type="image/webp" href="%sveltekit.assets%/photos/logo.webp" />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link

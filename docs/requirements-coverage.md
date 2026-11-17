@@ -2,6 +2,8 @@
 
 This audit compares the chat requests and the HERCO production skill against the current browser demo.
 
+The 2026-11-17 performance/security pass preserves the current light, dark and system appearance choices. See [production-plan.md](production-plan.md) for implementation guidance and [production-handoff.md](production-handoff.md) for completed work and validation. Backend integrations remain pending.
+
 | Requirement | Demo coverage | Remaining work |
 | --- | --- | --- |
 | Date overrides and public schedule | Admin can open or close a date or restore regular hours. Public availability and booking use the override. Existing appointments remain scheduled. | Individual slot blocks are available in the demo. Server-side conflict protection remains. |

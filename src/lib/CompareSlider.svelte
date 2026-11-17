@@ -1,13 +1,14 @@
 <script lang="ts">
-	let { before, after, alt }: { before: string; after: string; alt: string } = $props();
+	import { asset } from '$app/paths';
+	let { before, after, alt, loading = 'lazy' }: { before: string; after: string; alt: string; loading?: 'lazy' | 'eager' } = $props();
 
 	let pos = $state(50);
 </script>
 
 <!-- A full-size invisible range input gives drag, touch and keyboard control without custom pointer code. -->
 <div class="compare" style:--pos="{pos}%">
-	<img src={after} alt="{alt}, after" />
-	<img class="before" src={before} alt="{alt}, before" />
+	<img src={asset(after as Parameters<typeof asset>[0])} alt="{alt}, after" {loading} decoding="async" width="720" height="979" />
+	<img class="before" src={asset(before as Parameters<typeof asset>[0])} alt="{alt}, before" {loading} decoding="async" width="720" height="960" />
 	<span class="tag">Before</span>
 	<span class="tag after">After</span>
 	<span class="handle"></span>
@@ -25,6 +26,8 @@
 		border: 1px solid var(--line);
 		border-radius: 6px;
 	}
+
+	.compare:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 	img,
 	input {

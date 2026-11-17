@@ -1,8 +1,5 @@
 <script lang="ts">
  import ActionIcon from '#lib/ActionIcon.svelte';
- import { resolve } from '$app/paths';
- import { page } from '$app/state';
- import CustomerBookingHistory from '#lib/CustomerBookingHistory.svelte';
  import { account, saveProfilePhone, signIn, signOut } from '#lib/account.svelte.ts';
  let mode = $state<'Log in' | 'Sign up'>('Log in');
  const socialProviders = ['Facebook', 'Google'] as const;
@@ -13,7 +10,6 @@
  let phone = $state(account.current?.phone ?? '');
  let profileStatus = $state('');
  let phoneError = $state('');
- const showHistory = $derived(page.url.searchParams.get('tab') === 'booking-history');
  function saveProfile(event: SubmitEvent) {
   event.preventDefault();
   const value = phone.trim();
@@ -39,13 +35,8 @@
 <section class="section wrap stack account">
  {#if account.current}
   <div class="account-heading">
-   <nav class="row" aria-label="Account sections">
-    <a class="btn sm" class:ghost={showHistory} aria-current={!showHistory ? 'page' : undefined} href={resolve('/account')}><ActionIcon name="user" />Profile</a>
-    <a class="btn sm" class:ghost={!showHistory} aria-current={showHistory ? 'page' : undefined} href={resolve('/account?tab=booking-history')}><ActionIcon name="history" />Booking history</a>
-   </nav>
    <button class="btn sm ghost" onclick={signOut}><ActionIcon name="logout" />Sign out</button>
   </div>
-  {#if !showHistory}
   <section class="card stack" aria-labelledby="profile-heading">
    <h1 id="profile-heading">Profile</h1>
    <p>Signed in as <strong>{account.current.name}</strong> via {account.current.provider}</p>
@@ -62,7 +53,6 @@
     {#if profileStatus}<p role="status">{profileStatus}</p>{/if}
    </form>
   </section>
-  {/if}
  {:else}
   <div class="login stack">
    <h1>{mode === 'Log in' ? 'Log In' : 'Sign Up'}</h1>
@@ -96,12 +86,6 @@
     </form>
    {/if}
   </div>
- {/if}
- {#if !account.current || showHistory}
- <section class="stack" aria-labelledby="booking-history">
-  <h2 id="booking-history">Booking history</h2>
-  <CustomerBookingHistory />
- </section>
  {/if}
 </section>
 <style>

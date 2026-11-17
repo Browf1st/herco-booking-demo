@@ -25,13 +25,13 @@
 </script>
 <article class="card stack">
  <div class="row"><h2>{booking.id}</h2><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span></div>
- <p>{fmtDate(booking.date)} · {fmtSlot(booking.slot)} · Philippine time</p>
  <BookingSummary {booking} />
  {#each booking.requests ?? [] as request}
-  <p>{request.kind}{request.date && request.slot ? ' · ' + fmtDate(request.date) + ' at ' + fmtSlot(request.slot) : ''} <span class="badge" data-status={request.state.toLowerCase()}>{request.state}</span></p>
+  <p>{request.kind}{request.date && request.slot ? ' · ' + fmtDate(request.date) + ' at ' + fmtSlot(request.slot) : ''} <span class="badge" data-status={request.state.toLowerCase()}>{request.state === 'Pending' ? 'Awaiting shop approval' : request.state}</span></p>
+  {#if request.reason}<p class="small muted">Your note: {request.reason}</p>{/if}
  {/each}
  {#if active}
-  <EditCoating {booking} />
+  {#if booking.status === 'pending' && !pending}<EditCoating {booking} />{/if}
   {#if pending}
    <p class="small muted">Your original visit stays reserved while the shop reviews your request.</p>
   {:else if kind}

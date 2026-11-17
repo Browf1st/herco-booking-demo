@@ -8,6 +8,6 @@
 <section class="section wrap stack">
  <h1>My bookings</h1>
  <p class="muted">See your service status and request changes. The shop reviews cancellation and rescheduling requests.</p>
- <div class="row"><a class="btn sm" href={resolve('/book')}><ActionIcon name="calendar" />New booking</a><a class="btn sm ghost" href={resolve('/account')}><ActionIcon name="user" />{account.current ? 'Demo account' : 'Demo login / signup'}</a></div>
+ {#if !account.current}<div><a class="btn sm ghost" href={resolve('/account')}><ActionIcon name="user" />Sign in</a></div>{/if}
  <CustomerBookingHistory />
 </section>

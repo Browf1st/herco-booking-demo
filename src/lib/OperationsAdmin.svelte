@@ -6,13 +6,14 @@
 	import { tick } from 'svelte';
 	import RewardReceipt from './RewardReceipt.svelte';
 	import { approveRewardReceipt, correctPoints, rewardStatus, type Member } from './operations.svelte';
+	import BookingSummary from './BookingSummary.svelte';
 	import AdminBooking from './AdminBooking.svelte';
 	import AdminReports from './AdminReports.svelte';
 	import { serviceLabel } from './coating';
 	import type { StockDetails } from './operations.svelte';
-	import { bookingStatusLabels, db } from './store.svelte';
+	import { bookingStatusLabels, db, type Status } from './store.svelte';
 	import { serviceOf, sizes } from './config';
-	import { fmtDate, fmtSlot } from './dates';
+	import { fmtDate, fmtSlot, today } from './dates';
 	import { addStock, addStockOption, adjustStock, claimRewardReceipt, editRewardTier, editStockItem, grantPoints, ops, fanRanking, pointBalance, renameStockOption, stockOptions } from './operations.svelte';
 
 	let { tab, owner = false }: { tab: string; owner?: boolean } = $props();
@@ -90,8 +91,52 @@
 	const selectedStock = $derived(ops.data.stock.find((item) => item.id === stockId));
 	let notice = $state('');
 	let error = $state('');
-	let statusFilter = $state('all');
-	const matchingBookings = $derived(db.bookings.filter((b) => (statusFilter === 'all' || b.status === statusFilter) && [b.id, b.name, b.phone, b.bike, b.plateNumber ?? ''].join(' ').toLowerCase().includes(search.toLowerCase())).toSorted((a, b) => (b.date + b.slot).localeCompare(a.date + a.slot)));
+	const bookingDatePresets = [
+		{ value: 'today', label: 'Today' }, { value: 'month', label: 'This month' },
+		{ value: 'date', label: 'Specific date' }, { value: 'custom', label: 'Custom range' },
+		{ value: 'all', label: 'All dates' }
+	] as const;
+	const bookingStatuses = Object.entries(bookingStatusLabels) as [Status, string][];
+	const shopToday = today();
+	let bookingPeriod = $state<typeof bookingDatePresets[number]['value']>('today');
+	let bookingDate = $state(shopToday);
+	let bookingFrom = $state(shopToday.slice(0, 7) + '-01');
+	let bookingTo = $state(shopToday);
+	let bookingSearch = $state('');
+	let bookingSource = $state('all');
+	let bookingPage = $state(1);
+	let statusFilter = $state<Status | 'all'>('all');
+	const validBookingPeriod = $derived(bookingPeriod === 'date' ? Boolean(bookingDate) :
+		bookingPeriod !== 'custom' || Boolean(bookingFrom && bookingTo && bookingFrom <= bookingTo));
+	const bookingQuery = $derived(bookingSearch.trim().toLowerCase());
+	const periodBookings = $derived(db.bookings.filter(b => validBookingPeriod &&
+		(bookingPeriod === 'all' ||
+			(bookingPeriod === 'today' && b.date === shopToday) ||
+			(bookingPeriod === 'month' && b.date.slice(0, 7) === shopToday.slice(0, 7)) ||
+			(bookingPeriod === 'date' && b.date === bookingDate) ||
+			(bookingPeriod === 'custom' && b.date >= bookingFrom && b.date <= bookingTo)) &&
+		(bookingSource === 'all' || Boolean(b.walkIn) === (bookingSource === 'walk-in')) &&
+		[b.id, b.name, b.phone, b.bike, b.plateNumber ?? ''].join(' ').toLowerCase().includes(bookingQuery)));
+	const bookingMetrics = $derived([
+		{ value: 'all' as const, label: 'Total bookings', count: periodBookings.length },
+		...bookingStatuses.map(([value, label]) => ({ value, label, count: periodBookings.filter(b => b.status === value).length }))
+	]);
+	const matchingBookings = $derived(periodBookings.filter(b => statusFilter === 'all' || b.status === statusFilter)
+		.toSorted((a, b) => (b.date + b.slot).localeCompare(a.date + a.slot) || a.id.localeCompare(b.id)));
+	const bookingPages = $derived(Math.max(1, Math.ceil(matchingBookings.length / pageSize)));
+	const currentBookingPage = $derived(Math.min(bookingPage, bookingPages));
+	const bookingOffset = $derived((currentBookingPage - 1) * pageSize);
+
+	function resetBookingFilters() {
+		bookingPeriod = 'today';
+		bookingDate = shopToday;
+		bookingFrom = shopToday.slice(0, 7) + '-01';
+		bookingTo = shopToday;
+		bookingSearch = '';
+		bookingSource = 'all';
+		statusFilter = 'all';
+		bookingPage = 1;
+	}
 	const customers = $derived(ops.data.members.filter(member => matchesFan(member, fanQuery)));
 	let customerPage = $state(1);
 	const customerPages = $derived(Math.max(1, Math.ceil(customers.length / pageSize)));
@@ -198,17 +243,55 @@
 	{#if notice}<p class="success" role="status">{notice}</p>{/if}
 
 	{#if tab === 'Booking history'}
-		<div class="cols">
-			<label>Search bookings<input type="search" bind:value={search} placeholder="Name, reference, mobile, bike or plate" /></label>
-			<label>Status<select bind:value={statusFilter}><option value="all">All bookings</option><option value="pending">Pending</option><option value="confirmed">Booked</option><option value="done">Completed</option><option value="cancelled">Cancelled</option></select></label>
+		<section class="history-workspace stack" aria-labelledby="history-title">
+		<div class="history-heading">
+			<div><h2 id="history-title">Booking history</h2><p class="muted">Track bookings by appointment date.</p></div>
+			<span class="history-timezone"><ActionIcon name="clock" />Philippine time</span>
 		</div>
-		{#each matchingBookings as booking (booking.id)}
+		<div class="booking-metrics" role="group" aria-label="Booking totals and status filters">
+			{#each bookingMetrics as metric (metric.value)}
+				<button type="button" class="card booking-metric" data-status={metric.value} aria-pressed={statusFilter === metric.value} onclick={() => { statusFilter = metric.value; bookingPage = 1; }}>
+					<span class="metric-label"><span class="metric-dot" aria-hidden="true"></span>{metric.label}</span>
+					<span class="metric-value"><b>{metric.count}</b><span class="metric-selected" aria-hidden="true">{#if statusFilter === metric.value}<ActionIcon name="check" />{/if}</span></span>
+				</button>
+			{/each}
+		</div>
+		<section class="history-filters card" aria-label="Filter bookings">
+		<div class="row between filter-heading"><span><ActionIcon name="adjust" />Filter bookings</span><button type="button" class="history-reset" onclick={resetBookingFilters}><ActionIcon name="reset" />Reset filters</button></div>
+		<div class="history-filter-fields">
+			<label class="history-search">Search bookings<input type="search" bind:value={bookingSearch} oninput={() => bookingPage = 1} placeholder="Name, reference, mobile, bike or plate" /></label>
+			<label>Date filter<select bind:value={bookingPeriod} onchange={() => bookingPage = 1}>
+				{#each bookingDatePresets as preset (preset.value)}<option value={preset.value}>{preset.label}</option>{/each}
+			</select></label>
+			<label>Status<select bind:value={statusFilter} onchange={() => bookingPage = 1}><option value="all">All statuses</option>{#each bookingStatuses as [value, label]}<option {value}>{label}</option>{/each}</select></label>
+			<label>Booking source<select bind:value={bookingSource} onchange={() => bookingPage = 1}><option value="all">All sources</option><option value="online">Online</option><option value="walk-in">Walk-in</option></select></label>
+		</div>
+		{#if bookingPeriod === 'date'}
+			<div class="history-date-fields"><label>Appointment date<input type="date" bind:value={bookingDate} oninput={() => bookingPage = 1} aria-invalid={!validBookingPeriod} /></label></div>
+		{:else if bookingPeriod === 'custom'}
+			<div class="history-date-fields">
+				<label>From<input type="date" bind:value={bookingFrom} oninput={() => bookingPage = 1} aria-invalid={!validBookingPeriod} /></label>
+				<label>To<input type="date" bind:value={bookingTo} min={bookingFrom} oninput={() => bookingPage = 1} aria-invalid={!validBookingPeriod} /></label>
+			</div>
+		{/if}
+		{#if !validBookingPeriod}<p class="error" role="alert">{bookingPeriod === 'date' ? 'Choose an appointment date.' : 'Choose both dates, with the end date on or after the start date.'}</p>{/if}
+		<p class="filter-hint">Counts follow your date and search filters. Select a card to view that status.</p>
+		</section>
+		<div class="history-results-heading">
+			<h3>Bookings</h3>
+			<p class="muted" role="status">{matchingBookings.length ? `Showing ${bookingOffset + 1}–${Math.min(bookingOffset + pageSize, matchingBookings.length)} of ${matchingBookings.length} bookings` : '0 bookings'}<span class="history-page-size"> · 10 per page</span></p>
+		</div>
+		<div class="history-records">
+		{#each matchingBookings.slice(bookingOffset, bookingOffset + pageSize) as booking (booking.id)}
+			<article class="card booking-entry">
 			<details class="card booking-record">
 				<summary>
-					<span class="record-heading"><strong>{booking.name || 'Unnamed test booking'}</strong><span class="muted small">{booking.id} · {fmtDate(booking.date, { month: 'short', day: 'numeric', year: 'numeric' })} · {fmtSlot(booking.slot)}</span></span>
-					<span class="record-status"><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span><span class="expand-icon" aria-hidden="true">⌄</span></span>
+					<span class="record-heading"><strong>{booking.name || 'Unnamed test booking'}</strong><span class="record-reference">{booking.id}<span class="record-bike"> · {booking.bike}</span></span></span>
+					<span class="record-appointment"><span><ActionIcon name="calendar" />{fmtDate(booking.date, { month: 'short', day: 'numeric', year: 'numeric' })}</span><span class="record-time">{fmtSlot(booking.slot)}</span></span>
+					<span class="record-status"><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span><span class="expand-icon" aria-hidden="true"><ActionIcon name="right" /></span></span>
 				</summary>
 				<div class="record-body stack">
+				<BookingSummary {booking} staff />
 				<div class="cols">
 					<div class="stack">
 						<h3>Customer &amp; motorcycle</h3>
@@ -231,10 +314,16 @@
 					</div>
 				</div>
 				<div class="stack"><h3>Notes for the shop</h3><p class="booking-notes">{booking.notes || 'No notes provided.'}</p></div>
-				<AdminBooking {booking} />
 				</div>
 			</details>
-		{:else}<p class="muted">No matching bookings.</p>{/each}
+			{#if booking.status === 'pending' || booking.status === 'confirmed'}<div class="history-actions"><AdminBooking {booking} summary={false} /></div>{/if}
+			</article>
+		{:else}
+			<div class="card history-empty"><span class="empty-icon"><ActionIcon name="calendar" /></span><h3>No bookings found</h3><p class="muted">Try another date, status, or search to find your bookings.</p><button type="button" class="btn sm ghost" onclick={() => { resetBookingFilters(); bookingPeriod = 'all'; }}>View all bookings</button></div>
+		{/each}
+		</div>
+		{#if bookingPages > 1}<div class="history-pagination">{@render pagination('Booking history', currentBookingPage, bookingPages, page => bookingPage = page)}</div>{/if}
+		</section>
 	{:else if tab === 'Customers'}
 		<h3>Customers</h3>
 		<div class="card customer-total"><span class="muted small">Total accounts</span><b>{ops.data.members.length}</b></div>
@@ -763,14 +852,82 @@
 	.rank-fan { display: grid; flex: 1 1 160px; gap: 4px; }
 	.rank-points { font-size: 1.3rem; min-width: 95px; }
 	.rank-points span { display: block; }
-	.booking-record { padding: 0; }
-	.booking-record > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px; }
+	.history-workspace { gap: 1.15rem; }
+	.history-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .65rem; padding-block: .4rem; }
+	.history-heading h2 { font-size: clamp(2rem, 4vw, 2.6rem); }
+	.history-heading p { font-size: .85rem; margin-top: .45rem; }
+	.history-timezone { display: inline-flex; align-items: center; gap: .4rem; color: var(--muted); font-size: .75rem; }
+	.booking-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .65rem; }
+	.booking-metric { --metric-color: var(--text); display: grid; gap: .75rem; padding: .85rem; text-align: left; color: var(--text); cursor: pointer; font: inherit; border-color: color-mix(in srgb, var(--line) 65%, var(--panel)); border-radius: 8px; }
+	.metric-label { display: flex; align-items: center; gap: .4rem; font-size: .78rem; font-weight: 600; }
+	.metric-dot { width: .4rem; height: .4rem; flex: none; border-radius: 50%; background: var(--metric-color); }
+	.metric-value { display: flex; align-items: center; justify-content: space-between; }
+	.booking-metric b { font-size: 1.9rem; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; }
+	.metric-selected { display: grid; place-items: center; width: 1.3rem; height: 1.3rem; color: var(--accent); }
+	.booking-metric[data-status="pending"] { --metric-color: light-dark(#d69b00, #f7cf82); }
+	.booking-metric[data-status="confirmed"] { --metric-color: var(--accent); }
+	.booking-metric[data-status="done"] { --metric-color: var(--ok); }
+	.booking-metric[data-status="cancelled"] { --metric-color: var(--bad); }
+	.booking-metric:hover { background: var(--panel-2); border-color: var(--muted); }
+	.booking-metric[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 4%, var(--panel)); box-shadow: inset 0 0 0 1px var(--accent); }
+	.history-filters { display: grid; gap: .85rem; border-radius: 8px; border-color: color-mix(in srgb, var(--line) 65%, var(--panel)); }
+	.filter-heading { justify-content: space-between; font-size: .8rem; font-weight: 650; }
+	.filter-heading > span { display: inline-flex; align-items: center; gap: .4rem; }
+	.history-reset { min-height: 36px; padding: .25rem .4rem; border: 0; border-radius: 4px; color: var(--accent); background: transparent; font: inherit; cursor: pointer; }
+	.history-reset:hover { background: var(--panel-2); }
+	.history-filter-fields { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: .8rem; }
+	.history-filters label { font-size: .78rem; font-weight: 600; }
+	.history-filters input, .history-filters select { font-size: .85rem; font-weight: 400; background: var(--panel); border-radius: 6px; }
+	.history-date-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; border-top: 1px solid var(--line); padding-top: .85rem; }
+	.filter-hint { font-size: .72rem; color: var(--muted); }
+	.history-results-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; padding-top: .4rem; }
+	.history-results-heading h3 { font-size: 1.35rem; }
+	.history-results-heading p { font-size: .75rem; }
+	.history-records { display: grid; gap: .55rem; }
+	.booking-entry { padding: 0; }
+	.booking-entry > .booking-record { border: 0; }
+	.history-actions { padding: .85rem; border-top: 1px solid var(--line); }
+	.booking-record { padding: 0; border-radius: 8px; border-color: color-mix(in srgb, var(--line) 65%, var(--panel)); }
+	.booking-record:hover, .booking-record[open] { border-color: var(--muted); }
+	.booking-record > summary { display: grid; grid-template-columns: minmax(0, 1fr) 10rem 8rem; align-items: center; gap: 1rem; padding: .9rem 1rem; border-radius: 8px; }
+	.booking-record > summary:hover, .booking-record[open] > summary { background: color-mix(in srgb, var(--panel-2) 45%, var(--panel)); }
 	.booking-record > summary::-webkit-details-marker { display: none; }
-	.record-heading { display: grid; gap: 6px; }
-	.record-heading strong { font: italic 800 1.6rem var(--display); text-transform: uppercase; }
-	.record-status { display: flex; align-items: center; gap: 12px; }
-	.expand-icon { color: var(--accent); font-size: 1.5rem; }
-	.booking-record[open] .expand-icon { transform: rotate(180deg); }
+	.record-heading { display: grid; gap: .3rem; min-width: 0; }
+	.record-heading strong { font: italic 700 1.25rem var(--display); text-transform: uppercase; }
+	.record-reference { font-size: .72rem; color: var(--muted); }
+	.record-bike { margin-left: .2rem; }
+	.record-appointment { display: grid; gap: .2rem; font-size: .78rem; }
+	.record-appointment > span:first-child { display: inline-flex; align-items: center; gap: .35rem; }
+	.record-time { color: var(--muted); padding-left: 1.15em; }
+	.record-status { display: flex; justify-content: flex-end; align-items: center; gap: .65rem; }
+	.record-status .badge { font-size: .75rem; }
+	.expand-icon { display: grid; place-items: center; color: var(--muted); font-size: .85rem; }
+	.booking-record[open] .expand-icon { transform: rotate(90deg); }
+	.history-pagination { display: flex; justify-content: flex-end; padding-block: .3rem; }
+	.history-empty { display: grid; justify-items: center; gap: .7rem; text-align: center; padding: 2.5rem 1rem; border-style: dashed; }
+	.empty-icon { display: grid; place-items: center; width: 2.8rem; height: 2.8rem; background: var(--panel-2); color: var(--muted); border-radius: 50%; font-size: 1.3rem; }
+	.history-empty h3 { font-size: 1.5rem; }
+	.history-empty p { max-width: 23rem; font-size: .85rem; }
+	@media (max-width: 700px) {
+		.history-filter-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.history-search { grid-column: 1 / -1; }
+		.booking-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+		.booking-metric { gap: .5rem; padding: .75rem; }
+		.booking-metric:first-child { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; align-items: center; }
+		.booking-metric:first-child .metric-value { justify-content: flex-end; gap: .75rem; }
+		.booking-record > summary { grid-template-columns: minmax(0, 1fr) auto; gap: .5rem .75rem; padding: .8rem; }
+		.record-status { grid-column: 2; grid-row: 1; }
+		.record-appointment { grid-column: 1 / -1; grid-row: 2; display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; font-size: .72rem; }
+		.record-time { padding: 0; }
+		.record-bike { display: none; }
+		.history-page-size { display: none; }
+		.history-pagination { justify-content: center; }
+	}
+	@media (max-width: 360px) {
+		.history-filters { padding: .75rem; }
+		.history-filter-fields, .history-date-fields { gap: .65rem; }
+		.history-filters input, .history-filters select { padding-inline: .4rem; }
+	}
 	.record-body { padding: 18px; border-top: 1px solid var(--line); }
 	.record-details { display: grid; gap: 12px; margin: 0; }
 	.record-details dt { color: var(--muted); font-size: 0.85rem; }

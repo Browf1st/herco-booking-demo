@@ -10,7 +10,7 @@
  const sample = $derived(db.bookings.find(booking => booking.id === sampleServiceBookingId));
 </script>
 
-{#if account.current}
+{#if account.current || bookings.length}
  {#each bookings as booking (booking.id)}
   <CustomerBooking {booking} />
  {:else}

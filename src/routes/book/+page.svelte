@@ -21,7 +21,8 @@
  const canEdit = $derived(!editing || editedBooking?.status === 'pending' || editedBooking?.status === 'confirmed');
  const returnSection = bookingSections.find(section => section === query.get('return')) ?? 'Booking history';
  const returnToBooking = resolve(adminPath('Booking', query.get('view') === 'owner', returnSection));
- const walkIn = !editing && query.get('walk-in') === '1';
+ const manual = query.get('manual') === '1';
+ let walkIn = $state(!editing && query.get('walk-in') === '1');
  const preferredDate = query.get('date') ?? '';
  const requestedService = query.get('service');
  const editSelection = editedBooking ? catalogSelectionOf(editedBooking) : undefined;
@@ -64,13 +65,13 @@
  const tiers = Object.entries(ceramicModels);
  const ceramicPricing = $derived(db.pricing.ceramicCatalog ?? defaultCeramicCatalogPricing);
  let form = $state({
-  name: editedBooking?.name ?? (walkIn ? '' : account.current?.name ?? ''), email: editedBooking?.email ?? (walkIn ? '' : account.current?.email ?? ''),
-  phone: editedBooking?.phone ?? (walkIn ? '' : account.current?.phone ?? ''), plateNumber: editedBooking?.plateNumber ?? '',
+  name: editedBooking?.name ?? (manual ? '' : account.current?.name ?? ''), email: editedBooking?.email ?? (manual ? '' : account.current?.email ?? ''),
+  phone: editedBooking?.phone ?? (manual ? '' : account.current?.phone ?? ''), plateNumber: editedBooking?.plateNumber ?? '',
   notes: editedBooking?.notes ?? query.get('notes') ?? '', date: editedBooking?.date ?? (isBookableDate(preferredDate) ? preferredDate : ''), slot: editedBooking?.slot ?? ''
  });
  let signer = $state('');
  let acknowledged = $state(false);
- let immediate = $state(true);
+ let immediate = $state(manual);
  const isPcx = $derived(coating.ceramic && /^Honda PCX/i.test(bike));
  let adjustments = $state<Record<string, number | undefined>>({});
  const vehicle = $derived({ bike, size, modelYear: isPcx || (editedBooking && bike === editedBooking.bike) ? modelYear : undefined });
@@ -78,6 +79,9 @@
  const estimate = $derived(applyServicePriceAdjustments(baseEstimate, Object.fromEntries(Object.entries(adjustments).filter(([, value]) => value !== undefined && value >= 0 && Number.isSafeInteger(Math.round(value * 100))))));
  let error = $state('');
  let done = $state<Booking>();
+ let reviewDialog: HTMLDialogElement;
+ let reviewError = $state('');
+ let reviewVisit = $state({ date: '', slot: '' });
  let heading = $state<HTMLHeadingElement>();
 
  async function submit(event: SubmitEvent) {
@@ -100,18 +104,32 @@
    error = 'Confirm the intake details and type the customer name to sign the demo form.';
    return;
   }
+  reviewVisit = { date: walkIn && immediate ? today() : form.date, slot: walkIn && immediate ? currentShopTime() : form.slot };
+  if (!reviewVisit.date || !reviewVisit.slot) {
+   error = 'Choose an appointment date and time.';
+   return;
+  }
+  reviewError = '';
+  reviewDialog.showModal();
+ }
+
+ async function confirmBooking() {
+  if (done || !reviewDialog.open) return;
+  reviewError = '';
   try {
    const booking = book({
-    ...form, date: walkIn && immediate ? today() : form.date, slot: walkIn && immediate ? currentShopTime() : form.slot,
-    name, bike, modelYear: isPcx ? modelYear : undefined, phone, email: form.email.trim(), size, selection: $state.snapshot(coating),
+    ...form, ...reviewVisit,
+    name: form.name.trim(), bike, modelYear: isPcx ? modelYear : undefined, phone: form.phone.trim(), email: form.email.trim(), size, selection: $state.snapshot(coating),
     serviceId: coating.ceramic ? 'ceramic' : 'wheel-colour',
-    accountId: walkIn ? undefined : account.current?.id,
+    accountId: manual ? undefined : account.current?.id,
+    bookedByStaff: manual,
     walkIn: walkIn ? { signer: signer.trim(), at: new Date().toISOString(), version: 'Demo intake v1', immediate } : undefined
    });
-   if (!walkIn && !account.current) rememberBooking(booking.id);
+   if (!manual && !account.current) rememberBooking(booking.id);
+   reviewDialog.close();
    done = booking;
   } catch (e) {
-   error = (e as Error).message;
+   reviewError = (e as Error).message;
    return;
   }
   await tick();
@@ -131,13 +149,18 @@
    <p>{fmtDate(done.date)} at {fmtSlot(done.slot)} (Philippine time)</p>
    <p>Estimated service price <strong>{estimatePrice(done.estimate!)}</strong></p>
   </div>
-  <div><a class="btn" href={walkIn ? resolve(query.get('view') === 'owner' ? '/admin?tab=Booking%20history&view=owner' : '/admin?tab=Booking%20history') : resolve('/my-bookings')}><ActionIcon name="history" />{walkIn ? 'View booking history' : 'View my bookings'}</a></div>
+  <div><a class="btn" href={manual ? resolve(query.get('view') === 'owner' ? '/admin?tab=Booking%20history&view=owner' : '/admin?tab=Booking%20history') : resolve('/my-bookings')}><ActionIcon name="history" />{manual ? 'View booking history' : 'View my bookings'}</a></div>
  {:else if !canEdit}
   <h1>Edit services</h1>
   <p class="muted">This booking is no longer available to edit.</p>
   <div><a class="btn ghost" href={returnToBooking}><ActionIcon name="back" /> Back to bookings</a></div>
  {:else}
-  <h1>{walkIn ? 'Walk-in intake' : 'Book a visit'}</h1>
+  <h1>{walkIn ? 'Walk-in intake' : manual ? 'Manual booking' : 'Book a visit'}</h1>
+  {#if !editing}
+   <label class="booking-source">Booking source
+    <select bind:value={walkIn}><option value={false}>Online</option><option value={true}>Walk-in</option></select>
+   </label>
+  {/if}
   <p class="small muted">{editedBooking ? 'Editing services for ' + editedBooking.id : 'Demo only. Use sample details. Requests stay in this browser.'}</p>
   <form class="booking-layout" onsubmit={submit}>
    <div class="stack booking-steps">
@@ -222,7 +245,7 @@
     {#if editing}
      <p>{fmtDate(form.date)} · {fmtSlot(form.slot)} (Philippine time)</p>
     {:else}
-    {#if walkIn}<label class="check"><input type="checkbox" bind:checked={immediate} /> Customer is at the shop now</label>{/if}
+    {#if walkIn && manual}<label class="check"><input type="checkbox" bind:checked={immediate} /> Customer is at the shop now</label>{/if}
     {#if !walkIn || !immediate}<VisitPicker bind:date={form.date} bind:slot={form.slot} powder={coating.powder} />{/if}
     {#if walkIn}
      <p class="small muted">Demo intake acknowledgement. The customer checks the motorcycle and service details above before signing.</p>
@@ -265,9 +288,43 @@
  {/if}
 </section>
 
+<dialog bind:this={reviewDialog} aria-labelledby="review-title" class="booking-review">
+ <div class="stack">
+  <h2 id="review-title">Review booking</h2>
+  <dl class="review-facts">
+   <div><dt>Booking source</dt><dd>{walkIn ? 'Walk-in' : 'Online'}</dd></div>
+   <div><dt>Appointment · Philippine time</dt><dd>{reviewVisit.date ? fmtDate(reviewVisit.date, {month:'long', day:'numeric', year:'numeric'}) : ''} · {reviewVisit.slot ? fmtSlot(reviewVisit.slot) : ''}</dd></div>
+   <div><dt>Customer</dt><dd>{form.name.trim()}</dd></div>
+   <div><dt>Mobile</dt><dd>{form.phone.trim()}</dd></div>
+   <div><dt>Email</dt><dd>{form.email.trim() || 'Not provided'}</dd></div>
+   <div><dt>Motorcycle</dt><dd>{bike}{isPcx && modelYear ? ' · ' + modelYear : ''}</dd></div>
+   <div><dt>Plate number</dt><dd>{form.plateNumber.trim() || 'Not provided'}</dd></div>
+   {#if walkIn}<div><dt>Intake signed by</dt><dd>{signer.trim()}</dd></div>{/if}
+   <div class="review-notes"><dt>Notes for the shop</dt><dd>{form.notes.trim() || 'None'}</dd></div>
+  </dl>
+  <section class="stack" aria-label="Services and estimated prices">
+   <h3>Services and estimate</h3>
+   <p>{serviceLabel(coating)}{coating.powder && coating.finish ? ' · ' + coating.finish : ''}</p>
+   {#each estimate.lines ?? [] as line}<div class="cart-line"><span>{line.label}</span><strong>{linePrice(line)}</strong></div>{/each}
+   {#if estimate.discount}<div class="cart-line"><span>Promo savings</span><strong>{money(estimate.discount)}</strong></div>{/if}
+   <div class="cart-line cart-total"><span>Estimated total</span><strong>{estimatePrice(estimate)}</strong></div>
+  </section>
+  {#if reviewError}<p class="error" role="alert">{reviewError}</p>{/if}
+  <div class="row"><button type="button" class="btn sm ghost" onclick={() => reviewDialog.close()}>Back to edit</button><button type="button" class="btn sm" onclick={confirmBooking}><ActionIcon name="check" />Confirm and submit</button></div>
+ </div>
+</dialog>
+
 <style>
+ .booking-review { width: min(680px, calc(100% - 24px)); max-height: 88dvh; padding: clamp(16px, 4vw, 28px); border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); }
+ .booking-review::backdrop { background: #0009; }
+ .booking-review h2 { font-size: 2rem; }
+ .review-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: .7rem; margin: 0; }
+ .review-facts dt { color: var(--muted); font-size: .8rem; }
+ .review-facts dd { margin: 0; overflow-wrap: anywhere; }
+ .review-notes { grid-column: 1 / -1; white-space: pre-wrap; }
  .booking { max-width: 1280px; background: var(--bg); color: var(--text); }
 
+ .booking-source { max-width: 18rem; }
  .booking-layout { display: grid; gap: 20px; align-items: start; }
  .booking-steps { min-width: 0; gap: 24px; }
  .booking-cart { border-top: 4px solid var(--accent); border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px var(--card-shadow); }

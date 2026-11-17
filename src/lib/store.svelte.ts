@@ -1,5 +1,9 @@
 import { activityEvent, type ActivityEvent, type ActivityModule } from './activity';
 // Demo store: bookings live in this browser only, and this file is the one seam a real database replaces.
+// Production boundary: derive the actor from a verified session, validate input on the
+// server, then commit capacity checks, saved prices, history and an email outbox in
+// one database transaction. Never use this store or a URL role as authorization.
+// See docs/production-plan.md for the staged Supabase/Brevo implementation.
 import { demoFans, proFeatures, shop, type Size } from './config';
 import { applyServicePriceAdjustments, defaultPricing, olderPowderParts, selection, validateSelection, quote, type Selection, type Pricing } from './coating';
 import { ceramicTierNames, createCatalogOptions, defaultCeramicCatalogPricing, powderDay, wheels } from './bookingCatalog';
@@ -21,7 +25,12 @@ export type Booking = {
  approvalNote?: string;
  completionNote?: string;
  photos?: string[];
+ createdAt?: string;
+ approvedAt?: string;
+ cancelledAt?: string;
+ cancellationNote?: string;
  completedAt?: string;
+ bookedByStaff?: boolean;
  finalPrice?: number;
  walkIn?: { signer: string; at: string; version: string; immediate?: boolean };
 	id: string;
@@ -81,6 +90,8 @@ function seed(): Booking[] {
 		...rows[0], id: 'HG-DEMO-COMPLETE', date: previousOpen, status: 'done',
 		name: demoFans[0].name, customerId: 'DEMO-FAN-1', bike: 'Honda ADV160', notes: 'Completed glossy ceramic coating. Ready for staff to review points eligibility.'
 	});
+	rows[0].requests = [{ kind: 'Cancel', reason: 'Demo: I can no longer make the appointment.', state: 'Pending', at: new Date().toISOString() }];
+	if (open[3]) rows[1].requests = [{ kind: 'Reschedule', reason: 'Demo: Could I move my appointment to the next open day?', date: open[3], slot: slots[0], state: 'Pending', at: new Date().toISOString() }];
 	return rows;
 }
 
@@ -124,9 +135,11 @@ export const sampleServiceBookingId = 'HG-DEMO-SERVICE-ADDON';
 const sampleOriginal = selection();
 const sampleCurrent = { ...sampleOriginal, powder: true, powderParts: ['Brackets'], finish: 'Satin bronze' };
 const sampleBefore = { selection: sampleOriginal, estimate: quote(sampleOriginal, 'small', 'Honda ADV160', defaultPricing) };
-const sampleAfter = { selection: sampleCurrent, estimate: quote(sampleCurrent, 'small', 'Honda ADV160', defaultPricing) };
+const sampleQuote = quote(sampleCurrent, 'small', 'Honda ADV160', defaultPricing);
+const sampleAfter = { selection: sampleCurrent, estimate: applyServicePriceAdjustments(sampleQuote, { [sampleQuote.lines![0].label]: 1600 }) };
 const sampleBooking: Booking = {
  id: sampleServiceBookingId, name: 'Sample · Jamie Reyes', bike: 'Honda ADV160', size: 'small',
+ createdAt: addDays(today(), -4) + 'T03:00:00Z', approvedAt: addDays(today(), -3) + 'T02:00:00Z', completedAt: addDays(today(), -1) + 'T07:00:00Z',
  modelYear: 2025, date: addDays(today(), -1), slot: '10:00', status: 'done', serviceId: 'ceramic',
  phone: '', email: '', notes: 'Sample booking with an extra service requested at the shop.',
  selection: sampleCurrent, estimate: sampleAfter.estimate, originalServices: sampleBefore,
@@ -230,6 +243,7 @@ type StaffServiceEdit = ServiceVehicle & { notes: string; adjustments: Record<st
 
 export function editCoating(booking: Booking, input: Selection, actor = 'Demo admin', staffEdit?: StaffServiceEdit) {
  active(booking);
+ if (actor === 'Customer' && (booking.status !== 'pending' || booking.requests?.some(r => r.state === 'Pending'))) throw Error('Services can only be edited while the booking is pending and has no request awaiting review.');
  const before = { selection: coatingOf(booking), estimate: $state.snapshot(booking.estimate) };
  const vehicle = staffEdit ?? booking;
  if (!vehicle.bike.trim()) throw Error('Enter the motorcycle model.');
@@ -276,8 +290,12 @@ export function reviewChange(booking: Booking, request: ChangeRequest, approved:
   assertFree(request.date ?? '', request.slot ?? '');
   booking.date = request.date!;
   booking.slot = request.slot!;
+  if (booking.walkIn) booking.walkIn.immediate = false;
  }
- if (approved && request.kind === 'Cancel') booking.status = 'cancelled';
+ if (approved && request.kind === 'Cancel') {
+  booking.status = 'cancelled';
+  booking.cancelledAt = new Date().toISOString();
+ }
  request.state = approved ? 'Approved' : 'Declined';
  request.reviewedAt = new Date().toISOString();
  audit(request.kind + ' ' + request.state.toLowerCase() + (approved && request.kind === 'Reschedule' ? ' · ' + previous + ' → ' + booking.date + ' ' + booking.slot : ''), booking.id, 'Demo admin', 'Change requests');
@@ -349,9 +367,9 @@ export function book(input: NewBooking) {
 	if (input.selection) validateSelection(input.selection, input.bike);
 	const estimate = input.selection ? quote(input.selection, input.size ?? 'small', input.bike, db.pricing, [], input.modelYear) : undefined;
 	const originalServices = input.selection ? { selection: structuredClone(input.selection), estimate: structuredClone(estimate) } : undefined;
-	const booking: Booking = { ...input, estimate, originalServices, id: code(), status: 'pending' };
+	const booking: Booking = { ...input, estimate, originalServices, id: code(), status: 'pending', createdAt: new Date().toISOString() };
 	db.bookings.push(booking);
-	audit(input.walkIn ? 'Recorded walk-in intake' : 'Booking submitted · Pending', booking.id, input.walkIn ? 'Demo admin' : 'Customer');
+	audit(input.walkIn ? 'Recorded walk-in intake' : 'Booking submitted · Pending', booking.id, input.bookedByStaff ? 'Demo admin' : 'Customer');
 	return booking;
 }
 
@@ -367,12 +385,18 @@ export function reschedule(id: string, date: string, slot: string) {
 	audit('Rescheduled · ' + previous + ' → ' + date + ' ' + slot, id);
 }
 
-export function setStatus(id: string, status: Status) {
+export function setStatus(id: string, status: Status, note = '') {
 	const booking = db.bookings.find(b => b.id === id)!;
 	active(booking);
 	if (status === 'cancelled' && booking.requests?.some(r => r.state === 'Pending')) throw Error('Review the pending change request first.');
 	const previous = booking.status;
 	booking.status = status;
+	if (status === 'confirmed') booking.approvedAt = new Date().toISOString();
+	if (status === 'cancelled') {
+		booking.cancelledAt = new Date().toISOString();
+		booking.cancellationNote = note.trim();
+		// Production: enqueue a cancellation email with the customer-visible note after saving.
+	}
 	audit(previous + ' → ' + status, id);
 }
 

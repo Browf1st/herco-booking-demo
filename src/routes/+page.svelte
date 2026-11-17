@@ -33,7 +33,7 @@
 				<a class="btn ghost" href="#schedule"><ActionIcon name="clock" />Check availability</a>
 			</div>
 		</div>
-		<img class="hero-photo" src={asset(photos.hero)} alt="" fetchpriority="high" />
+		<img class="hero-photo" src={asset(photos.hero)} srcset={`${asset('photos/herco-cruiser-480.webp')} 480w, ${asset(photos.hero)} 720w`} sizes="(min-width: 1100px) 506px, (min-width: 800px) 46vw, calc(100vw - 32px)" alt="" width="720" height="960" fetchpriority="high" />
 	</div>
 	<div class="stripe"></div>
 </section>
@@ -129,7 +129,7 @@
 	<div class="finish-grid">
 		{#each wheelColours as colour (colour.id)}
 			<figure class="card stack">
-				<img src={colour.photo} alt={`${colour.name} coated wheel`} loading="lazy" />
+				<img src={asset(colour.photo as Parameters<typeof asset>[0])} alt={`${colour.name} coated wheel`} width="720" height="720" loading="lazy" decoding="async" />
 				<figcaption><h3>{colour.name}</h3><p class="small muted">Check availability with the shop</p></figcaption>
 			</figure>
 		{/each}
@@ -291,6 +291,7 @@
 
 	.hero-photo {
 		width: 100%;
+		height: auto;
 		max-height: 480px;
 		object-fit: contain;
 	}
@@ -317,6 +318,7 @@
 	.finish-grid img,
 	.work-photo img {
 		width: 100%;
+		height: auto;
 		aspect-ratio: 1;
 		object-fit: cover;
 		border-radius: 4px;

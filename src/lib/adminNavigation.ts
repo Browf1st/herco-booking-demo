@@ -2,6 +2,8 @@ export const adminTabs = ['Booking', 'Customers', 'HERCO Points', 'Inventory', '
 export const bookingSections = ['Bookings', 'Change requests', 'Booking history'] as const;
 
 export function adminNavigation(params: Pick<URLSearchParams, 'get'>) {
+	// Demo navigation only. Production must independently authorize every route,
+	// query and mutation with trusted role/action grants, never the `view` parameter.
 	const requested = params.get('tab');
 	const owner = params.get('view') === 'owner';
 	const tab = adminTabs.find(value => value === requested && (owner || value !== 'Activity log')) ?? (requested === 'Customers & points' ? 'HERCO Points' : 'Booking');

@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { adminNavigation, adminPath, bookingSections } from '#lib/adminNavigation.ts';
+	import BookingSummary from '#lib/BookingSummary.svelte';
 	import AdminBooking from '#lib/AdminBooking.svelte';
 	import AdminActivity from '#lib/AdminActivity.svelte';
 	import AdminPricing from '#lib/AdminPricing.svelte';
@@ -22,6 +23,8 @@
 	let date = $state(upcoming().find(isOpenDay)!);
 	let moving = $state<{ id: string; date: string; slot: string }>();
 	let error = $state('');
+	let source = $state('all');
+	const matchesSource = (booking: { walkIn?: unknown }) => source === 'all' || Boolean(booking.walkIn) === (source === 'walk-in');
 	let slotFilter = $state<'all' | 'pending' | 'confirmed' | 'done' | 'open'>('all');
 	let slotFilterMenu = $state<HTMLDetailsElement>();
 	let slotFilterTrigger = $state<HTMLElement>();
@@ -44,7 +47,7 @@
 		{ id: 'open', label: 'Open', count: daySlots.filter(slot => slot.open).length }
 	] as const);
 	const selectedSlotFilter = $derived(slotFilters.find(filter => filter.id === slotFilter)!);
-	const visibleSlots = $derived(daySlots.filter(slot => slotFilter === 'all' || (slotFilter === 'open' ? slot.open : slot.booking?.status === slotFilter)));
+	const visibleSlots = $derived(daySlots.filter(slot => (source === 'all' || (slot.booking && matchesSource(slot.booking))) && (slotFilter === 'all' || (slotFilter === 'open' ? slot.open : slot.booking?.status === slotFilter))));
 
 	function pickDate(day: string) {
 		date = day;
@@ -87,12 +90,22 @@
 					{/if}
 				</a>
 			{/each}
+			{#if tab === 'Bookings' && date >= today()}
+				<details class="manual-menu">
+					<summary class="btn sm"><ActionIcon name="add" />Manual booking <span aria-hidden="true">▾</span></summary>
+					<div class="manual-options">
+						<a data-sveltekit-reload href={resolve(`/book?manual=1&date=${date}${navigation.owner ? '&view=owner' : ''}`)}>Online</a>
+						<a data-sveltekit-reload href={resolve(`/book?manual=1&walk-in=1&date=${date}${navigation.owner ? '&view=owner' : ''}`)}>Walk-in</a>
+					</div>
+				</details>
+			{/if}
 		</nav>
 	{/if}
 	{#if tab === 'Pricing'}
 		<AdminPricing />
 	{:else if tab === 'Change requests'}
 		<h3>Requests awaiting review</h3>
+		<p class="muted">Customers submit cancellation and reschedule requests from Bookings. Their current appointment stays reserved until you approve the request.</p>
 		{#each db.bookings.filter(b => b.requests?.some(r => r.state === 'Pending')) as booking (booking.id)}
 			<article class="card stack"><p><strong>{booking.name}</strong> · {booking.id} · {fmtDate(booking.date)} at {fmtSlot(booking.slot)}</p><AdminBooking {booking} /></article>
 		{:else}<p class="card">No requests awaiting review.</p>{/each}
@@ -168,11 +181,9 @@
 					{/each}
 				</div>
 			</details>
-			{#if date >= today()}
-				<a class="btn sm" href={resolve(`/book?walk-in=1&date=${date}${navigation.owner ? '&view=owner' : ''}`)}><ActionIcon name="add" />Manual booking</a>
-			{/if}
 		</div>
-		{#each db.bookings.filter(b => b.date === date && b.walkIn?.immediate && b.status !== 'cancelled') as booking (booking.id)}
+		<label>Booking source<select bind:value={source}><option value="all">All sources</option><option value="online">Online</option><option value="walk-in">Walk-in</option></select></label>
+		{#each db.bookings.filter(b => b.date === date && b.walkIn?.immediate && b.status !== 'cancelled' && matchesSource(b)) as booking (booking.id)}
 			<article class="card stack">
 				<p><strong>Walk-in · {booking.name}</strong> · {fmtSlot(booking.slot)} · <span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span></p>
 				<AdminBooking {booking} />
@@ -209,7 +220,7 @@
 								<a href="tel:{b.phone}">{b.phone}</a>{b.email ? `, ${b.email}` : ''}<br />
 								{b.notes}
 							</p>
-							<AdminBooking booking={b} />
+							<BookingSummary booking={b} staff />
 							{#if moving && moving.id === b.id}
 								<SlotPicker bind:date={moving.date} bind:slot={moving.slot} />
 								{#if error}<p class="error">{error}</p>{/if}
@@ -222,6 +233,7 @@
 							{/if}
 							</div>
 						</details>
+						{#if b.status === 'pending' || b.status === 'confirmed'}<AdminBooking booking={b} summary={false} />{/if}
 					{/if}
 				</li>
 			{:else}
@@ -234,6 +246,12 @@
 </section>
 
 <style>
+	.manual-menu { position: relative; margin-inline-start: auto; }
+	.manual-menu summary { list-style: none; cursor: pointer; }
+	.manual-menu summary::-webkit-details-marker { display: none; }
+	.manual-options { position: absolute; inset: calc(100% + .3rem) 0 auto auto; min-width: 9rem; padding: .25rem; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 12px var(--card-shadow); z-index: 5; }
+	.manual-options a { display: block; padding: .55rem .7rem; border-radius: 4px; text-decoration: none; }
+	.manual-options a:hover { background: var(--panel-2); }
 	.admin-content { grid-template-columns: minmax(0, 1fr); }
 	.booking-workspace { max-width: 1420px; }
 	.booking-workspace :is(.booking-sections, .day-controls, .availability-banner, .schedule-heading, .slot-heading, .slot-detail-body) :global(.btn) {

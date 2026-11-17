@@ -13,10 +13,11 @@
 	import { adminNavigation, adminPath, adminTabs } from '#lib/adminNavigation.ts';
 
 	let { children }: LayoutProps = $props();
+	let bookMenu = $state<HTMLDetailsElement>();
 	let menuOpen = $state(false);
 	let menuTrigger: HTMLButtonElement;
 	let header: HTMLElement;
-	afterNavigate(() => { menuOpen = false; });
+	afterNavigate(() => { menuOpen = false; if (bookMenu) bookMenu.open = false; });
 	let theme = $state<'system' | 'light' | 'dark'>('system');
 	let themeMenu: HTMLDetailsElement;
 	let themeTrigger: HTMLElement;
@@ -67,11 +68,15 @@
 
 <svelte:window onclick={(event) => {
 	if (themeMenu?.open && event.target instanceof Node && !themeMenu.contains(event.target)) themeMenu.open = false;
+	if (bookMenu?.open && event.target instanceof Node && !bookMenu.contains(event.target)) bookMenu.open = false;
 	if (menuOpen && event.target instanceof Node && !header.contains(event.target)) menuOpen = false;
 }} onkeydown={(event) => {
 	if (event.key === 'Escape' && themeMenu?.open) {
 		themeMenu.open = false;
 		themeTrigger.focus();
+	} else if (event.key === 'Escape' && bookMenu?.open) {
+		bookMenu.open = false;
+		bookMenu.querySelector('summary')?.focus();
 	} else if (event.key === 'Escape' && menuOpen) {
 		menuOpen = false;
 		menuTrigger.focus();
@@ -115,8 +120,15 @@
 			<a class="link" href={resolve('/#services')} aria-current={page.route.id === '/' && page.url.hash === '#services' ? 'location' : undefined}>Services</a>
 			<a class="link" href={resolve('/preview')} aria-current={page.route.id === '/preview' ? 'page' : undefined}>Showcase</a>
 			<a class="link" href={resolve('/points')} aria-current={page.route.id === '/points' ? 'page' : undefined}>HERCO Points</a>
-			<a class="link" href={resolve('/account')} aria-current={['/account', '/my-bookings'].includes(page.route.id ?? '') ? 'page' : undefined}>Account</a>
-			<a class="btn sm" href={resolve('/book')} aria-current={page.route.id === '/book' ? 'page' : undefined}><ActionIcon name="calendar" />Book</a>
+			<a class="link" href={resolve('/my-bookings')} aria-current={page.route.id === '/my-bookings' ? 'page' : undefined}>Bookings</a>
+			<a class="link" href={resolve('/account')} aria-current={page.route.id === '/account' ? 'page' : undefined}>Account</a>
+			<details class="book-menu" bind:this={bookMenu}>
+				<summary class="btn sm" class:booking-current={page.route.id === '/book'}><ActionIcon name="calendar" />Book <span aria-hidden="true">▾</span></summary>
+				<div class="book-options">
+					<a href={resolve('/book')} data-sveltekit-reload aria-current={page.route.id === '/book' && !page.url.searchParams.has('walk-in') ? 'page' : undefined}>Online</a>
+					<a href={resolve('/book?walk-in=1')} data-sveltekit-reload aria-current={page.route.id === '/book' && page.url.searchParams.has('walk-in') ? 'page' : undefined}>Walk-in</a>
+				</div>
+			</details>
 		</nav>
 		{:else}
 		<nav id="header-navigation" class="admin-sections main-nav" class:menu-open={menuOpen} aria-label="Admin sections">
@@ -208,6 +220,13 @@
 		border-bottom-color: var(--accent);
 	}
 
+	.book-menu { position: relative; }
+	.book-menu summary { list-style: none; }
+	.book-menu summary::-webkit-details-marker { display: none; }
+	.book-options { position: absolute; inset: calc(100% + .3rem) 0 auto auto; min-width: 9rem; padding: .25rem; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 12px var(--card-shadow); z-index: 2; }
+	.book-options a { display: block; padding: .55rem .7rem; border-radius: 4px; text-decoration: none; }
+	.book-options a:hover { background: var(--panel-2); }
+	@media (max-width: 800px) { .book-options { position: static; margin-top: .25rem; } }
 	.menu-trigger { display: none; }
 
 	header {
@@ -276,7 +295,7 @@
 		text-decoration-thickness: 3px;
 	}
 
-	.btn[aria-current] {
+	.booking-current {
 		box-shadow: inset 0 -4px 0 var(--text);
 	}
 
@@ -315,7 +334,6 @@
 		.main-nav.menu-open { display: grid; gap: .25rem; }
 		.main-nav a { padding: .5rem; }
 		.main-nav a[aria-current] { color: var(--accent); }
-		.main-nav .btn[aria-current] { color: var(--accent-ink); }
 		header .link {
 			font-size: 0.95rem;
 			letter-spacing: 0.04em;

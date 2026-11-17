@@ -116,8 +116,15 @@ export function syncOperations() {
 function balanceIn(data: Operations, memberId: string) {
 	return data.points.filter((entry) => entry.memberId === memberId).reduce((sum, entry) => sum + entry.amount, 0);
 }
-export const pointBalance = (memberId: string) => balanceIn(ops.data, memberId);
-export const fanRanking = () => ops.data.members.toSorted((a, b) => pointBalance(b.id) - pointBalance(a.id) || a.name.localeCompare(b.name));
+export const pointBalance = (memberId: string) => balances.get(memberId) ?? 0;
+// Aggregate once per ledger change instead of scanning every entry in every sort comparison.
+// Production: query a bounded, authorized leaderboard projection; never ship the private ledger.
+const balances = $derived.by(() => {
+	const totals = new Map<string, number>();
+	for (const entry of ops.data.points) totals.set(entry.memberId, (totals.get(entry.memberId) ?? 0) + entry.amount);
+	return totals;
+});
+export const fanRanking = () => ops.data.members.toSorted((a, b) => (balances.get(b.id) ?? 0) - (balances.get(a.id) ?? 0) || a.name.localeCompare(b.name));
 export const rewardName = (service: RewardService) => service === 'ceramic' ? 'Free ceramic coating' : 'Free powder coating';
 export async function redeemReward(memberId: string, rewardPoints: number, requestId: string) {
 	const issue = () => {

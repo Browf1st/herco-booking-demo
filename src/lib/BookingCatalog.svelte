@@ -1,4 +1,5 @@
 <script lang="ts">
+ const powderColorsId = $props.id();
  import { asset } from '$app/paths';
  import type { Snippet } from 'svelte';
  import { basicColors, catalogItems, ceramicAddons, ceramicTier, powderParts, powderPhotos, wheelExtras, wheelRates, wheels } from './bookingCatalog';
@@ -122,8 +123,8 @@
   </fieldset>
   {#if hasMags || showParts}
   <label>Preferred powder color or finish
-   <input bind:value={value.finish} maxlength="100" list="powder-colors" placeholder="Choose or type a color" />
-   <datalist id="powder-colors">
+   <input bind:value={value.finish} maxlength="100" list={powderColorsId} placeholder="Choose or type a color" />
+   <datalist id={powderColorsId}>
     {#each basicColors as color}<option value={color}></option>{/each}
     {#each powderPhotos as photo}<option value={photo.name}></option>{/each}
    </datalist>
@@ -132,7 +133,7 @@
   <div class="gallery">
    {#each powderPhotos as photo}
     <button type="button" aria-pressed={value.finish === photo.name} onclick={() => value.finish = photo.name}>
-     <img src={asset(photo.file)} alt="" loading="lazy" />
+     <img src={asset(photo.file)} alt="" decoding="async" />
      <span>{photo.name}</span>
     </button>
    {/each}
