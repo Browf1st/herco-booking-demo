@@ -10,19 +10,40 @@
 	import { page } from '$app/state';
 	import { photos, shop } from '#lib/config.ts';
 	import type { LayoutProps } from './$types';
-	import { adminNavigation, adminPath, adminTabs } from '#lib/adminNavigation.ts';
+	import { adminNavigation, adminPath } from '#lib/adminNavigation.ts';
+	import { switchStaffSession, syncStaffAccess } from '#lib/staffAccess.svelte.ts';
 
 	let { children }: LayoutProps = $props();
 	let bookMenu = $state<HTMLDetailsElement>();
 	let menuOpen = $state(false);
 	let menuTrigger: HTMLButtonElement;
 	let header: HTMLElement;
-	afterNavigate(() => { menuOpen = false; if (bookMenu) bookMenu.open = false; });
+	const openOwnerMenu = () => header?.querySelector<HTMLDetailsElement>('.owner-group[open]');
+	afterNavigate(() => {
+		menuOpen = false;
+		if (bookMenu) bookMenu.open = false;
+		const open = openOwnerMenu();
+		if (open) open.open = false;
+	});
 	let theme = $state<'system' | 'light' | 'dark'>('system');
 	let themeMenu: HTMLDetailsElement;
 	let themeTrigger: HTMLElement;
 	const themes = [{ value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }] as const;
 	const activeAdmin = $derived(adminNavigation(page.url.searchParams));
+	const ownerLinks = [{ tab: 'Reports', label: 'Reports' }, { tab: 'Staff Access', label: 'Accounts' }, { tab: 'Activity log', label: 'Activity Log' }] as const;
+	const moreTabs = ['Booking', 'Customers', 'HERCO Points', 'Inventory', 'Pricing'] as const;
+	let sessionError = $state('');
+
+	function selectDemoView(event: MouseEvent, view: 'admin' | 'owner') {
+		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+		sessionError = '';
+		try {
+			switchStaffSession(view);
+		} catch (error) {
+			event.preventDefault();
+			sessionError = error instanceof Error ? error.message : 'Could not change the demo session.';
+		}
+	}
 
 	function syncTheme() {
 		const current = document.documentElement.dataset.theme;
@@ -54,10 +75,12 @@
 		const stopOperations = syncOperations();
 		if (account.current) saveFanProfile(account.current);
 		const stopBookings = syncBookings();
+		const stopStaffAccess = syncStaffAccess();
 		return () => {
 			window.removeEventListener('storage', onThemeStorage);
 			stopOperations();
 			stopBookings();
+			stopStaffAccess();
 		};
 	});
 </script>
@@ -67,6 +90,8 @@
 </svelte:head>
 
 <svelte:window onclick={(event) => {
+	const open = openOwnerMenu();
+	if (open && event.target instanceof Node && !open.contains(event.target)) open.open = false;
 	if (themeMenu?.open && event.target instanceof Node && !themeMenu.contains(event.target)) themeMenu.open = false;
 	if (bookMenu?.open && event.target instanceof Node && !bookMenu.contains(event.target)) bookMenu.open = false;
 	if (menuOpen && event.target instanceof Node && !header.contains(event.target)) menuOpen = false;
@@ -77,6 +102,10 @@
 	} else if (event.key === 'Escape' && bookMenu?.open) {
 		bookMenu.open = false;
 		bookMenu.querySelector('summary')?.focus();
+	} else if (event.key === 'Escape' && openOwnerMenu()) {
+		const open = openOwnerMenu()!;
+		open.open = false;
+		open.querySelector('summary')?.focus();
 	} else if (event.key === 'Escape' && menuOpen) {
 		menuOpen = false;
 		menuTrigger.focus();
@@ -100,14 +129,15 @@
 		</details>
 		<nav class="view-switch" aria-label="Demo views">
 			<a href={resolve('/')} aria-current={page.route.id !== '/admin' ? 'true' : undefined}>User view</a>
-			<a href={resolve('/admin')} aria-current={page.route.id === '/admin' && !activeAdmin.owner ? 'true' : undefined}>Admin view</a>
-			<a href={resolve(adminPath('Booking', true))} aria-current={page.route.id === '/admin' && activeAdmin.owner ? 'true' : undefined}>Owner view</a>
+			<a href={resolve('/admin')} aria-current={page.route.id === '/admin' && !activeAdmin.owner ? 'true' : undefined} onclick={(event) => selectDemoView(event, 'admin')}>Admin view</a>
+			<a href={resolve(adminPath('Booking'))} aria-current={page.route.id === '/admin' && activeAdmin.owner ? 'true' : undefined} onclick={(event) => selectDemoView(event, 'owner')}>Owner view</a>
 		</nav>
 	</div>
+	{#if sessionError}<p class="wrap error small" role="alert">{sessionError}</p>{/if}
 </div>
 
 <header bind:this={header}>
-	<div class="wrap row" class:admin-header={page.route.id === '/admin'}>
+	<div class="wrap row" class:admin-header={page.route.id === '/admin'} class:owner-header={page.route.id === '/admin' && activeAdmin.owner}>
 		<a class="logo" href={resolve('/')}>
 			<img class="mark" src={asset(photos.logo)} alt="" />
 			<span><b>Herco</b><small>Detailing Garage</small></span>
@@ -131,13 +161,27 @@
 			</details>
 		</nav>
 		{:else}
-		<nav id="header-navigation" class="admin-sections main-nav" class:menu-open={menuOpen} aria-label="Admin sections">
-			{#each adminTabs.filter(tab => activeAdmin.owner || tab !== 'Activity log') as tab}
+		<nav id="header-navigation" class="admin-sections main-nav" class:owner-sections={activeAdmin.owner} class:menu-open={menuOpen} aria-label="Admin sections">
+			{#if activeAdmin.owner}
+				{#each ownerLinks as { tab, label } (tab)}
+					<a href={resolve(adminPath(tab))} aria-current={activeAdmin.allowed && activeAdmin.tab === tab ? 'page' : undefined}>{label}</a>
+				{/each}
+				<details class="owner-group" class:group-current={activeAdmin.allowed && moreTabs.some(tab => tab === activeAdmin.tab)}>
+					<summary>More <span class="owner-caret" aria-hidden="true"></span></summary>
+					<div class="owner-options">
+						{#each moreTabs as tab (tab)}
+							<a href={resolve(adminPath(tab))} aria-current={activeAdmin.allowed && activeAdmin.tab === tab ? 'page' : undefined}>{tab}</a>
+						{/each}
+					</div>
+				</details>
+			{:else}
+			{#each activeAdmin.tabs as tab (tab)}
 				<a
-					href={resolve(adminPath(tab, activeAdmin.owner))}
-					aria-current={activeAdmin.tab === tab ? 'page' : undefined}
+					href={resolve(adminPath(tab))}
+					aria-current={activeAdmin.allowed && activeAdmin.tab === tab ? 'page' : undefined}
 				>{tab}</a>
 			{/each}
+			{/if}
 		</nav>
 		{/if}
 	</div>
@@ -219,6 +263,42 @@
 		color: var(--accent);
 		border-bottom-color: var(--accent);
 	}
+
+	.admin-sections.owner-sections { overflow: visible; flex-wrap: wrap; gap: 0 clamp(.75rem, 2vw, 1.5rem); }
+	.owner-header { max-width: 1420px; }
+	.owner-group { position: relative; }
+	.owner-group summary {
+		display: flex;
+		align-items: center;
+		gap: .45rem;
+		list-style: none;
+		padding: 12px .2rem 12px 0;
+		border-bottom: 3px solid transparent;
+		font: 700 1.05rem var(--display);
+		letter-spacing: .05em;
+		text-transform: uppercase;
+		cursor: pointer;
+	}
+	.owner-group summary::-webkit-details-marker { display: none; }
+	@media (min-width: 961px) {
+		.owner-group > summary { height: 100%; }
+	}
+	.owner-group.group-current > summary { color: var(--accent); border-bottom-color: var(--accent); }
+	.owner-caret { width: .42rem; height: .42rem; border: solid currentColor; border-width: 0 1.5px 1.5px 0; rotate: 45deg; }
+	.owner-group[open] > summary .owner-caret { rotate: 225deg; }
+	.owner-options {
+		position: absolute;
+		inset: 100% 0 auto auto;
+		z-index: 1;
+		min-width: 11rem;
+		padding: .25rem;
+		background: var(--panel);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		box-shadow: 0 4px 12px var(--card-shadow);
+	}
+	.owner-options a { padding: .5rem .65rem; border: 0; border-radius: 4px; font: 650 .92rem var(--body); letter-spacing: 0; text-transform: none; }
+	.owner-options a:hover, .owner-options a[aria-current='page'] { background: var(--panel-2); }
 
 	.book-menu { position: relative; }
 	.book-menu summary { list-style: none; }
@@ -332,6 +412,9 @@
 			overflow-y: auto;
 		}
 		.main-nav.menu-open { display: grid; gap: .25rem; }
+		.admin-sections.owner-sections { overflow: auto; }
+		.owner-group summary { padding: .5rem; }
+		.owner-options { position: static; min-width: 0; box-shadow: none; }
 		.main-nav a { padding: .5rem; }
 		.main-nav a[aria-current] { color: var(--accent); }
 		header .link {

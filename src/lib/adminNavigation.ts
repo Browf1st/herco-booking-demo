@@ -1,17 +1,23 @@
-export const adminTabs = ['Booking', 'Customers', 'HERCO Points', 'Inventory', 'Reports', 'Pricing', 'Activity log'] as const;
-export const bookingSections = ['Bookings', 'Change requests', 'Booking history'] as const;
+import { bookingPages, canAccessPage, staffAccess } from './staffAccess.svelte.ts';
+
+export const adminTabs = ['Booking', 'Customers', 'HERCO Points', 'Inventory', 'Reports', 'Pricing', 'Activity log', 'Staff Access'] as const;
 
 export function adminNavigation(params: Pick<URLSearchParams, 'get'>) {
-	// Demo navigation only. Production must independently authorize every route,
-	// query and mutation with trusted role/action grants, never the `view` parameter.
 	const requested = params.get('tab');
-	const owner = params.get('view') === 'owner';
-	const tab = adminTabs.find(value => value === requested && (owner || value !== 'Activity log')) ?? (requested === 'Customers & points' ? 'HERCO Points' : 'Booking');
-	const section = bookingSections.find(value => value === params.get('section')) ??
-		bookingSections.find(value => value === requested) ?? 'Bookings';
-	return { tab, section, owner };
+	const tabs = adminTabs.filter(canAccessPage);
+	const sections = bookingPages.filter(canAccessPage);
+	const requestedSection = params.get('section') ?? (requested === 'Booking' ? null : requested);
+	const section = bookingPages.find(value => value === requestedSection) ?? sections[0] ?? 'Bookings';
+	const tab = adminTabs.find(value => value === requested) ??
+		(requested === 'Customers & points' ? 'HERCO Points' : requested || params.get('section') ? 'Booking' : tabs[0] ?? 'Booking');
+	const knownTab = requested === null || requested === 'Customers & points' ||
+		adminTabs.some(value => value === requested) || bookingPages.some(value => value === requested);
+	const knownSection = tab !== 'Booking' || !params.get('section') ||
+		bookingPages.some(value => value === requestedSection);
+	const allowed = knownTab && knownSection && canAccessPage(tab === 'Booking' ? section : tab);
+	return { tab, section, owner: staffAccess.owner, allowed, tabs, sections };
 }
 
-export function adminPath(tab: string, owner: boolean, section?: string) {
-	return `/admin?tab=${encodeURIComponent(tab)}${owner ? '&view=owner' : ''}${section ? '&section=' + encodeURIComponent(section) : ''}` as const;
+export function adminPath(tab: string, section?: string) {
+	return `/admin?tab=${encodeURIComponent(tab)}${section ? '&section=' + encodeURIComponent(section) : ''}` as const;
 }

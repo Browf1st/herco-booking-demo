@@ -1,4 +1,5 @@
 import { activityEvent, type ActivityEvent, type ActivityModule } from './activity';
+import { requireStaffAction, staffActor } from './staffAccess.svelte.ts';
 // Demo store: bookings live in this browser only, and this file is the one seam a real database replaces.
 // Production boundary: derive the actor from a verified session, validate input on the
 // server, then commit capacity checks, saved prices, history and an email outbox in
@@ -6,7 +7,7 @@ import { activityEvent, type ActivityEvent, type ActivityModule } from './activi
 // See docs/production-plan.md for the staged Supabase/Brevo implementation.
 import { demoFans, proFeatures, shop, type Size } from './config';
 import { applyServicePriceAdjustments, defaultPricing, olderPowderParts, selection, validateSelection, quote, type Selection, type Pricing } from './coating';
-import { ceramicTierNames, createCatalogOptions, defaultCeramicCatalogPricing, powderDay, wheels } from './bookingCatalog';
+import { ceramicTierNames, defaultCeramicCatalogPricing, powderDay } from './bookingCatalog';
 import { addDays, isBookableDate, isOpenDay, nowHour, slots, today, upcoming } from './dates';
 
 export type Status = 'pending' | 'confirmed' | 'done' | 'cancelled';
@@ -176,12 +177,15 @@ export function syncBookings() {
  return () => window.removeEventListener('storage', sync);
 }
 
-export function audit(action: string, bookingId?: string, actor = 'Demo admin', module: ActivityModule = 'Booking', detail?: string) {
+export function audit(action: string, bookingId?: string, actor = staffActor(), module: ActivityModule = 'Booking', detail?: string) {
  db.events.push(activityEvent(module, action, { bookingId, detail }, actor));
  save();
 }
 
 export function updatePricing(pricing: Pricing, module: 'Pricing' | 'Promotion') {
+ requireStaffAction(module === 'Promotion' ? 'changePromotions' : 'changePricing');
+ const current = $state.snapshot(db.pricing);
+ pricing = module === 'Promotion' ? { ...current, promo: pricing.promo } : { ...pricing, promo: current.promo };
  const amounts = [...Object.values(pricing.ceramic), ...Object.values(pricing.powder), ...Object.values(pricing.size), ...Object.values(pricing.models)];
  if (amounts.some(n => !Number.isFinite(n) || n < 0) || !Number.isFinite(pricing.promo) || pricing.promo < 0 || pricing.promo > 100) throw Error('Use nonnegative amounts and a promotion between 0 and 100%.');
  const catalog = pricing.ceramicCatalog;
@@ -212,7 +216,7 @@ export function updatePricing(pricing: Pricing, module: 'Pricing' | 'Promotion')
  const premiumChange = catalog && previous.premiumGloss !== catalog.premiumGloss
   ? ['Premium Matte to Glossy: ' + previous.premiumGloss + ' → ' + catalog.premiumGloss] : [];
  db.pricing = pricing;
- audit(module === 'Promotion' ? 'Saved booking promotion' : 'Saved ceramic coating prices', undefined, 'Demo admin', module,
+ audit(module === 'Promotion' ? 'Saved booking promotion' : 'Saved ceramic coating prices', undefined, staffActor(), module,
   module === 'Promotion' ? oldPromo + '% → ' + pricing.promo + '%' :
    [...tierChanges, ...addonChanges, ...listedChanges, ...premiumChange].join(' · ') || 'No rate changes');
 }
@@ -223,51 +227,37 @@ export function coatingOf(booking: Booking): Selection {
  return { ...selection(powder, booking.finish), ceramicFinish: booking.serviceId === 'ceramic-matte' ? 'Stay Matte' : 'Glossy Finish', powderParts: powder ? ['Wheels / mags'] : [], front: powder ? 'Not sure' : '' };
 }
 
-export function catalogSelectionOf(booking: Booking) {
- const value = coatingOf(booking);
- const catalog = value.catalog ?? {
-  ...createCatalogOptions(),
-  bigBike: booking.size === 'large' || /^Kawasaki Dominar 400\b/i.test(booking.bike),
-  wheelType: value.powderParts.includes(wheels) ? 'Not sure' : '',
-  ceramicAddons: value.ceramicFinish === 'Matte to Glossy' ? ['Matte to Glossy'] : []
- };
- return { ...value, catalog };
-}
-
 function active(booking: Booking) {
  if (booking.status !== 'pending' && booking.status !== 'confirmed') throw Error('This booking is already closed.');
 }
 
-type ServiceVehicle = Pick<Booking, 'bike' | 'size' | 'modelYear'>;
-type StaffServiceEdit = ServiceVehicle & { notes: string; adjustments: Record<string, number | undefined> };
-
-export function editCoating(booking: Booking, input: Selection, actor = 'Demo admin', staffEdit?: StaffServiceEdit) {
+export function editCoating(booking: Booking, input: Selection, actor: 'Customer' | 'Demo admin', adjustments: Record<string, number | undefined> = {}) {
  active(booking);
  if (actor === 'Customer' && (booking.status !== 'pending' || booking.requests?.some(r => r.state === 'Pending'))) throw Error('Services can only be edited while the booking is pending and has no request awaiting review.');
  const before = { selection: coatingOf(booking), estimate: $state.snapshot(booking.estimate) };
- const vehicle = staffEdit ?? booking;
- if (!vehicle.bike.trim()) throw Error('Enter the motorcycle model.');
- validateSelection(input, vehicle.bike, olderPowderParts(before.selection.powderParts));
+ if (!booking.bike.trim()) throw Error('Enter the motorcycle model.');
+ validateSelection(input, booking.bike, olderPowderParts(before.selection.powderParts));
  if (!before.selection.powder && !booking.walkIn?.immediate) assertServiceDay(input, booking.date);
- const estimate = estimateServiceEdit(booking, input, vehicle, staffEdit?.adjustments);
- const vehicleChanged = booking.bike !== vehicle.bike || booking.size !== vehicle.size || booking.modelYear !== vehicle.modelYear;
- const priceChanged = Boolean(staffEdit && Object.values(staffEdit.adjustments).some(price => price !== undefined));
- if (JSON.stringify(before.selection) === JSON.stringify(input) && !vehicleChanged && !priceChanged && (!staffEdit || staffEdit.notes === booking.notes)) return;
+ const baseEstimate = estimateServiceEdit(booking, input);
+ const adjustedLines = actor === 'Demo admin' ? baseEstimate.lines?.filter(line => adjustments[line.label] !== undefined) ?? [] : [];
+ if (JSON.stringify(before.selection) === JSON.stringify(input) && !adjustedLines.length) return;
+ const estimate = adjustedLines.length ? applyServicePriceAdjustments(baseEstimate, adjustments) : baseEstimate;
+ if (actor === 'Demo admin') {
+  if (JSON.stringify(before.selection) !== JSON.stringify(input)) requireStaffAction('editServices');
+  if (adjustedLines.length) requireStaffAction('adjustPrices');
+ }
  const after = { selection: input, estimate };
- booking.serviceChanges = [...(booking.serviceChanges ?? []), { id: crypto.randomUUID(), at: new Date().toISOString(), actor, before, after }];
+ const changedBy = actor === 'Customer' ? actor : staffActor();
+ booking.serviceChanges = [...(booking.serviceChanges ?? []), { id: crypto.randomUUID(), at: new Date().toISOString(), actor: changedBy, before, after }];
  booking.selection = input;
  booking.serviceId = input.ceramic ? 'ceramic' : 'wheel-colour';
  booking.estimate = estimate;
- if (staffEdit) Object.assign(booking, { bike: staffEdit.bike, size: staffEdit.size, modelYear: staffEdit.modelYear, notes: staffEdit.notes });
- const adjustedLines = staffEdit ? (estimate.lines ?? []).filter(line => staffEdit.adjustments[line.label] !== undefined)
-  .map(line => line.label + ' · ₱' + line.subtotal.toFixed(2)).join(' · ') : '';
- audit('Updated services' + (before.estimate ? ' · ₱' + before.estimate.total + ' → ₱' + estimate.total : ''), booking.id, actor, 'Booking', adjustedLines || undefined);
+ const priceDetail = adjustedLines.map(line => line.label + ' · ₱' + adjustments[line.label]!.toFixed(2)).join(' · ');
+ audit('Updated services' + (before.estimate ? ' · ₱' + before.estimate.total + ' → ₱' + estimate.total : ''), booking.id, changedBy, 'Booking', priceDetail || undefined);
 }
 
-export function estimateServiceEdit(booking: Booking, input: Selection, vehicle: ServiceVehicle = booking, adjustments?: Record<string, number | undefined>) {
- const sameMotorcycle = vehicle.bike === booking.bike && vehicle.modelYear === booking.modelYear && vehicle.size === booking.size;
- const estimate = quote(input, vehicle.size ?? 'small', vehicle.bike, db.pricing, sameMotorcycle ? $state.snapshot(booking.estimate?.lines) : [], vehicle.modelYear);
- return adjustments ? applyServicePriceAdjustments(estimate, adjustments) : estimate;
+export function estimateServiceEdit(booking: Booking, input: Selection) {
+ return quote(input, booking.size ?? 'small', booking.bike, db.pricing, $state.snapshot(booking.estimate?.lines), booking.modelYear);
 }
 
 export function requestChange(booking: Booking, kind: ChangeRequest['kind'], reason: string, date?: string, slot?: string) {
@@ -281,10 +271,12 @@ export function requestChange(booking: Booking, kind: ChangeRequest['kind'], rea
  audit(kind + ' requested', booking.id, 'Customer', 'Change requests');
 }
 
-export function reviewChange(booking: Booking, request: ChangeRequest, approved: boolean) {
+export function reviewChange(booking: Booking, request: ChangeRequest, approved: boolean, note = '') {
+ requireStaffAction(request.kind === 'Cancel' ? 'reviewCancellation' : 'reviewReschedule');
  active(booking);
- if (request.state !== 'Pending') throw Error('This request has already been reviewed.');
+ if (request.state !== 'Pending' || !booking.requests?.includes(request)) throw Error('This request has already been reviewed.');
  const previous = booking.date + ' ' + booking.slot;
+ const previousStatus = booking.status;
  if (approved && request.kind === 'Reschedule') {
   assertServiceDay(booking.selection, request.date ?? '');
   assertFree(request.date ?? '', request.slot ?? '');
@@ -295,25 +287,32 @@ export function reviewChange(booking: Booking, request: ChangeRequest, approved:
  if (approved && request.kind === 'Cancel') {
   booking.status = 'cancelled';
   booking.cancelledAt = new Date().toISOString();
+  booking.cancellationNote = note.trim();
  }
  request.state = approved ? 'Approved' : 'Declined';
  request.reviewedAt = new Date().toISOString();
- audit(request.kind + ' ' + request.state.toLowerCase() + (approved && request.kind === 'Reschedule' ? ' · ' + previous + ' → ' + booking.date + ' ' + booking.slot : ''), booking.id, 'Demo admin', 'Change requests');
+ const transition = !approved ? '' : request.kind === 'Reschedule'
+  ? ' · ' + previous + ' → ' + booking.date + ' ' + booking.slot
+  : ' · ' + previousStatus + ' → cancelled';
+ audit(request.kind + ' ' + request.state.toLowerCase() + transition, booking.id, staffActor(), 'Change requests');
+ // Production: after either cancellation path commits, email the customer if a note was supplied.
 }
 
 export function approveBooking(booking: Booking, note: string) {
+ requireStaffAction('confirmBooking');
  if (booking.status !== 'pending') throw Error('Only pending bookings can be confirmed.');
  booking.approvalNote = note;
  setStatus(booking.id, 'confirmed');
 }
 
 export function completeBooking(booking: Booking, note: string, photos: string[], finalPrice: number | undefined) {
+ requireStaffAction('completeBooking');
  if (booking.status !== 'confirmed') throw Error('Confirm this booking before completing it.');
  if (booking.requests?.some(r => r.state === 'Pending')) throw Error('Review the pending change request before completing this booking.');
  if (finalPrice === undefined || finalPrice < 0 || !Number.isSafeInteger(Math.round(finalPrice * 100))) throw Error('Enter a valid final service price.');
  const previous = { completionNote: booking.completionNote, photos: booking.photos, completedAt: booking.completedAt, status: booking.status, finalPrice: booking.finalPrice };
  Object.assign(booking, { completionNote: note, photos, completedAt: new Date().toISOString(), status: 'done', finalPrice: Math.round(finalPrice * 100) / 100 });
- try { audit('Confirmed → Done' + (photos.length ? ' · Added ' + photos.length + ' completion photo(s)' : ''), booking.id, 'Demo admin', 'Booking', 'Final service price: ₱' + booking.finalPrice?.toFixed(2)); }
+ try { audit('Confirmed → Done' + (photos.length ? ' · Added ' + photos.length + ' completion photo(s)' : ''), booking.id, staffActor(), 'Booking', 'Final service price: ₱' + booking.finalPrice?.toFixed(2)); }
  catch (error) { Object.assign(booking, previous); db.events.pop(); throw error; }
 }
 
@@ -328,11 +327,12 @@ export function isSlotBlocked(date: string, time: string) {
 }
 
 export function toggleSlotBlock(date: string, time: string) {
+	requireStaffAction('manageSchedule');
 	if (date < today() || !slots.includes(time)) throw Error('Choose a valid appointment time on today or a future date.');
 	const blocked = isSlotBlocked(date, time);
 	const previous = db.blockedSlots[date] ?? [];
 	db.blockedSlots[date] = blocked ? previous.filter(slot => slot !== time) : [...previous, time];
-	audit((blocked ? 'Unblocked ' : 'Blocked ') + date + ' at ' + time, undefined, 'Demo admin', 'Booking calendar');
+	audit((blocked ? 'Unblocked ' : 'Blocked ') + date + ' at ' + time, undefined, staffActor(), 'Booking calendar');
 }
 
 export function slotsFor(date: string) {
@@ -362,6 +362,7 @@ function assertServiceDay(selection: Selection | undefined, date: string) {
 }
 
 export function book(input: NewBooking) {
+	if (input.bookedByStaff || input.walkIn?.immediate) requireStaffAction('createBooking');
 	if (!input.walkIn?.immediate) assertServiceDay(input.selection, input.date);
 	if (!input.walkIn?.immediate) assertFree(input.date, input.slot);
 	if (input.selection) validateSelection(input.selection, input.bike);
@@ -369,11 +370,12 @@ export function book(input: NewBooking) {
 	const originalServices = input.selection ? { selection: structuredClone(input.selection), estimate: structuredClone(estimate) } : undefined;
 	const booking: Booking = { ...input, estimate, originalServices, id: code(), status: 'pending', createdAt: new Date().toISOString() };
 	db.bookings.push(booking);
-	audit(input.walkIn ? 'Recorded walk-in intake' : 'Booking submitted · Pending', booking.id, input.bookedByStaff ? 'Demo admin' : 'Customer');
+	audit(input.walkIn ? 'Recorded walk-in intake' : 'Booking submitted · Pending', booking.id, input.bookedByStaff ? staffActor() : 'Customer');
 	return booking;
 }
 
 export function reschedule(id: string, date: string, slot: string) {
+	requireStaffAction('rescheduleBooking');
 	const booking = db.bookings.find(b => b.id === id)!;
 	active(booking);
 	assertServiceDay(booking.selection, date);
@@ -385,7 +387,8 @@ export function reschedule(id: string, date: string, slot: string) {
 	audit('Rescheduled · ' + previous + ' → ' + date + ' ' + slot, id);
 }
 
-export function setStatus(id: string, status: Status, note = '') {
+export function setStatus(id: string, status: 'confirmed' | 'cancelled', note = '') {
+	requireStaffAction(status === 'confirmed' ? 'confirmBooking' : 'cancelBooking');
 	const booking = db.bookings.find(b => b.id === id)!;
 	active(booking);
 	if (status === 'cancelled' && booking.requests?.some(r => r.state === 'Pending')) throw Error('Review the pending change request first.');
@@ -401,11 +404,12 @@ export function setStatus(id: string, status: Status, note = '') {
 }
 
 export function setDateAvailability(date: string, override: 'open' | 'closed' | 'regular') {
+ requireStaffAction('manageSchedule');
  if (date < today()) throw Error('Choose today or a future date.');
  db.blocked = db.blocked.filter(day => day !== date);
  db.opened = db.opened.filter(day => day !== date);
  if (override === 'closed') db.blocked.push(date);
  if (override === 'open') db.opened.push(date);
  const action = { open: 'Opened bookings', closed: 'Closed bookings', regular: 'Restored regular hours' };
- audit(action[override] + ' for ' + date, undefined, 'Demo admin', 'Booking calendar');
+ audit(action[override] + ' for ' + date, undefined, staffActor(), 'Booking calendar');
 }

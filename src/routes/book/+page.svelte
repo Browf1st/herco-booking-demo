@@ -1,53 +1,46 @@
 <script lang="ts">
  import ActionIcon from '#lib/ActionIcon.svelte';
  import { resolve } from '$app/paths';
- import { goto } from '$app/navigation';
  import { page } from '$app/state';
  import { tick } from 'svelte';
  import BookingCatalog from '#lib/BookingCatalog.svelte';
  import { ceramicModels, ceramicTierNames, createCatalogOptions, defaultCeramicCatalogPricing } from '#lib/bookingCatalog.ts';
  import VisitPicker from '#lib/VisitPicker.svelte';
  import { account, rememberBooking } from '#lib/account.svelte.ts';
- import { applyServicePriceAdjustments, estimatePrice, linePrice, money, olderPowderParts, quote, selection, serviceLabel } from '#lib/coating.ts';
- import { adminPath, bookingSections } from '#lib/adminNavigation.ts';
+ import { estimatePrice, linePrice, money, quote, selection, serviceLabel } from '#lib/coating.ts';
+ import { adminPath } from '#lib/adminNavigation.ts';
+ import { bookingPages, canAccessPage, canPerform } from '#lib/staffAccess.svelte.ts';
  import { type Size } from '#lib/config.ts';
  import { currentShopTime, fmtDate, fmtSlot, isBookableDate, today } from '#lib/dates.ts';
- import { book, catalogSelectionOf, db, editCoating, estimateServiceEdit, type Booking } from '#lib/store.svelte.ts';
+ import { book, db, type Booking } from '#lib/store.svelte.ts';
 
  const query = page.url.searchParams;
- const editId = query.get('edit');
- const editedBooking = editId ? db.bookings.find(booking => booking.id === editId) : undefined;
- const editing = Boolean(editId);
- const canEdit = $derived(!editing || editedBooking?.status === 'pending' || editedBooking?.status === 'confirmed');
- const returnSection = bookingSections.find(section => section === query.get('return')) ?? 'Booking history';
- const returnToBooking = resolve(adminPath('Booking', query.get('view') === 'owner', returnSection));
+ const legacyEditLink = query.has('edit');
+ const returnSection = bookingPages.find(section => section === query.get('return')) ?? 'Booking history';
+ const allowedReturnSection = $derived(canAccessPage(returnSection) ? returnSection : bookingPages.find(canAccessPage));
+ const returnToBooking = $derived(allowedReturnSection ? resolve(adminPath('Booking', allowedReturnSection)) : resolve('/admin'));
  const manual = query.get('manual') === '1';
- let walkIn = $state(!editing && query.get('walk-in') === '1');
+ const manualAllowed = $derived(!manual || canPerform('createBooking'));
+ let walkIn = $state(query.get('walk-in') === '1');
  const preferredDate = query.get('date') ?? '';
  const requestedService = query.get('service');
- const editSelection = editedBooking ? catalogSelectionOf(editedBooking) : undefined;
- let coating = $state(editSelection ?? {
+ const groupedAliases = ['Honda ADV150', 'Honda PCX150', 'Suzuki Gixxer 250'];
+ let coating = $state({
   ...selection(['wheel-colour', 'Powder Coating'].includes(requestedService ?? ''), query.get('finish') ?? ''),
   ceramic: requestedService !== null && !['wheel-colour', 'Powder Coating'].includes(requestedService),
   catalog: createCatalogOptions()
  });
- const groupedAliases = ['Honda ADV150', 'Honda PCX150', 'Suzuki Gixxer 250'];
- const savedModel = editedBooking?.bike.split(' — ')[0] ?? '';
- const initialUnit = !editedBooking ? '' : editSelection?.catalog.otherBigBike ? 'other-big-bike'
-  : Object.values(ceramicModels).flat().includes(savedModel) && !groupedAliases.includes(savedModel) ? savedModel : 'other';
- let unit = $state(initialUnit);
- let modelYear = $state<number | undefined>(editedBooking?.modelYear);
+ let unit = $state('');
+ let modelYear = $state<number>();
  const pcxYears = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018];
- let powderBike = $state(editedBooking?.bike ?? '');
- let custom = $state(initialUnit.startsWith('other') ? editedBooking?.bike ?? '' : '');
+ let powderBike = $state('');
+ let custom = $state('');
  const manualModel = $derived(unit === 'other' || unit === 'other-big-bike');
- const bike = $derived(coating.ceramic ? (manualModel ? custom.trim() : unit === initialUnit && editedBooking ? editedBooking.bike : unit) : powderBike.trim());
- const size = $derived<Size | undefined>(editedBooking && bike === editedBooking.bike ? editedBooking.size : coating.catalog.bigBike ? 'large' : 'small');
- const olderParts = olderPowderParts(editSelection?.powderParts ?? []);
+ const bike = $derived(coating.ceramic ? (manualModel ? custom.trim() : unit) : powderBike.trim());
+ const size = $derived<Size>(coating.catalog.bigBike ? 'large' : 'small');
  function selectMotorcycle(model: string) {
   modelYear = undefined;
   custom = '';
-  adjustments = {};
   coating.catalog.otherBigBike = model === 'other-big-bike';
   coating.catalog.bigBike = coating.catalog.otherBigBike || model === 'Kawasaki Dominar 400';
  }
@@ -65,35 +58,26 @@
  const tiers = Object.entries(ceramicModels);
  const ceramicPricing = $derived(db.pricing.ceramicCatalog ?? defaultCeramicCatalogPricing);
  let form = $state({
-  name: editedBooking?.name ?? (manual ? '' : account.current?.name ?? ''), email: editedBooking?.email ?? (manual ? '' : account.current?.email ?? ''),
-  phone: editedBooking?.phone ?? (manual ? '' : account.current?.phone ?? ''), plateNumber: editedBooking?.plateNumber ?? '',
-  notes: editedBooking?.notes ?? query.get('notes') ?? '', date: editedBooking?.date ?? (isBookableDate(preferredDate) ? preferredDate : ''), slot: editedBooking?.slot ?? ''
+  name: manual ? '' : account.current?.name ?? '', email: manual ? '' : account.current?.email ?? '',
+  phone: manual ? '' : account.current?.phone ?? '', plateNumber: '',
+  notes: query.get('notes') ?? '', date: isBookableDate(preferredDate) ? preferredDate : '', slot: ''
  });
  let signer = $state('');
  let acknowledged = $state(false);
  let immediate = $state(manual);
  const isPcx = $derived(coating.ceramic && /^Honda PCX/i.test(bike));
- let adjustments = $state<Record<string, number | undefined>>({});
- const vehicle = $derived({ bike, size, modelYear: isPcx || (editedBooking && bike === editedBooking.bike) ? modelYear : undefined });
- const baseEstimate = $derived(editedBooking ? estimateServiceEdit(editedBooking, coating, vehicle) : quote(coating, size ?? 'small', bike, db.pricing, [], vehicle.modelYear));
- const estimate = $derived(applyServicePriceAdjustments(baseEstimate, Object.fromEntries(Object.entries(adjustments).filter(([, value]) => value !== undefined && value >= 0 && Number.isSafeInteger(Math.round(value * 100))))));
+ const estimate = $derived(quote(coating, size, bike, db.pricing, [], isPcx ? modelYear : undefined));
  let error = $state('');
  let done = $state<Booking>();
- let reviewDialog: HTMLDialogElement;
+ let reviewDialog = $state<HTMLDialogElement>();
  let reviewError = $state('');
  let reviewVisit = $state({ date: '', slot: '' });
  let heading = $state<HTMLHeadingElement>();
 
- async function submit(event: SubmitEvent) {
+ function submit(event: SubmitEvent) {
   event.preventDefault();
+  if (manual && !canPerform('createBooking')) return;
   error = '';
-  if (editedBooking) {
-   try {
-    editCoating(editedBooking, $state.snapshot(coating), 'Demo admin', { ...vehicle, notes: form.notes.trim(), adjustments: $state.snapshot(adjustments) });
-    await goto(returnToBooking);
-   } catch (e) { error = (e as Error).message; }
-   return;
-  }
   const name = form.name.trim();
   const phone = form.phone.trim();
   if (!name || !bike || !/^\+?[\d ()-]+$/.test(phone) || phone.replace(/\D/g, '').length < 7) {
@@ -110,11 +94,11 @@
    return;
   }
   reviewError = '';
-  reviewDialog.showModal();
+  reviewDialog?.showModal();
  }
 
  async function confirmBooking() {
-  if (done || !reviewDialog.open) return;
+  if (done || !reviewDialog?.open || (manual && !canPerform('createBooking'))) return;
   reviewError = '';
   try {
    const booking = book({
@@ -140,7 +124,11 @@
 <svelte:head><title>{walkIn ? 'Walk-in intake' : 'Book a visit'} | HERCO</title></svelte:head>
 
 <section class="section wrap stack booking">
- {#if done}
+ {#if !manualAllowed}
+  <h1>Manual booking unavailable</h1>
+  <p class="muted">This view needs permission to create manual bookings.</p>
+  <div><a class="btn sm ghost" href={resolve('/admin')}>Back to available pages</a></div>
+ {:else if done}
   <p class="eyebrow">{done.id}</p>
   <h1 bind:this={heading} tabindex="-1">{walkIn ? 'Intake saved' : 'Booking submitted'}</h1>
   <p class="muted">This demo request is saved in this browser and awaits shop confirmation.</p>
@@ -149,19 +137,17 @@
    <p>{fmtDate(done.date)} at {fmtSlot(done.slot)} (Philippine time)</p>
    <p>Estimated service price <strong>{estimatePrice(done.estimate!)}</strong></p>
   </div>
-  <div><a class="btn" href={manual ? resolve(query.get('view') === 'owner' ? '/admin?tab=Booking%20history&view=owner' : '/admin?tab=Booking%20history') : resolve('/my-bookings')}><ActionIcon name="history" />{manual ? 'View booking history' : 'View my bookings'}</a></div>
- {:else if !canEdit}
+  <div><a class="btn" href={manual ? returnToBooking : resolve('/my-bookings')}><ActionIcon name="history" />{manual ? allowedReturnSection === 'Booking history' ? 'View booking history' : 'Back to bookings' : 'View my bookings'}</a></div>
+ {:else if legacyEditLink}
   <h1>Edit services</h1>
-  <p class="muted">This booking is no longer available to edit.</p>
+  <p class="muted">Open the booking and select Edit services.</p>
   <div><a class="btn ghost" href={returnToBooking}><ActionIcon name="back" /> Back to bookings</a></div>
  {:else}
   <h1>{walkIn ? 'Walk-in intake' : manual ? 'Manual booking' : 'Book a visit'}</h1>
-  {#if !editing}
    <label class="booking-source">Booking source
     <select bind:value={walkIn}><option value={false}>Online</option><option value={true}>Walk-in</option></select>
    </label>
-  {/if}
-  <p class="small muted">{editedBooking ? 'Editing services for ' + editedBooking.id : 'Demo only. Use sample details. Requests stay in this browser.'}</p>
+  <p class="small muted">Demo only. Use sample details. Requests stay in this browser.</p>
   <form class="booking-layout" onsubmit={submit}>
    <div class="stack booking-steps">
    <fieldset class="card stack booking-panel">
@@ -208,14 +194,14 @@
     {/if}
     {#if isPcx}
      <label>PCX model year
-      <select bind:value={modelYear} required={!editing}>
-       <option value={undefined} disabled={!editing}>{editing ? 'Not recorded' : 'Select model year'}</option>
+      <select bind:value={modelYear} required>
+       <option value={undefined} disabled>Select model year</option>
        {#each pcxYears as year}<option value={year}>{year}</option>{/each}
       </select>
      </label>
     {/if}
     {#if bike || !coating.ceramic}
-     <BookingCatalog bind:value={coating} {bike} year={isPcx ? modelYear : undefined} serviceControls={false} {olderParts}>
+     <BookingCatalog bind:value={coating} {bike} year={isPcx ? modelYear : undefined} serviceControls={false}>
       {#snippet powderDetails()}
        {#if !coating.ceramic}
         <label>Motorcycle brand and model <input bind:value={powderBike} placeholder="e.g. Yamaha Sniper 155" maxlength="100" required /></label>
@@ -230,28 +216,24 @@
    <fieldset class="card stack booking-panel contact-panel">
     <legend><span>3</span> Contact details and vehicle plate</legend>
     <div class="cols">
-     <label>Full name <input bind:value={form.name} autocomplete="name" placeholder="e.g. Jamie Reyes" maxlength="70" readonly={editing} required={!editing} /></label>
-     <label>Mobile number <input type="tel" bind:value={form.phone} autocomplete="tel" placeholder="e.g. 0917 000 0000" maxlength="20" readonly={editing} required={!editing} /></label>
+     <label>Full name <input bind:value={form.name} autocomplete="name" placeholder="e.g. Jamie Reyes" maxlength="70" required /></label>
+     <label>Mobile number <input type="tel" bind:value={form.phone} autocomplete="tel" placeholder="e.g. 0917 000 0000" maxlength="20" required /></label>
      <label>
-      <span>Email {#if !editing}<span class:required-label={!walkIn}>{walkIn ? '(optional)' : '(required)'}</span>{/if}</span>
-      <input type="email" bind:value={form.email} autocomplete="email" placeholder="e.g. jamie@example.com" maxlength="254" readonly={editing} required={!walkIn && !editing} aria-describedby={walkIn || editing ? undefined : 'booking-email-help'} />
-      {#if !walkIn && !editing}<span id="booking-email-help" class="small muted email-help">Used for booking reminders.</span>{/if}
+      <span>Email <span class:required-label={!walkIn}>{walkIn ? '(optional)' : '(required)'}</span></span>
+      <input type="email" bind:value={form.email} autocomplete="email" placeholder="e.g. jamie@example.com" maxlength="254" required={!walkIn} aria-describedby={walkIn ? undefined : 'booking-email-help'} />
+      {#if !walkIn}<span id="booking-email-help" class="small muted email-help">Used for booking reminders.</span>{/if}
      </label>
-     <label>Plate number (optional) <input bind:value={form.plateNumber} placeholder="e.g. ABC 1234" maxlength="20" readonly={editing} /></label>
+     <label>Plate number (optional) <input bind:value={form.plateNumber} placeholder="e.g. ABC 1234" maxlength="20" /></label>
     </div>
    </fieldset>
    <fieldset class="card stack booking-panel">
-    <legend><span>4</span> {editing ? 'Scheduled date and time' : 'Preferred date and time'}</legend>
-    {#if editing}
-     <p>{fmtDate(form.date)} · {fmtSlot(form.slot)} (Philippine time)</p>
-    {:else}
+    <legend><span>4</span> Preferred date and time</legend>
     {#if walkIn && manual}<label class="check"><input type="checkbox" bind:checked={immediate} /> Customer is at the shop now</label>{/if}
     {#if !walkIn || !immediate}<VisitPicker bind:date={form.date} bind:slot={form.slot} powder={coating.powder} />{/if}
     {#if walkIn}
      <p class="small muted">Demo intake acknowledgement. The customer checks the motorcycle and service details above before signing.</p>
      <label class="check"><input type="checkbox" bind:checked={acknowledged} required /> I reviewed the details on this intake form.</label>
      <label>Customer signature (type full name for this demo) <input bind:value={signer} required /></label>
-    {/if}
     {/if}
    </fieldset>
    {/if}
@@ -264,30 +246,23 @@
      {#if form.date && form.slot}<div class="cart-line"><span>Preferred visit</span><strong>{fmtDate(form.date)} · {fmtSlot(form.slot)}</strong></div>{/if}
      {#each estimate.lines ?? [] as line (line.label)}
       <div class="cart-line"><span>{line.label}</span><strong>{linePrice(line)}</strong></div>
-      {#if editing}
-       <label class="price-adjustment">
-        Adjusted price (₱)
-        <input type="number" min="0" step="0.01" placeholder="Use current price" aria-label={'Adjusted price for ' + line.label} bind:value={adjustments[line.label]} />
-       </label>
-      {/if}
      {:else}
       <p>Choose a service to add it to your booking.</p>
      {/each}
      {#if estimate.lines?.length}
       {#if estimate.discount}<div class="cart-line"><span>Estimated promo savings</span><strong>{money(estimate.discount)}</strong></div>{/if}
       <div class="cart-line cart-total"><span>Estimated total</span><strong>{estimatePrice(estimate)}</strong></div>
-      {#if editing}<p class="small muted">Leave a field blank to keep its current price. An adjusted price is the amount for that item after any discount.</p>
-      {:else}<p class="small muted">Your estimate may change after an in-shop inspection. The shop will confirm any price changes with you before starting the work.</p>{/if}
+      <p class="small muted">Your estimate may change after an in-shop inspection. The shop will confirm any price changes with you before starting the work.</p>
      {/if}
     </div>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
-    <button class="btn" disabled={!bike || (!coating.ceramic && !coating.powder)}><ActionIcon name={walkIn || editing ? "save" : "send"} />{editing ? 'Save service changes' : walkIn ? 'Save walk-in intake' : 'Submit booking'}</button>
-    {#if editing}<a class="btn sm ghost" href={returnToBooking}><ActionIcon name="back" />Cancel edit</a>{/if}
+    <button class="btn" disabled={!bike || (!coating.ceramic && !coating.powder)}><ActionIcon name={walkIn ? "save" : "send"} />{walkIn ? 'Save walk-in intake' : 'Submit booking'}</button>
    </aside>
   </form>
  {/if}
 </section>
 
+{#if manualAllowed}
 <dialog bind:this={reviewDialog} aria-labelledby="review-title" class="booking-review">
  <div class="stack">
   <h2 id="review-title">Review booking</h2>
@@ -310,9 +285,10 @@
    <div class="cart-line cart-total"><span>Estimated total</span><strong>{estimatePrice(estimate)}</strong></div>
   </section>
   {#if reviewError}<p class="error" role="alert">{reviewError}</p>{/if}
-  <div class="row"><button type="button" class="btn sm ghost" onclick={() => reviewDialog.close()}>Back to edit</button><button type="button" class="btn sm" onclick={confirmBooking}><ActionIcon name="check" />Confirm and submit</button></div>
+  <div class="row"><button type="button" class="btn sm ghost" onclick={() => reviewDialog?.close()}>Back to edit</button><button type="button" class="btn sm" onclick={confirmBooking}><ActionIcon name="check" />Confirm and submit</button></div>
  </div>
 </dialog>
+{/if}
 
 <style>
  .booking-review { width: min(680px, calc(100% - 24px)); max-height: 88dvh; padding: clamp(16px, 4vw, 28px); border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); }
@@ -378,8 +354,6 @@
  .cart-title { padding-bottom: 12px; border-bottom: 1px solid var(--line); font-family: var(--body); font-size: 1.15rem; font-weight: 900; font-style: italic; letter-spacing: -.03em; }
  .cart-line { display: flex; justify-content: space-between; gap: 10px; }
  .cart-line strong { text-align: right; }
- .price-adjustment { grid-template-columns: 1fr minmax(0, 8.5rem); align-items: center; gap: .4rem; font-size: .8rem; }
- .price-adjustment input { min-height: 38px; padding: .35rem .5rem; }
  .cart-total { border-top: 1px solid var(--line); padding-top: 10px; }
  .check { display: flex; align-items: center; gap: 8px; }
  .contact-panel > .cols { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); }

@@ -1,4 +1,6 @@
 <script lang="ts">
+ import { asset } from '$app/paths';
+ import { powderPhotos } from './bookingCatalog';
  import { canEnhance, finishes, parts, type Selection } from './coating';
  let { value = $bindable(), bike }: { value: Selection; bike: string } = $props();
  const wheelSizes = ['Not sure', ...Array.from({length: 13}, (_, i) => String(i + 10))];
@@ -28,6 +30,14 @@
    </div>
   {/if}
   <label>Powder colour or finish (optional)<input maxlength="100" bind:value={value.finish} placeholder="e.g. Satin bronze" /></label>
+  <div class="gallery">
+   {#each powderPhotos as photo (photo.name)}
+    <button type="button" aria-pressed={value.finish === photo.name} onclick={() => value.finish = photo.name}>
+     <img src={asset(photo.file)} alt="" decoding="async" />
+     <span>{photo.name}</span>
+    </button>
+   {/each}
+  </div>
   <p class="small muted">The shop will inspect metal parts before confirming suitability and the quote.</p>
  {/if}
 </div>
@@ -36,4 +46,8 @@
  fieldset { min-inline-size: 0; margin: 0; border: 1px solid var(--line); border-radius: 6px; }
  .choice { display: flex; align-items: center; gap: 8px; padding: 8px; color: var(--text); }
  input[type='checkbox'] { accent-color: var(--accent); width: 1rem; height: 1rem; }
+ .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 110px), 1fr)); gap: 8px; }
+ .gallery button { display: grid; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; }
+ .gallery button[aria-pressed='true'] { border-color: var(--accent); }
+ .gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 4px; }
 </style>

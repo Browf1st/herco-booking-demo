@@ -5,7 +5,7 @@
  import { serviceOf } from './config';
  import { addDays, fmtDate, fmtSlot, today } from './dates';
  import { bookingStatusLabels, db, type Status } from './store.svelte';
- let { owner = false }: { owner?: boolean } = $props();
+ let { showIncome = false }: { showIncome?: boolean } = $props();
 
  const dateOptions = { month: '2-digit', day: '2-digit', year: '2-digit' } as const;
  const shopDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' });
@@ -65,7 +65,7 @@
  const missingFinalPrices = $derived(completed.filter(({ booking }) => booking.finalPrice === undefined).length);
  const income = $derived(completed.reduce((cents, { booking }) => cents + Math.round((booking.finalPrice ?? 0) * 100), 0) / 100);
  const metrics = $derived([
-  ...(owner ? [['Total income from completed services', money(income), 'income']] : []),
+  ...(showIncome ? [['Total income from completed services', money(income), 'income']] : []),
   ['Bookings in period', scheduled.length],
   ['Completed services', completed.length, 'completed'],
   ['Pending and booked', scheduled.filter(({ booking }) => booking.status === 'pending' || booking.status === 'confirmed').length],
@@ -119,14 +119,14 @@
    <p class="small muted">Philippine time · Newest first</p>
   </div>
   <p class="small muted">All dates use Philippine time. Booking counts use the scheduled date. Completed totals use the completion date, or the scheduled date when an older record has no completion timestamp.</p>
-  {#if owner && missingFinalPrices}
+  {#if showIncome && missingFinalPrices}
    <p class="small muted">Completed bookings missing a final price are excluded from income ({missingFinalPrices}).</p>
   {/if}
   {#if rows.length}
    <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users need to scroll the table horizontally.) -->
    <div class="report-table" role="region" aria-labelledby="report-records" tabindex="0">
     <table>
-     <thead><tr><th scope="col">Booking</th><th scope="col">Service</th><th scope="col">Scheduled</th><th scope="col">Completed</th><th scope="col">Status</th><th scope="col">Source</th>{#if owner}<th scope="col" class="report-price">Final price</th>{/if}</tr></thead>
+     <thead><tr><th scope="col">Booking</th><th scope="col">Service</th><th scope="col">Scheduled</th><th scope="col">Completed</th><th scope="col">Status</th><th scope="col">Source</th>{#if showIncome}<th scope="col" class="report-price">Final price</th>{/if}</tr></thead>
      <tbody>
       {#each pageRows as { booking, service, completion } (booking.id)}
        <tr>
@@ -139,7 +139,7 @@
         <td>{#if completion}<time datetime={completion}>{fmtDate(completion, dateOptions)}</time>{:else}—{/if}</td>
         <td><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span></td>
         <td>{booking.walkIn ? 'Walk-in' : 'Online'}</td>
-        {#if owner}<td class="report-price">{booking.status === 'done' && booking.finalPrice !== undefined ? money(booking.finalPrice) : '—'}</td>{/if}
+        {#if showIncome}<td class="report-price">{booking.status === 'done' && booking.finalPrice !== undefined ? money(booking.finalPrice) : '—'}</td>{/if}
        </tr>
       {/each}
      </tbody>

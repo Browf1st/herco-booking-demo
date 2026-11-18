@@ -1,5 +1,6 @@
 import { demoFans, rewardProgram } from './config';
 import { activityEvent, type ActivityEvent, type ActivityModule } from './activity';
+import { requireStaffAction, staffActor } from './staffAccess.svelte.ts';
 
 export type RewardService = 'ceramic' | 'powder';
 export type RewardReceipt = {
@@ -95,7 +96,7 @@ export const ops = $state<{ data: Operations }>({ data: load() });
 const id = () => crypto.randomUUID();
 const timestamp = () => new Date().toISOString();
 
-function logOperation(data: Operations, module: ActivityModule, action: string, target: string, detail?: string, actor?: string) {
+function logOperation(data: Operations, module: ActivityModule, action: string, target: string, detail?: string, actor = staffActor()) {
 	data.events.push(activityEvent(module, action, { target, detail }, actor));
 }
 
@@ -174,6 +175,7 @@ export function rewardStatus(receipt: RewardReceipt) {
 }
 
 export function approveRewardReceipt(receiptId: string) {
+	requireStaffAction('approveRewards');
 	commit(data => {
 		const receipt = data.rewardReceipts.find(item => item.id === receiptId);
 		if (!receipt || receipt.status !== 'pending') throw new Error('This request is no longer pending.');
@@ -183,16 +185,18 @@ export function approveRewardReceipt(receiptId: string) {
 }
 
 export function claimRewardReceipt(receiptId: string) {
+	requireStaffAction('claimRewards');
 	commit((data) => {
 		const receipt = data.rewardReceipts.find((item) => item.id === receiptId);
 		if (!receipt || (receipt.status !== 'issued' && receipt.status !== 'approved')) throw new Error('Only approved rewards can be marked as claimed.');
 		receipt.status = 'claimed';
 		receipt.claimedAt = timestamp();
-		receipt.claimedBy = 'Demo admin';
+		receipt.claimedBy = staffActor();
 		logOperation(data, 'Redemptions', 'Marked reward as claimed', receipt.reference, receipt.memberName + ' · ' + receipt.reward);
 	});
 }
 export function editRewardTier(index: number, reward: RewardTier) {
+	requireStaffAction('manageRewards');
 	if (!reward.name.trim() || !Number.isSafeInteger(reward.points) || reward.points <= 0) throw new Error('Enter a reward name and positive whole points.');
 	commit((data) => {
 		if (!Number.isInteger(index) || !data.rewardProgram[index]) throw new Error('Reward not found.');
@@ -215,6 +219,7 @@ export function correctPoints(memberId: string, amount: number, reason: string) 
 }
 
 function recordPointAdjustment(memberId: string, amount: number, reason: string, correction = false) {
+	requireStaffAction('managePoints');
 	commit((data) => {
 		const member = data.members.find(member => member.id === memberId);
 		if (!member) throw new Error('Member not found.');
@@ -226,6 +231,7 @@ function recordPointAdjustment(memberId: string, amount: number, reason: string,
 	});
 }
 export function setRewardCosts(ceramic: number, powder: number) {
+	requireStaffAction('manageRewards');
 	if (![ceramic, powder].every((cost) => Number.isSafeInteger(cost) && cost >= 0)) throw new Error('Use whole point amounts of zero or more.');
 	commit((data) => { data.rewardCosts = { ceramic, powder }; });
 }
@@ -241,6 +247,7 @@ export function redeem(memberId: string, service: RewardService) {
 	});
 }
 export function reviewRedemption(requestId: string, status: 'fulfilled' | 'rejected') {
+	requireStaffAction('approveRewards');
 	commit((data) => {
 		const request = data.redemptions.find((item) => item.id === requestId);
 		if (!request || request.status !== 'requested') throw new Error('This request has already been reviewed.');
@@ -257,6 +264,7 @@ export function stockOptions(data: Operations, kind: 'unit' | 'category') {
 }
 
 export function addStockOption(kind: 'unit' | 'category', value: string) {
+	requireStaffAction('manageInventory');
 	const name = value.trim();
 	if (!name) throw new Error('Enter a ' + kind + ' name.');
 	commit(data => {
@@ -270,6 +278,7 @@ export function addStockOption(kind: 'unit' | 'category', value: string) {
 }
 
 export function renameStockOption(kind: 'unit' | 'category', previous: string, value: string) {
+	requireStaffAction('manageInventory');
 	const name = value.trim();
 	if (!name) throw new Error('Enter a ' + kind + ' name.');
 	commit(data => {
@@ -299,6 +308,7 @@ function validateStockDetails(details: StockDetails) {
 }
 
 export function addStock(name: string, unit: string, quantity: number, minimum: number, category = '', details: StockDetails = {}) {
+	requireStaffAction('manageInventory');
 	validateStockDetails(details);
 	if (!name.trim() || !unit.trim() || ![quantity, minimum].every((n) => Number.isFinite(n) && n >= 0)) throw new Error('Enter an item, unit, and valid stock amounts.');
 	commit((data) => {
@@ -310,6 +320,7 @@ export function addStock(name: string, unit: string, quantity: number, minimum: 
 	});
 }
 export function editStockItem(itemId: string, name: string, unit: string, minimum: number, category: string, details?: StockDetails) {
+	requireStaffAction('manageInventory');
 	if (details) validateStockDetails(details);
 	const trimmedName = name.trim();
 	const trimmedUnit = unit.trim();
@@ -338,6 +349,7 @@ export function editStockItem(itemId: string, name: string, unit: string, minimu
 }
 
 export function adjustStock(itemId: string, amount: number, reason: string) {
+	requireStaffAction('manageInventory');
 	if (!Number.isFinite(amount) || !amount || !reason.trim()) throw new Error('Enter a stock adjustment and reason.');
 	commit((data) => {
 		const item = data.stock.find((item) => item.id === itemId);

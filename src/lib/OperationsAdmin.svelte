@@ -9,6 +9,7 @@
 	import BookingSummary from './BookingSummary.svelte';
 	import AdminBooking from './AdminBooking.svelte';
 	import AdminReports from './AdminReports.svelte';
+	import { canPerform } from './staffAccess.svelte.ts';
 	import { serviceLabel } from './coating';
 	import type { StockDetails } from './operations.svelte';
 	import { bookingStatusLabels, db, type Status } from './store.svelte';
@@ -16,7 +17,8 @@
 	import { fmtDate, fmtSlot, today } from './dates';
 	import { addStock, addStockOption, adjustStock, claimRewardReceipt, editRewardTier, editStockItem, grantPoints, ops, fanRanking, pointBalance, renameStockOption, stockOptions } from './operations.svelte';
 
-	let { tab, owner = false }: { tab: string; owner?: boolean } = $props();
+	let { tab }: { tab: string } = $props();
+	const canManageInventory = $derived(canPerform('manageInventory'));
 	const showRedemptions = $derived(page.url.searchParams.get('section') === 'Redemptions');
 	const pageSize = 10;
 	let search = $state('');
@@ -286,7 +288,7 @@
 			<article class="card booking-entry">
 			<details class="card booking-record">
 				<summary>
-					<span class="record-heading"><strong>{booking.name || 'Unnamed test booking'}</strong><span class="record-reference">{booking.id}<span class="record-bike"> · {booking.bike}</span></span></span>
+					<span class="record-heading"><strong>{booking.name || 'Unnamed test booking'}</strong><span class="record-reference">{booking.id}<span class="record-bike"> · {booking.bike}</span></span><span class="record-reference"><ActionIcon name="box" /> {booking.selection ? serviceLabel(booking.selection) : serviceOf(booking.serviceId).name}</span></span>
 					<span class="record-appointment"><span><ActionIcon name="calendar" />{fmtDate(booking.date, { month: 'short', day: 'numeric', year: 'numeric' })}</span><span class="record-time">{fmtSlot(booking.slot)}</span></span>
 					<span class="record-status"><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span><span class="expand-icon" aria-hidden="true"><ActionIcon name="right" /></span></span>
 				</summary>
@@ -305,11 +307,10 @@
 						</dl>
 					</div>
 					<div class="stack">
-						<h3>Service &amp; visit</h3>
+						<h3>Booking details</h3>
 						<dl class="record-details">
-							<div><dt>Service</dt><dd>{booking.selection ? serviceLabel(booking.selection) : serviceOf(booking.serviceId).name}</dd></div>
+							<div><dt>Booking source</dt><dd>{booking.walkIn ? 'Walk-in' : 'Online'}</dd></div>
 							{#if booking.finish}<div><dt>Preferred finish</dt><dd>{booking.finish}</dd></div>{/if}
-							<div><dt>Visit</dt><dd>{fmtDate(booking.date)} · {fmtSlot(booking.slot)}</dd></div>
 						</dl>
 					</div>
 				</div>
@@ -353,8 +354,8 @@
 		{/if}
 	{:else if tab === 'HERCO Points'}
 		<nav class="row" aria-label="HERCO Points sections">
-			<a class="btn sm" class:ghost={showRedemptions} href={resolve(adminPath('HERCO Points', owner))} aria-current={!showRedemptions ? 'page' : undefined}><ActionIcon name="ranking" />Ranking &amp; rewards</a>
-			<a class="btn sm" class:ghost={!showRedemptions} href={resolve(adminPath('HERCO Points', owner, 'Redemptions'))} aria-current={showRedemptions ? 'page' : undefined}
+			<a class="btn sm" class:ghost={showRedemptions} href={resolve(adminPath('HERCO Points'))} aria-current={!showRedemptions ? 'page' : undefined}><ActionIcon name="ranking" />Ranking &amp; rewards</a>
+			<a class="btn sm" class:ghost={!showRedemptions} href={resolve(adminPath('HERCO Points', 'Redemptions'))} aria-current={showRedemptions ? 'page' : undefined}
 				aria-label={'Redemptions, ' + redemptionCounts.pending + ' pending approval'}><ActionIcon name="gift" />
 				Redemptions <span class="tab-count" aria-hidden="true">{redemptionCounts.pending}</span>
 			</a>
@@ -362,8 +363,8 @@
 		{#if !showRedemptions}
 		<div class="admin-points-layout">
 		<section class="stack">
-		<div class="row between"><h3>HERCO Points ranking</h3><button class="btn sm" disabled={!ranking.length} onclick={openPoints}><ActionIcon name="adjust" />Manage HERCO Points</button></div>
-		<p class="muted small">Search fan accounts, add HERCO Points and view their ranking. Sample accounts are fictional.</p>
+		<div class="row between"><h3>HERCO Points ranking</h3>{#if canPerform('managePoints')}<button class="btn sm" disabled={!ranking.length} onclick={openPoints}><ActionIcon name="adjust" />Manage HERCO Points</button>{/if}</div>
+		<p class="muted small">Search fan accounts and view their ranking. Sample accounts are fictional.</p>
 		<div class="cols">
 			<label>Find a fan<input type="search" bind:value={search} oninput={() => leaderboardPage = 1} placeholder="Name, email, phone or account ID" /></label>
 			<label>Sort leaderboard<select bind:value={leaderboardSort} onchange={() => leaderboardPage = 1}>
@@ -384,7 +385,7 @@
 		{@render pagination('Leaderboard', currentLeaderboardPage, leaderboardPages, page => leaderboardPage = page)}
 		</section>
 		<aside class="card stack">
-			<div class="rewards-heading"><h3>HERCO Rewards Program</h3><button class="btn sm" disabled={!rewardProgram.length} onclick={openReward}><ActionIcon name="edit" />Edit reward</button></div>
+			<div class="rewards-heading"><h3>HERCO Rewards Program</h3>{#if canPerform('manageRewards')}<button class="btn sm" disabled={!rewardProgram.length} onclick={openReward}><ActionIcon name="edit" />Edit reward</button>{/if}</div>
 			{#each rewardProgram as reward, index (index)}
 				<div class="ledger reward-line">
 					<div><b>{reward.name}</b>{#if reward.scope}<p class="small muted">{reward.scope}</p>{/if}</div>
@@ -393,6 +394,7 @@
 			{/each}
 		</aside>
 		</div>
+		{#if canPerform('managePoints')}
 		<dialog bind:this={pointsDialog} aria-labelledby="points-dialog-title">
 			<div class="stack">
 				<div class="dialog-heading row"><h3 id="points-dialog-title">Manage HERCO Points</h3><button class="close-dialog" aria-label="Close points popup" onclick={() => pointsDialog?.close()}><ActionIcon name="close" /></button></div>
@@ -437,6 +439,8 @@
 				{/if}
 			</div>
 		</dialog>
+		{/if}
+		{#if canPerform('manageRewards')}
 		<dialog bind:this={rewardDialog} aria-labelledby="reward-dialog-title">
 			<form class="stack" onsubmit={(e) => { e.preventDefault(); perform(() => { editRewardTier(rewardIndex, { name: rewardTitle, scope: rewardScope, points: rewardCost }); rewardDialog?.close(); }, 'Reward updated.'); }}>
 				<div class="dialog-heading row"><h3 id="reward-dialog-title">Edit reward</h3><button type="button" class="close-dialog" aria-label="Close reward popup" onclick={() => rewardDialog?.close()}><ActionIcon name="close" /></button></div>
@@ -450,6 +454,7 @@
 				<div class="row"><button class="btn sm"><ActionIcon name="save" />Save reward</button><button type="button" class="btn sm ghost" onclick={() => rewardDialog?.close()}><ActionIcon name="close" />Cancel</button></div>
 			</form>
 		</dialog>
+		{/if}
 		{:else}
 		<div class="card stack">
 			<h3>Redemptions</h3>
@@ -481,9 +486,9 @@
 					</summary>
 					<div class="stack">
 						<RewardReceipt {receipt} />
-						{#if receipt.status === 'pending'}
+						{#if receipt.status === 'pending' && canPerform('approveRewards')}
 							<div><button class="btn sm" onclick={() => perform(() => approveRewardReceipt(receipt.id), 'Reward redemption approved.')}><ActionIcon name="check" />Approve redemption</button></div>
-						{:else if receipt.status !== 'claimed'}
+						{:else if receipt.status !== 'pending' && receipt.status !== 'claimed' && canPerform('claimRewards')}
 							<div><button class="btn sm complete-action" onclick={() => perform(() => claimRewardReceipt(receipt.id), 'Reward AR marked as claimed.')}><ActionIcon name="check" />Mark as claimed</button></div>
 						{/if}
 					</div>
@@ -495,6 +500,7 @@
 	{:else if tab === 'Inventory'}
 		<div class="row inventory-heading">
 		<h3>Workshop supplies &amp; inventory</h3>
+		{#if canManageInventory}
 		<div class="row inventory-actions">
 			<button type="button" class="btn sm" onclick={() => {
 				error = '';
@@ -504,6 +510,7 @@
 			<button type="button" class="btn sm ghost" onclick={() => openStock()}><ActionIcon name="adjust" />Update existing stock</button>
 			<button type="button" class="btn sm ghost" onclick={() => openInventoryOptions('unit')}><ActionIcon name="box" />Manage units and categories</button>
 		</div>
+		{/if}
 		</div>
 		<section class="card stack" aria-labelledby="inventory-overview-title">
 			<h3 id="inventory-overview-title">Inventory overview</h3>
@@ -514,6 +521,7 @@
 				<div><dt><span class="badge" data-status="cancelled">Out of stock</span></dt><dd>{outOfStock}</dd></div>
 			</dl>
 		</section>
+		{#if canManageInventory}
 		<dialog bind:this={optionDialog} aria-labelledby="stock-option-title">
 			<form class="stack" onsubmit={(e) => {
 				e.preventDefault();
@@ -605,6 +613,7 @@
 				<div class="row inventory-form-footer"><button type="button" class="btn sm ghost" onclick={() => newItemDialog?.close()}><ActionIcon name="close" />Cancel</button><button class="btn sm"><ActionIcon name="add" />Create inventory item</button></div>
 			</form>
 		</dialog>
+		{/if}
 		<section class="card stack stock-panel" aria-labelledby="stock-on-hand-title">
 			<div class="row inventory-heading"><h3 id="stock-on-hand-title">Stock on hand</h3><span class="small muted">{visibleStock.length} of {ops.data.stock.length} items shown</span></div>
 			<div class="cols">
@@ -629,7 +638,7 @@
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users need to scroll the ledger horizontally.) -->
 			<div class="stock-table" role="region" aria-labelledby="stock-on-hand-title" tabindex="0">
 			<table>
-				<thead><tr><th scope="col">Item</th><th scope="col">Category</th><th scope="col">Stock status</th><th scope="col">Reorder threshold</th><th scope="col">Inventory actions</th></tr></thead>
+				<thead><tr><th scope="col">Item</th><th scope="col">Category</th><th scope="col">Stock status</th><th scope="col">Reorder threshold</th>{#if canManageInventory}<th scope="col">Inventory actions</th>{/if}</tr></thead>
 				<tbody>
 			{#each visibleStock.slice((currentStockPage - 1) * pageSize, currentStockPage * pageSize) as item (item.id)}
 				{@const health = stockHealth(item.quantity, item.minimum)}
@@ -641,7 +650,7 @@
 						<progress aria-label={'Stock compared with reorder threshold for ' + item.name} max={Math.max(item.minimum * 2, item.quantity, 1)} value={item.quantity} data-health={health}></progress>
 						<span class="small muted">{item.quantity} on hand · Reorder at {item.minimum}</span>
 					</td>
-					<td><div class="row stock-row-actions">
+					{#if canManageInventory}<td><div class="row stock-row-actions">
 						<button class="btn sm ghost stock-in" aria-label={'Stock in for ' + item.name} onclick={() => openStock(item.id)}><ActionIcon name="in" />Stock in</button>
 						<button class="btn sm ghost stock-out" aria-label={'Stock out for ' + item.name} disabled={!item.quantity} onclick={() => openStock(item.id, 'use')}><ActionIcon name="out" />Stock out</button>
 						<button type="button" class="btn sm ghost" aria-label={'Edit item ' + item.name} onclick={() => {
@@ -650,7 +659,7 @@
 							editStockDetails = { ...item.details };
 							editItemDialog?.showModal();
 						}}><ActionIcon name="edit" />Edit</button>
-					</div></td>
+					</div></td>{/if}
 				</tr>
 			{/each}
 				</tbody>
@@ -659,6 +668,7 @@
 			{@render pagination('Stock on hand', currentStockPage, stockPages, page => stockPage = page)}
 			{:else}<p class="muted">No supplies match this view.</p>{/if}
 		</section>
+		{#if canManageInventory}
 		<dialog class="inventory-form" bind:this={editItemDialog} aria-labelledby="edit-item-dialog-title">
 			<form class="stack" onsubmit={(e) => {
 				e.preventDefault();
@@ -703,13 +713,14 @@
 				<div class="row"><button class="btn sm"><ActionIcon name={stockMode === "add" ? "in" : "save"} />{stockMode === 'add' ? 'Add stock' : 'Save usage'}</button><button type="button" class="btn sm ghost" onclick={() => stockDialog?.close()}><ActionIcon name="close" />Cancel</button></div>
 			</form>
 		</dialog>
+		{/if}
 		<details class="card stock-history" open><summary>Stock history</summary>
 			<label>Filter stock history<select bind:value={historyItem} onchange={() => historyPage = 1}><option value="">All items</option>{#each ops.data.stock as item (item.id)}<option value={item.id}>{item.name}</option>{/each}</select></label>
 			{#each stockHistory.slice((currentHistoryPage - 1) * pageSize, currentHistoryPage * pageSize) as entry (entry.id)}<div class="ledger"><div><b>{ops.data.stock.find((item) => item.id === entry.itemId)?.name}</b><p class="small muted">{entry.reason} · {new Date(entry.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short', hour12: true })}</p></div><b class="badge" data-status={entry.amount < 0 ? 'cancelled' : 'done'}>{entry.amount > 0 ? '+' : ''}{entry.amount}</b></div>{:else}<p class="muted">No stock movements for this view.</p>{/each}
 			{@render pagination('Stock history', currentHistoryPage, historyPages, page => historyPage = page)}
 		</details>
 	{:else if tab === 'Reports'}
-		<AdminReports {owner} />
+		<AdminReports showIncome={canPerform('viewIncome')} />
 	{/if}
 </div>
 

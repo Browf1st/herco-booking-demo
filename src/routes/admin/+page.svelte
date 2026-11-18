@@ -2,18 +2,20 @@
 	import ActionIcon from '#lib/ActionIcon.svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { adminNavigation, adminPath, bookingSections } from '#lib/adminNavigation.ts';
+	import { adminNavigation, adminPath } from '#lib/adminNavigation.ts';
+	import { canPerform, staffAccess } from '#lib/staffAccess.svelte.ts';
 	import BookingSummary from '#lib/BookingSummary.svelte';
+	import StaffAccess from '#lib/StaffAccess.svelte';
 	import AdminBooking from '#lib/AdminBooking.svelte';
 	import AdminActivity from '#lib/AdminActivity.svelte';
 	import AdminPricing from '#lib/AdminPricing.svelte';
 	import OperationsAdmin from '#lib/OperationsAdmin.svelte';
 	import AdminCalendar from '#lib/AdminCalendar.svelte';
-	import SlotPicker from '#lib/SlotPicker.svelte';
+
 	import { serviceOf, sizes } from '#lib/config.ts';
 	import { addDays, fmtDate, fmtSlot, isOpenDay, today, upcoming } from '#lib/dates.ts';
 	import { serviceLabel } from '#lib/coating.ts';
-	import { bookingStatusLabels, bookingsOn, db, dayStatus, isSlotBlocked, reschedule, setDateAvailability, slotsFor, toggleSlotBlock } from '#lib/store.svelte.ts';
+	import { bookingStatusLabels, bookingsOn, db, dayStatus, isSlotBlocked, setDateAvailability, slotsFor, toggleSlotBlock } from '#lib/store.svelte.ts';
 
 	const navigation = $derived(adminNavigation(page.url.searchParams));
 	const tab = $derived(navigation.tab === 'Booking' ? navigation.section : navigation.tab);
@@ -21,8 +23,8 @@
 		total + (booking.requests?.filter(request => request.state === 'Pending').length ?? 0), 0));
 	const pendingBookings = $derived(db.bookings.filter(booking => booking.status === 'pending').length);
 	let date = $state(upcoming().find(isOpenDay)!);
-	let moving = $state<{ id: string; date: string; slot: string }>();
-	let error = $state('');
+
+
 	let source = $state('all');
 	const matchesSource = (booking: { walkIn?: unknown }) => source === 'all' || Boolean(booking.walkIn) === (source === 'walk-in');
 	let slotFilter = $state<'all' | 'pending' | 'confirmed' | 'done' | 'open'>('all');
@@ -51,18 +53,6 @@
 
 	function pickDate(day: string) {
 		date = day;
-		moving = undefined;
-		error = '';
-	}
-
-	function move() {
-		try {
-			reschedule(moving!.id, moving!.date, moving!.slot);
-			date = moving!.date;
-			moving = undefined;
-		} catch (e) {
-			error = (e as Error).message;
-		}
 	}
 </script>
 
@@ -78,10 +68,21 @@
 }} />
 
 <section class="section wrap stack admin-content" class:booking-workspace={tab === 'Bookings'}>
+	{#key staffAccess.sessionId}
+	{#if staffAccess.current}
+		<p class="small muted" role="status">Previewing {staffAccess.current.name}’s access. Select Owner view to return.</p>
+	{/if}
+	{#if !navigation.allowed}
+		<div class="card stack" role="status">
+			<h2>Page unavailable</h2>
+			<p>{staffAccess.sessionId ? 'This view does not have access to this page.' : 'This staff preview is no longer active. Select Admin view or Owner view above.'}</p>
+			{#if navigation.tabs.length}<div><a class="btn sm" href={resolve('/admin')}>Back to available pages</a></div>{/if}
+		</div>
+	{:else}
 	{#if navigation.tab === 'Booking'}
 		<nav class="row booking-sections" aria-label="Booking sections">
-			{#each bookingSections as section (section)}
-				<a class="btn sm" class:ghost={navigation.section !== section} href={resolve(adminPath('Booking', navigation.owner, section))} aria-current={navigation.section === section ? 'page' : undefined}><ActionIcon name={section === "Bookings" ? "calendar" : section === "Change requests" ? "edit" : "history"} />
+			{#each navigation.sections as section (section)}
+				<a class="btn sm" class:ghost={navigation.section !== section} href={resolve(adminPath('Booking', section))} aria-current={navigation.section === section ? 'page' : undefined}><ActionIcon name={section === "Bookings" ? "calendar" : section === "Change requests" ? "edit" : "history"} />
 					{section === 'Bookings' ? 'Booking' : section}
 					{#if section === 'Change requests'}
 						<span class="tab-count" aria-label={pendingRequests + ' awaiting review'}>{pendingRequests}</span>
@@ -90,12 +91,12 @@
 					{/if}
 				</a>
 			{/each}
-			{#if tab === 'Bookings' && date >= today()}
+			{#if tab === 'Bookings' && date >= today() && canPerform('createBooking')}
 				<details class="manual-menu">
 					<summary class="btn sm"><ActionIcon name="add" />Manual booking <span aria-hidden="true">▾</span></summary>
 					<div class="manual-options">
-						<a data-sveltekit-reload href={resolve(`/book?manual=1&date=${date}${navigation.owner ? '&view=owner' : ''}`)}>Online</a>
-						<a data-sveltekit-reload href={resolve(`/book?manual=1&walk-in=1&date=${date}${navigation.owner ? '&view=owner' : ''}`)}>Walk-in</a>
+						<a data-sveltekit-reload href={resolve(`/book?manual=1&date=${date}`)}>Online</a>
+						<a data-sveltekit-reload href={resolve(`/book?manual=1&walk-in=1&date=${date}`)}>Walk-in</a>
 					</div>
 				</details>
 			{/if}
@@ -107,12 +108,18 @@
 		<h3>Requests awaiting review</h3>
 		<p class="muted">Customers submit cancellation and reschedule requests from Bookings. Their current appointment stays reserved until you approve the request.</p>
 		{#each db.bookings.filter(b => b.requests?.some(r => r.state === 'Pending')) as booking (booking.id)}
-			<article class="card stack"><p><strong>{booking.name}</strong> · {booking.id} · {fmtDate(booking.date)} at {fmtSlot(booking.slot)}</p><AdminBooking {booking} /></article>
+			<article class="card stack">
+				<p><strong>{booking.name}</strong> · {booking.id} · {fmtDate(booking.date)} at {fmtSlot(booking.slot)}</p>
+				<AdminBooking {booking} summary={false} />
+				<details><summary>Booking details</summary><div class="stack"><BookingSummary {booking} staff /></div></details>
+			</article>
 		{:else}<p class="card">No requests awaiting review.</p>{/each}
+	{:else if tab === 'Staff Access' && navigation.owner}
+		<StaffAccess />
 	{:else if tab === 'Activity log' && navigation.owner}
 		<AdminActivity />
 	{:else if tab !== 'Bookings'}
-		<OperationsAdmin {tab} owner={navigation.owner} />
+		<OperationsAdmin {tab} />
 	{:else}
 		<div class="row between day-heading">
 			<div><p class="eyebrow">Booking schedule</p><h2>{fmtDate(date)}</h2></div>
@@ -138,16 +145,16 @@
 					<p class="small muted">{fmtDate(date)} · {override}</p>
 				</div>
 			</div>
-			{#if date >= today()}
+			{#if date >= today() && canPerform('manageSchedule')}
 				<div class="row">
 
 					{#if closed}
-						<button class="btn sm" onclick={() => setDateAvailability(date, 'open')}><ActionIcon name="check" />Open this date</button>
+						<button class="btn sm" onclick={() => { if (canPerform('manageSchedule')) setDateAvailability(date, 'open'); }}><ActionIcon name="check" />Open this date</button>
 					{:else}
-						<button class="btn sm danger" onclick={() => setDateAvailability(date, 'closed')}><ActionIcon name="block" />Close this date</button>
+						<button class="btn sm danger" onclick={() => { if (canPerform('manageSchedule')) setDateAvailability(date, 'closed'); }}><ActionIcon name="block" />Close this date</button>
 					{/if}
 					{#if db.opened.includes(date) || db.blocked.includes(date)}
-						<button class="btn sm ghost" onclick={() => setDateAvailability(date, 'regular')}><ActionIcon name="reset" />Restore regular hours</button>
+						<button class="btn sm ghost" onclick={() => { if (canPerform('manageSchedule')) setDateAvailability(date, 'regular'); }}><ActionIcon name="reset" />Restore regular hours</button>
 					{/if}
 				</div>
 			{/if}
@@ -206,31 +213,21 @@
 								{#if b && blocked}<span class="badge">Time blocked</span>{/if}
 							</div>
 						</div>
-						{#if date >= today()}
-							<button class="btn sm ghost" aria-label={(blocked ? 'Unblock ' : 'Block ') + fmtSlot(time)} onclick={() => toggleSlotBlock(date, time)}><ActionIcon name={blocked ? 'check' : 'block'} />{blocked ? 'Unblock' : 'Block'}</button>
+						{#if date >= today() && canPerform('manageSchedule')}
+							<button class="btn sm ghost" aria-label={(blocked ? 'Unblock ' : 'Block ') + fmtSlot(time)} onclick={() => { if (canPerform('manageSchedule')) toggleSlotBlock(date, time); }}><ActionIcon name={blocked ? 'check' : 'block'} />{blocked ? 'Unblock' : 'Block'}</button>
 						{/if}
 					</div>
 					{#if b}
 						<details class="slot-details">
 							<summary>Booking details</summary>
 							<div class="stack slot-detail-body">
-							<p class="muted small">
-								{b.bike}{#if b.finish} · Finish: {b.finish}{/if}{#if b.size} ({sizes[b.size]}){/if}<br />
-								{#if b.plateNumber}Plate number {b.plateNumber}<br />{/if}
-								<a href="tel:{b.phone}">{b.phone}</a>{b.email ? `, ${b.email}` : ''}<br />
-								{b.notes}
-							</p>
-							<BookingSummary booking={b} staff />
-							{#if moving && moving.id === b.id}
-								<SlotPicker bind:date={moving.date} bind:slot={moving.slot} />
-								{#if error}<p class="error">{error}</p>{/if}
-								<div class="row">
-									<button class="btn sm" disabled={!moving.slot} onclick={move}><ActionIcon name="save" />Save new slot</button>
-									<button class="btn sm ghost" onclick={() => (moving = undefined)}><ActionIcon name="close" />Close</button>
-								</div>
-							{:else if (b.status === 'pending' || b.status === 'confirmed') && !b.requests?.some(r => r.state === 'Pending')}
-								<div><button class="btn sm ghost" onclick={() => (moving = { id: b.id, date: '', slot: '' })}><ActionIcon name="calendar" />Reschedule as admin</button></div>
-							{/if}
+								<BookingSummary booking={b} staff />
+								<p class="muted small">
+									{b.bike}{#if b.finish} · Finish: {b.finish}{/if}{#if b.size} ({sizes[b.size]}){/if}<br />
+									{#if b.plateNumber}Plate number {b.plateNumber}<br />{/if}
+									<a href="tel:{b.phone}">{b.phone}</a>{b.email ? `, ${b.email}` : ''}<br />
+									{b.notes}
+								</p>
 							</div>
 						</details>
 						{#if b.status === 'pending' || b.status === 'confirmed'}<AdminBooking booking={b} summary={false} />{/if}
@@ -243,6 +240,8 @@
 		</section>
 		</div>
 	{/if}
+	{/if}
+	{/key}
 </section>
 
 <style>

@@ -2,6 +2,7 @@
  import ActionIcon from '#lib/ActionIcon.svelte';
  import { ceramicAddons, ceramicModels, ceramicTierNames, defaultCeramicCatalogPricing, listedCeramicAddons } from './bookingCatalog';
  import { db, updatePricing } from './store.svelte';
+ import { canPerform } from './staffAccess.svelte.ts';
 
  let draft = $state($state.snapshot(db.pricing.ceramicCatalog ?? defaultCeramicCatalogPricing));
  let promo = $state(db.pricing.promo);
@@ -40,7 +41,7 @@
 <form class="card stack" onsubmit={savePrices}>
  <h3>Ceramic coating prices</h3>
  <p class="muted">Amounts are in Philippine pesos before discounts. Saved booking line items keep their quoted prices.</p>
- <fieldset class="stack">
+ <fieldset class="stack" disabled={!canPerform('changePricing')}>
   <legend>Motorcycle tiers</legend>
   <div class="cols">
    {#each tiers as tier (tier)}
@@ -48,7 +49,7 @@
    {/each}
   </div>
  </fieldset>
- <fieldset class="stack">
+ <fieldset class="stack" disabled={!canPerform('changePricing')}>
   <legend>Add-on prices</legend>
   <p class="small muted">Matte to Glossy, Inner coating, and Graphene coating use these ranges when the motorcycle has no pricing tier.</p>
   {#each addons as addon (addon)}
@@ -59,7 +60,7 @@
    </div>
   {/each}
  </fieldset>
- <fieldset class="stack">
+ <fieldset class="stack" disabled={!canPerform('changePricing')}>
   <legend>Add-on rates for priced tiers</legend>
   <div class="cols">
    {#each listedCeramicAddons as addon (addon)}
@@ -72,16 +73,16 @@
  </fieldset>
  {#if priceMessage}<p role="status">{priceMessage}</p>{/if}
  {#if priceError}<p class="error" role="alert">{priceError}</p>{/if}
- <div><button class="btn"><ActionIcon name="save" />Save ceramic prices</button></div>
+ {#if canPerform('changePricing')}<div><button class="btn"><ActionIcon name="save" />Save ceramic prices</button></div>{/if}
 </form>
 
 <form class="card stack" onsubmit={savePromotion}>
  <h3>Booking promotion</h3>
  <p class="muted">Applies to ceramic and powder coating estimates. Set to 0% to turn it off.</p>
- <label>Discount (%)<input type="number" min="0" max="100" step="0.01" bind:value={promo} required /></label>
+ <label>Discount (%)<input type="number" min="0" max="100" step="0.01" bind:value={promo} required disabled={!canPerform('changePromotions')} /></label>
  {#if promoMessage}<p role="status">{promoMessage}</p>{/if}
  {#if promoError}<p class="error" role="alert">{promoError}</p>{/if}
- <div><button class="btn"><ActionIcon name="save" />Save promotion</button></div>
+ {#if canPerform('changePromotions')}<div><button class="btn"><ActionIcon name="save" />Save promotion</button></div>{/if}
 </form>
 
 <style>
