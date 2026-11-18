@@ -286,12 +286,16 @@
 		<div class="history-records">
 		{#each matchingBookings.slice(bookingOffset, bookingOffset + pageSize) as booking (booking.id)}
 			<article class="card booking-entry">
-			<details class="card booking-record">
-				<summary>
+			<AdminBooking {booking}>
+				{#snippet heading()}
+				<div class="record-header">
 					<span class="record-heading"><strong>{booking.name || 'Unnamed test booking'}</strong><span class="record-reference">{booking.id}<span class="record-bike"> · {booking.bike}</span></span><span class="record-reference"><ActionIcon name="box" /> {booking.selection ? serviceLabel(booking.selection) : serviceOf(booking.serviceId).name}</span></span>
 					<span class="record-appointment"><span><ActionIcon name="calendar" />{fmtDate(booking.date, { month: 'short', day: 'numeric', year: 'numeric' })}</span><span class="record-time">{fmtSlot(booking.slot)}</span></span>
-					<span class="record-status"><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span><span class="expand-icon" aria-hidden="true"><ActionIcon name="right" /></span></span>
-				</summary>
+					<span class="record-status"><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span></span>
+				</div>
+				{/snippet}
+			<details class="booking-record">
+				<summary><span class="closed-label">Tap to view more</span><span class="open-label">Show less</span></summary>
 				<div class="record-body stack">
 				<BookingSummary {booking} staff />
 				<div class="cols">
@@ -317,7 +321,7 @@
 				<div class="stack"><h3>Notes for the shop</h3><p class="booking-notes">{booking.notes || 'No notes provided.'}</p></div>
 				</div>
 			</details>
-			{#if booking.status === 'pending' || booking.status === 'confirmed'}<div class="history-actions"><AdminBooking {booking} summary={false} /></div>{/if}
+			</AdminBooking>
 			</article>
 		{:else}
 			<div class="card history-empty"><span class="empty-icon"><ActionIcon name="calendar" /></span><h3>No bookings found</h3><p class="muted">Try another date, status, or search to find your bookings.</p><button type="button" class="btn sm ghost" onclick={() => { resetBookingFilters(); bookingPeriod = 'all'; }}>View all bookings</button></div>
@@ -895,14 +899,11 @@
 	.history-results-heading h3 { font-size: 1.35rem; }
 	.history-results-heading p { font-size: .75rem; }
 	.history-records { display: grid; gap: .55rem; }
-	.booking-entry { padding: 0; }
-	.booking-entry > .booking-record { border: 0; }
-	.history-actions { padding: .85rem; border-top: 1px solid var(--line); }
-	.booking-record { padding: 0; border-radius: 8px; border-color: color-mix(in srgb, var(--line) 65%, var(--panel)); }
-	.booking-record:hover, .booking-record[open] { border-color: var(--muted); }
-	.booking-record > summary { display: grid; grid-template-columns: minmax(0, 1fr) 10rem 8rem; align-items: center; gap: 1rem; padding: .9rem 1rem; border-radius: 8px; }
-	.booking-record > summary:hover, .booking-record[open] > summary { background: color-mix(in srgb, var(--panel-2) 45%, var(--panel)); }
-	.booking-record > summary::-webkit-details-marker { display: none; }
+	.booking-entry { padding: .85rem; }
+	.booking-record { margin-block-start: .55rem; border-top: 1px solid var(--line); }
+	.booking-record > summary { width: fit-content; padding: .35rem .35rem 0 0; color: var(--muted); font-size: .8rem; font-weight: 700; }
+	.booking-record:not([open]) .open-label, .booking-record[open] .closed-label { display: none; }
+	.record-header { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: start; gap: .5rem .95rem; }
 	.record-heading { display: grid; gap: .3rem; min-width: 0; }
 	.record-heading strong { font: italic 700 1.25rem var(--display); text-transform: uppercase; }
 	.record-reference { font-size: .72rem; color: var(--muted); }
@@ -912,8 +913,6 @@
 	.record-time { color: var(--muted); padding-left: 1.15em; }
 	.record-status { display: flex; justify-content: flex-end; align-items: center; gap: .65rem; }
 	.record-status .badge { font-size: .75rem; }
-	.expand-icon { display: grid; place-items: center; color: var(--muted); font-size: .85rem; }
-	.booking-record[open] .expand-icon { transform: rotate(90deg); }
 	.history-pagination { display: flex; justify-content: flex-end; padding-block: .3rem; }
 	.history-empty { display: grid; justify-items: center; gap: .7rem; text-align: center; padding: 2.5rem 1rem; border-style: dashed; }
 	.empty-icon { display: grid; place-items: center; width: 2.8rem; height: 2.8rem; background: var(--panel-2); color: var(--muted); border-radius: 50%; font-size: 1.3rem; }
@@ -926,7 +925,7 @@
 		.booking-metric { gap: .5rem; padding: .75rem; }
 		.booking-metric:first-child { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; align-items: center; }
 		.booking-metric:first-child .metric-value { justify-content: flex-end; gap: .75rem; }
-		.booking-record > summary { grid-template-columns: minmax(0, 1fr) auto; gap: .5rem .75rem; padding: .8rem; }
+		.record-header { grid-template-columns: minmax(0, 1fr) auto; gap: .5rem .75rem; }
 		.record-status { grid-column: 2; grid-row: 1; }
 		.record-appointment { grid-column: 1 / -1; grid-row: 2; display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; font-size: .72rem; }
 		.record-time { padding: 0; }
@@ -939,7 +938,7 @@
 		.history-filter-fields, .history-date-fields { gap: .65rem; }
 		.history-filters input, .history-filters select { padding-inline: .4rem; }
 	}
-	.record-body { padding: 18px; border-top: 1px solid var(--line); }
+	.record-body { padding-block: .6rem .25rem; overflow-wrap: anywhere; }
 	.record-details { display: grid; gap: 12px; margin: 0; }
 	.record-details dt { color: var(--muted); font-size: 0.85rem; }
 	.record-details dd { margin: 0; overflow-wrap: anywhere; }

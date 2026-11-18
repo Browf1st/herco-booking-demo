@@ -23,7 +23,9 @@
 		total + (booking.requests?.filter(request => request.state === 'Pending').length ?? 0), 0));
 	const pendingBookings = $derived(db.bookings.filter(booking => booking.status === 'pending').length);
 	let date = $state(upcoming().find(isOpenDay)!);
-
+	let availabilityDialog = $state<HTMLDialogElement>();
+	let availabilityError = $state('');
+	let availabilityNotice = $state('');
 
 	let source = $state('all');
 	const matchesSource = (booking: { walkIn?: unknown }) => source === 'all' || Boolean(booking.walkIn) === (source === 'walk-in');
@@ -36,6 +38,7 @@
 	const pastDate = $derived(date < today());
 	const closed = $derived(availability === 'closed' || availability === 'blocked');
 	const override = $derived(db.blocked.includes(date) ? 'Closed by admin' : db.opened.includes(date) ? 'Opened by admin' : 'Regular hours');
+	const availabilityLabel = $derived(pastDate ? 'Past date' : closed ? 'Closed to new bookings' : availability === 'full' ? 'Full' : 'Available');
 	const count = (status: string) => db.bookings.filter(booking => booking.date === date && booking.status === status).length;
 	const daySlots = $derived(slotsFor(date).map(({ time, free }) => ({
 		time, booking: queue.find(booking => booking.slot === time), blocked: isSlotBlocked(date, time),
@@ -53,6 +56,21 @@
 
 	function pickDate(day: string) {
 		date = day;
+	}
+
+	function updateAvailability(update: () => void, notice: string) {
+		availabilityError = availabilityNotice = '';
+		try {
+			update();
+			availabilityNotice = notice;
+		} catch (error) {
+			availabilityError = (error as Error).message;
+		}
+	}
+
+	function openAvailability() {
+		availabilityError = availabilityNotice = '';
+		availabilityDialog?.showModal();
 	}
 </script>
 
@@ -109,9 +127,13 @@
 		<p class="muted">Customers submit cancellation and reschedule requests from Bookings. Their current appointment stays reserved until you approve the request.</p>
 		{#each db.bookings.filter(b => b.requests?.some(r => r.state === 'Pending')) as booking (booking.id)}
 			<article class="card stack">
-				<p><strong>{booking.name}</strong> · {booking.id} · {fmtDate(booking.date)} at {fmtSlot(booking.slot)}</p>
-				<AdminBooking {booking} summary={false} />
-				<details><summary>Booking details</summary><div class="stack"><BookingSummary {booking} staff /></div></details>
+				<AdminBooking {booking}>
+					{#snippet heading()}<p><strong>{booking.name}</strong> · {booking.id} · {fmtDate(booking.date)} at {fmtSlot(booking.slot)}</p>{/snippet}
+					<details class="slot-details">
+						<summary><span class="closed-label">Tap to view more</span><span class="open-label">Show less</span></summary>
+						<div class="stack slot-detail-body"><BookingSummary {booking} staff /></div>
+					</details>
+				</AdminBooking>
 			</article>
 		{:else}<p class="card">No requests awaiting review.</p>{/each}
 	{:else if tab === 'Staff Access' && navigation.owner}
@@ -122,43 +144,66 @@
 		<OperationsAdmin {tab} />
 	{:else}
 		<div class="row between day-heading">
-			<div><p class="eyebrow">Booking schedule</p><h2>{fmtDate(date)}</h2></div>
-			<div class="row day-controls" role="group" aria-label="Select booking day">
-				<button type="button" class="btn sm ghost" aria-label="Previous day" onclick={() => pickDate(addDays(date, -1))}><ActionIcon name="left" /></button>
-				<button type="button" class="btn sm ghost" aria-label="Next day" onclick={() => pickDate(addDays(date, 1))}><ActionIcon name="right" /></button>
+			<div>
+				<p class="eyebrow">Booking schedule</p><h2>{fmtDate(date)}</h2>
+				<div class="row day-status"><span class="badge" data-status={pastDate ? undefined : closed ? 'cancelled' : availability === 'full' ? 'pending' : 'done'}>{availabilityLabel}</span><span class="small muted">{override}</span></div>
+			</div>
+			<div class="row day-controls">
+				{#if !pastDate && canPerform('manageSchedule')}
+					<button type="button" class="btn sm ghost" onclick={openAvailability}><ActionIcon name="calendar" />Manage availability</button>
+				{/if}
+				<div class="row" role="group" aria-label="Select booking day">
+					<button type="button" class="btn sm ghost" aria-label="Previous day" onclick={() => pickDate(addDays(date, -1))}><ActionIcon name="left" /></button>
+					<button type="button" class="btn sm ghost" aria-label="Next day" onclick={() => pickDate(addDays(date, 1))}><ActionIcon name="right" /></button>
+				</div>
 			</div>
 		</div>
 		<div class="tiles">
 			<div class="card pending-tile"><b class="display">{count('pending')}</b><span class="small">Pending</span></div>
 			<div class="card booked-tile"><b class="display">{count('confirmed')}</b><span class="small">Booked</span></div>
 			<div class="card completed-tile"><b class="display">{count('done')}</b><span class="small">Completed</span></div>
-			<div class="card blocked-tile"><b class="display">{daySlots.filter(slot => slot.blocked).length}</b><span class="small">Blocked slots</span></div>
 		</div>
-		<section class="card row between availability-banner" aria-label="Date availability">
-			<div class="row">
-				<span class="availability-icon"><ActionIcon name="calendar" /></span>
-				<div>
-					<div class="row">
-						<h3>Date availability</h3>
-						<span class="badge" data-status={pastDate ? undefined : closed ? 'cancelled' : availability === 'full' ? 'pending' : 'done'}>{pastDate ? 'Past date' : closed ? 'Closed to new bookings' : availability === 'full' ? 'Full' : 'Available'}</span>
-					</div>
-					<p class="small muted">{fmtDate(date)} · {override}</p>
+		{#if !pastDate && canPerform('manageSchedule')}
+			<dialog class="availability-dialog" bind:this={availabilityDialog} aria-labelledby="availability-title">
+				<header class="availability-header">
+					<span class="availability-icon"><ActionIcon name="calendar" /></span>
+					<div><h3 id="availability-title">Manage availability</h3><p class="small muted">{fmtDate(date)} · Philippine time</p></div>
+					<button type="button" class="availability-button" onclick={() => availabilityDialog?.close()}>Close</button>
+				</header>
+				<div class="stack availability-body">
+					<p class="small muted">Changes apply to new bookings. Existing appointments stay scheduled.</p>
+					<section class="stack availability-day" aria-label="Date availability">
+						<div class="row between"><h4>Date availability</h4><span class="badge" data-status={closed ? 'cancelled' : availability === 'full' ? 'pending' : 'done'}>{availabilityLabel}</span></div>
+						<div class="row between">
+							<p class="small muted">{override}</p>
+							<div class="row availability-actions">
+							{#if closed}
+								<button type="button" class="availability-button" onclick={() => updateAvailability(() => setDateAvailability(date, 'open'), 'Date opened for new bookings.')}><ActionIcon name="check" />Open this date</button>
+							{:else}
+								<button type="button" class="availability-button date-danger" onclick={() => updateAvailability(() => setDateAvailability(date, 'closed'), 'Date closed to new bookings.')}><ActionIcon name="block" />Close this date</button>
+							{/if}
+							{#if override !== 'Regular hours'}
+								<button type="button" class="availability-button" onclick={() => updateAvailability(() => setDateAvailability(date, 'regular'), 'Regular hours restored.')}><ActionIcon name="reset" />Restore regular hours</button>
+							{/if}
+							</div>
+						</div>
+					</section>
+					<section class="stack availability-times" aria-label="Time slot availability">
+						<h4>Time slot restrictions</h4>
+						<ul>
+							{#each daySlots as { time, blocked } (time)}
+								<li class="row between">
+									<div><strong>{fmtSlot(time)}</strong><p class="small slot-restriction" class:restricted={blocked}>{blocked ? 'Blocked for new bookings' : 'No slot restriction'}</p></div>
+									<button type="button" class="availability-button slot-button" aria-label={(blocked ? 'Unblock ' : 'Block ') + fmtSlot(time)} onclick={() => updateAvailability(() => toggleSlotBlock(date, time), (blocked ? 'Removed the restriction for ' : 'Blocked new bookings at ') + fmtSlot(time) + '.')}><ActionIcon name={blocked ? 'check' : 'block'} />{blocked ? 'Unblock' : 'Block slot'}</button>
+								</li>
+							{/each}
+						</ul>
+					</section>
+					{#if availabilityError}<p class="error" role="alert">{availabilityError}</p>{/if}
+					{#if availabilityNotice}<p class="small muted" role="status">{availabilityNotice}</p>{/if}
 				</div>
-			</div>
-			{#if date >= today() && canPerform('manageSchedule')}
-				<div class="row">
-
-					{#if closed}
-						<button class="btn sm" onclick={() => { if (canPerform('manageSchedule')) setDateAvailability(date, 'open'); }}><ActionIcon name="check" />Open this date</button>
-					{:else}
-						<button class="btn sm danger" onclick={() => { if (canPerform('manageSchedule')) setDateAvailability(date, 'closed'); }}><ActionIcon name="block" />Close this date</button>
-					{/if}
-					{#if db.opened.includes(date) || db.blocked.includes(date)}
-						<button class="btn sm ghost" onclick={() => { if (canPerform('manageSchedule')) setDateAvailability(date, 'regular'); }}><ActionIcon name="reset" />Restore regular hours</button>
-					{/if}
-				</div>
-			{/if}
-		</section>
+			</dialog>
+		{/if}
 
 		<div class="booking-layout">
 		<div class="stack booking-column">
@@ -168,7 +213,7 @@
 		</div>
 		<section class="stack booking-column" aria-labelledby="time-slots-heading">
 		<div class="card row between schedule-heading">
-			<div><h3 id="time-slots-heading">Time slots</h3><p class="small muted">Philippine time · Blocking a slot keeps existing bookings scheduled.</p></div>
+			<div><h3 id="time-slots-heading">Time slots</h3><p class="small muted">Philippine time</p></div>
 			<details class="slot-filter" bind:this={slotFilterMenu}>
 				<summary bind:this={slotFilterTrigger} aria-label={'Filter slots, ' + selectedSlotFilter.label + ', ' + selectedSlotFilter.count}>
 					<ActionIcon name="adjust" />
@@ -192,34 +237,39 @@
 		<label>Booking source<select bind:value={source}><option value="all">All sources</option><option value="online">Online</option><option value="walk-in">Walk-in</option></select></label>
 		{#each db.bookings.filter(b => b.date === date && b.walkIn?.immediate && b.status !== 'cancelled' && matchesSource(b)) as booking (booking.id)}
 			<article class="card stack">
-				<p><strong>Walk-in · {booking.name}</strong> · {fmtSlot(booking.slot)} · <span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span></p>
-				<AdminBooking {booking} />
+				<AdminBooking {booking}>
+					{#snippet heading()}
+						<p><strong>{booking.name}</strong></p>
+						<p class="small muted">Walk-in · {fmtSlot(booking.slot)} <span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span></p>
+					{/snippet}
+					<details class="slot-details">
+						<summary><span class="closed-label">Tap to view more</span><span class="open-label">Show less</span></summary>
+						<div class="stack slot-detail-body"><BookingSummary {booking} staff /></div>
+					</details>
+				</AdminBooking>
 			</article>
 		{/each}
 		<ol class="stack">
 			{#each visibleSlots as { time, open, blocked, booking: b } (date + time)}
 				<li class="card slot-card" data-slot-status={b?.status ?? (blocked ? 'blocked' : open ? 'open' : 'unavailable')}>
-					<div class="row between slot-heading">
+					{#snippet slotHeading()}
 						<div class="slot-summary">
 							<time class="display time" datetime={time}>{fmtSlot(time)}</time>
 							<div class="slot-identity">
 								{#if b}
 									<b>{b.name}</b>
 									<p class="small muted">{b.selection ? serviceLabel(b.selection) : serviceOf(b.serviceId).name} · {b.bike}</p>
+									<span class="badge" data-status={b.status === 'confirmed' ? 'booked' : b.status}>{bookingStatusLabels[b.status]}</span>
 								{:else}
 									<b>{blocked ? 'Blocked' : closed ? 'Closed' : pastDate ? 'Past slot' : open ? 'Open slot' : 'Unavailable'}</b>
 								{/if}
-								{#if b}<span class="badge" data-status={b.status === 'confirmed' ? 'booked' : b.status}>{bookingStatusLabels[b.status]}</span>{/if}
-								{#if b && blocked}<span class="badge">Time blocked</span>{/if}
 							</div>
 						</div>
-						{#if date >= today() && canPerform('manageSchedule')}
-							<button class="btn sm ghost" aria-label={(blocked ? 'Unblock ' : 'Block ') + fmtSlot(time)} onclick={() => { if (canPerform('manageSchedule')) toggleSlotBlock(date, time); }}><ActionIcon name={blocked ? 'check' : 'block'} />{blocked ? 'Unblock' : 'Block'}</button>
-						{/if}
-					</div>
+					{/snippet}
 					{#if b}
+						<AdminBooking booking={b} heading={slotHeading}>
 						<details class="slot-details">
-							<summary>Booking details</summary>
+							<summary><span class="closed-label">Tap to view more</span><span class="open-label">Show less</span></summary>
 							<div class="stack slot-detail-body">
 								<BookingSummary booking={b} staff />
 								<p class="muted small">
@@ -230,7 +280,9 @@
 								</p>
 							</div>
 						</details>
-						{#if b.status === 'pending' || b.status === 'confirmed'}<AdminBooking booking={b} summary={false} />{/if}
+						</AdminBooking>
+					{:else}
+						{@render slotHeading()}
 					{/if}
 				</li>
 			{:else}
@@ -253,17 +305,19 @@
 	.manual-options a:hover { background: var(--panel-2); }
 	.admin-content { grid-template-columns: minmax(0, 1fr); }
 	.booking-workspace { max-width: 1420px; }
-	.booking-workspace :is(.booking-sections, .day-controls, .availability-banner, .schedule-heading, .slot-heading, .slot-detail-body) :global(.btn) {
+	.booking-workspace :is(.booking-sections, .day-controls, .schedule-heading, .slot-detail-body) :global(.btn) {
 		clip-path: none;
 		border-radius: 6px;
 		font-style: normal;
 	}
 	.day-heading h2 { font-size: clamp(2rem, 4vw, 3.5rem); margin-top: .35rem; }
-	.day-controls { gap: .35rem; }
+	.day-status { margin-block-start: .35rem; }
+	.day-controls { gap: .6rem; }
+	.day-controls > .row { gap: .3rem; }
 	.day-controls button { min-width: 40px; padding-inline: .65rem; }
 	.tiles {
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: .65rem;
 	}
 
@@ -279,10 +333,25 @@
 	.pending-tile { color: var(--warn); border-color: var(--warn-line); background: color-mix(in srgb, var(--warn-bg) 45%, var(--panel)); }
 	.booked-tile { color: var(--accent); border-color: var(--bad-line); background: color-mix(in srgb, var(--bad-bg) 45%, var(--panel)); }
 	.completed-tile { color: var(--ok); border-color: var(--ok-line); background: color-mix(in srgb, var(--ok-bg) 45%, var(--panel)); }
-	.blocked-tile { color: var(--muted); background: var(--panel-2); }
-	.availability-banner { padding: .75rem .85rem; }
-	.availability-banner h3, .schedule-heading h3 { font-size: 1.35rem; }
-	.availability-icon { display: grid; place-items: center; background: var(--panel-2); color: var(--accent); border-radius: .35rem; width: 2.2rem; height: 2.2rem; }
+	.availability-dialog { --dialog-gutter: clamp(.75rem, 3vw, 1.2rem); width: min(540px, calc(100% - 24px)); max-height: 90dvh; margin: auto; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); }
+	.availability-dialog::backdrop { background: #0009; }
+	.availability-header { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .65rem; padding: var(--dialog-gutter); background: var(--panel); border-bottom: 1px solid var(--line); }
+	.availability-icon { display: grid; place-items: center; width: 2.15rem; aspect-ratio: 1; border-radius: 8px; background: var(--panel-2); color: var(--accent); }
+	.availability-body { padding: var(--dialog-gutter); }
+	.availability-day { gap: .45rem; padding: .7rem; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+	.availability-actions { gap: .4rem; }
+	.availability-button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 36px; padding: .3rem .55rem; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); font: 650 .8rem var(--body); cursor: pointer; }
+	.availability-button:hover { border-color: var(--accent); }
+	.date-danger { color: var(--bad); }
+	.slot-button { min-width: 6.25rem; }
+	.slot-restriction { color: var(--muted); }
+	.slot-restriction.restricted { color: var(--bad); }
+	.availability-dialog h4 { margin: 0; font-size: .95rem; }
+	.availability-times { gap: .5rem; }
+	.availability-times ul { margin: 0; padding: 0 .65rem; list-style: none; border: 1px solid var(--line); border-radius: 8px; }
+	.availability-times li { padding: .45rem 0; }
+	.availability-times li + li { border-top: 1px solid var(--line); }
+	.availability-dialog h3, .schedule-heading h3 { font-size: 1.35rem; }
 	.booking-layout { display: grid; align-items: start; gap: .9rem; }
 	.booking-column { min-width: 0; }
 	.slot-filter { position: relative; min-width: 10rem; font-size: .85rem; }
@@ -316,7 +385,8 @@
 	.slot-identity { overflow-wrap: anywhere; padding-inline-start: .7rem; border-inline-start: 1px solid var(--line); }
 	.slot-identity .badge { display: inline-block; margin-block-start: .25rem; }
 	.slot-details { border-top: 1px solid var(--line); margin-top: .55rem; }
-	.slot-details summary { width: fit-content; margin-inline-start: auto; padding: .35rem 0 0 .35rem; color: var(--muted); font-size: .8rem; font-weight: 700; cursor: pointer; }
+	.slot-details summary { width: fit-content; padding: .35rem .35rem 0 0; color: var(--muted); font-size: .8rem; font-weight: 700; cursor: pointer; }
+	.slot-details:not([open]) .open-label, .slot-details[open] .closed-label { display: none; }
 	.slot-detail-body { padding-block: .6rem .25rem; overflow-wrap: anywhere; }
 	.time {
 		color: var(--accent);
@@ -331,8 +401,5 @@
 
 	@media (min-width: 1000px) {
 		.booking-layout { grid-template-columns: minmax(345px, 2fr) minmax(0, 4fr); }
-	}
-	@media (max-width: 600px) {
-		.tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	}
 </style>

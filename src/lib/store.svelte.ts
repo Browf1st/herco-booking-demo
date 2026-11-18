@@ -12,6 +12,7 @@ import { addDays, isBookableDate, isOpenDay, nowHour, slots, today, upcoming } f
 
 export type Status = 'pending' | 'confirmed' | 'done' | 'cancelled';
 export const bookingStatusLabels: Record<Status, string> = { pending: 'Pending', confirmed: 'Booked', done: 'Completed', cancelled: 'Cancelled' };
+export const MAX_COMPLETION_PHOTOS = 3;
 export type ChangeRequest = { kind: 'Cancel' | 'Reschedule'; reason: string; date?: string; slot?: string; state: 'Pending' | 'Approved' | 'Declined'; at: string; reviewedAt?: string };
 type DemoData = { bookings: Booking[]; blocked: string[]; opened?: string[]; blockedSlots?: Record<string, string[]>; scenarioVersion: number; pricing?: Pricing; events?: ActivityEvent[] };
 type ServiceSnapshot = { selection: Selection; estimate?: ReturnType<typeof quote> };
@@ -260,6 +261,10 @@ export function estimateServiceEdit(booking: Booking, input: Selection) {
  return quote(input, booking.size ?? 'small', booking.bike, db.pricing, $state.snapshot(booking.estimate?.lines), booking.modelYear);
 }
 
+export function hasUnfinalizedServicePrices(booking: Booking) {
+ return booking.estimate?.lines?.some(line => line.pending || line.maximum !== undefined) ?? false;
+}
+
 export function requestChange(booking: Booking, kind: ChangeRequest['kind'], reason: string, date?: string, slot?: string) {
  active(booking);
  if (booking.requests?.some(r => r.state === 'Pending')) throw Error('There is already a request awaiting review.');
@@ -309,10 +314,16 @@ export function completeBooking(booking: Booking, note: string, photos: string[]
  requireStaffAction('completeBooking');
  if (booking.status !== 'confirmed') throw Error('Confirm this booking before completing it.');
  if (booking.requests?.some(r => r.state === 'Pending')) throw Error('Review the pending change request before completing this booking.');
+ if (hasUnfinalizedServicePrices(booking)) throw Error('Save an exact price for each service that has a range or needs a shop quote.');
+ if (!photos.length) throw Error('Attach at least one completion photo.');
+ if (photos.length > MAX_COMPLETION_PHOTOS) throw Error('Attach up to ' + MAX_COMPLETION_PHOTOS + ' completion photos.');
+ if (photos.some(photo => !photo.startsWith('data:image/jpeg;base64,') || photo.length <= 'data:image/jpeg;base64,'.length)) {
+  throw Error('Attach valid completion photos using the camera or album.');
+ }
  if (finalPrice === undefined || finalPrice < 0 || !Number.isSafeInteger(Math.round(finalPrice * 100))) throw Error('Enter a valid final service price.');
  const previous = { completionNote: booking.completionNote, photos: booking.photos, completedAt: booking.completedAt, status: booking.status, finalPrice: booking.finalPrice };
  Object.assign(booking, { completionNote: note, photos, completedAt: new Date().toISOString(), status: 'done', finalPrice: Math.round(finalPrice * 100) / 100 });
- try { audit('Confirmed → Done' + (photos.length ? ' · Added ' + photos.length + ' completion photo(s)' : ''), booking.id, staffActor(), 'Booking', 'Final service price: ₱' + booking.finalPrice?.toFixed(2)); }
+ try { audit('Confirmed → Done · Added ' + photos.length + (photos.length === 1 ? ' completion photo' : ' completion photos'), booking.id, staffActor(), 'Booking', 'Final service price: ₱' + booking.finalPrice?.toFixed(2)); }
  catch (error) { Object.assign(booking, previous); db.events.pop(); throw error; }
 }
 
