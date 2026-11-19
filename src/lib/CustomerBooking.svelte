@@ -5,6 +5,8 @@
  import BookingSummary from './BookingSummary.svelte';
  import EditCoating from './EditCoating.svelte';
  import { fmtDate, fmtSlot } from './dates';
+ import { serviceOf } from './config';
+ import { estimatePrice, serviceLabel } from './coating';
  import { bookingStatusLabels, requestChange, type Booking, type ChangeRequest } from './store.svelte';
  let { booking }: { booking: Booking } = $props();
  let kind = $state<ChangeRequest['kind']>();
@@ -33,20 +35,31 @@
  }
 </script>
 <article class="card stack">
- <div class="row"><h2>{booking.id}</h2><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span></div>
- <BookingSummary {booking} />
- {#each booking.requests ?? [] as request}
-  <p>{request.kind}{request.date && request.slot ? ' · ' + fmtDate(request.date) + ' at ' + fmtSlot(request.slot) : ''} <span class="badge" data-status={request.state.toLowerCase()}>{request.state === 'Pending' ? 'Awaiting shop approval' : request.state}</span></p>
-  {#if request.reason}<p class="small muted">Your note: {request.reason}</p>{/if}
- {/each}
- {#if active}
-  {#if booking.status === 'pending' && !pending}<EditCoating {booking} />{/if}
-  {#if pending}
-   <p class="small muted">Your original visit stays reserved while the shop reviews your request.</p>
-  {:else}
+ <header class="row booking-header">
+  <div class="row"><h2>{booking.id}</h2><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span></div>
+  {#if active && !pending}
    <div class="row"><button class="btn sm ghost" onclick={() => openRequest('Reschedule')}><ActionIcon name="calendar" />Request reschedule</button><button class="btn sm danger" onclick={() => openRequest('Cancel')}><ActionIcon name="block" />Request cancellation</button></div>
   {/if}
+ </header>
+ <p><ActionIcon name="box" /> <strong>{booking.selection ? serviceLabel(booking.selection) : serviceOf(booking.serviceId).name}</strong> · {booking.bike}</p>
+ <div class="row">
+  <p><ActionIcon name="calendar" /> <strong>Visit</strong> · {fmtDate(booking.date)} at {fmtSlot(booking.slot)}</p>
+  {#if booking.estimate}<p>Estimated service value <strong>{estimatePrice(booking.estimate)}</strong></p>{/if}
+ </div>
+ {#if active && pending}
+  <p class="small muted">Your original visit stays reserved while the shop reviews your request.</p>
  {/if}
+ <details>
+  <summary>View details</summary>
+  <div class="stack booking-details">
+   <BookingSummary {booking} overviewShown />
+   {#each booking.requests ?? [] as request}
+    <p>{request.kind}{request.date && request.slot ? ' · ' + fmtDate(request.date) + ' at ' + fmtSlot(request.slot) : ''} <span class="badge" data-status={request.state.toLowerCase()}>{request.state === 'Pending' ? 'Awaiting shop approval' : request.state}</span></p>
+    {#if request.reason}<p class="small muted">Your note: {request.reason}</p>{/if}
+   {/each}
+   {#if booking.status === 'pending' && !pending}<EditCoating {booking} />{/if}
+  </div>
+ </details>
  <dialog bind:this={dialog} aria-label="Request a booking change">
   {#if kind}
    <form class="card stack" onsubmit={submit}>
@@ -62,6 +75,8 @@
 </article>
 <style>
  h2 { font-size: 1.8rem; }
+ .booking-header { justify-content: space-between; }
+ .booking-details { margin-top: .75rem; }
  dialog { width: min(570px, calc(100% - 24px)); max-height: 90dvh; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); }
  dialog::backdrop { background: #0009; }
 </style>

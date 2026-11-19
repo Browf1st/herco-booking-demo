@@ -5,16 +5,20 @@
  import { serviceOf } from './config';
  import { defaultPricing, estimatePrice, linePrice, money, quote, serviceLabel, type Selection } from './coating';
  import { db, type Booking } from './store.svelte';
- let { booking, staff = false }: { booking: Booking; staff?: boolean } = $props();
+ let { booking, staff = false, overviewShown = false }: { booking: Booking; staff?: boolean; overviewShown?: boolean } = $props();
  const events = $derived(db.events.filter(e => e.bookingId === booking.id && (staff || e.actor === 'Customer' || !e.action.startsWith('Recorded walk-in'))));
  const stamp = (at?: string) => at ? new Date(at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short', hour12: true }) : 'Not recorded';
  const labels = (selection: Selection, estimate?: ReturnType<typeof quote>) =>
   (estimate?.lines ?? quote(selection, booking.size ?? 'small', booking.bike, defaultPricing, [], booking.modelYear).lines ?? []).map(line => line.label);
 </script>
 
-<p><ActionIcon name="box" /> <strong>{booking.selection ? serviceLabel(booking.selection) : serviceOf(booking.serviceId).name}</strong> · {booking.bike}{booking.modelYear ? ' · Model year ' + booking.modelYear : ''}</p>
+{#if !overviewShown}
+ <p><ActionIcon name="box" /> <strong>{booking.selection ? serviceLabel(booking.selection) : serviceOf(booking.serviceId).name}</strong> · {booking.bike}{booking.modelYear ? ' · Model year ' + booking.modelYear : ''}</p>
+{:else if booking.modelYear}
+ <p>Model year {booking.modelYear}</p>
+{/if}
 <div class="cols" aria-label="Booking dates in Philippine time">
- <p><ActionIcon name="calendar" /> <strong>Visit</strong><br />{fmtDate(booking.date)} · {fmtSlot(booking.slot)}</p>
+ {#if !overviewShown}<p><ActionIcon name="calendar" /> <strong>Visit</strong><br />{fmtDate(booking.date)} · {fmtSlot(booking.slot)}</p>{/if}
  <p><ActionIcon name="clock" /> <strong>Booked on</strong><br />{stamp(booking.createdAt ?? booking.walkIn?.at)}</p>
  <p><ActionIcon name="check" /> <strong>Approved</strong><br />{booking.status === 'pending' ? 'Awaiting approval' : stamp(booking.approvedAt)}</p>
  <p><ActionIcon name="finish" /> <strong>Completed</strong><br />{booking.status === 'done' ? stamp(booking.completedAt) : 'Not completed'}</p>
@@ -24,7 +28,10 @@
  <p>Powder coating: {booking.selection.powderParts.join(', ')}{booking.selection.finish ? ' · ' + booking.selection.finish : ''}</p>
  {#if !booking.selection.catalog && booking.selection.powderParts.includes('Wheels / mags')}<p>Mag diameter · Front: {booking.selection.front || '—'} · Rear: {booking.selection.rear || '—'} (inches)</p>{/if}
 {/if}
-{#if booking.estimate}<p>Estimated service value <strong>{estimatePrice(booking.estimate)}</strong>{#if booking.estimate.discount} · {money(booking.estimate.discount)} promo discount{/if}</p>{/if}
+{#if booking.estimate}
+ {#if !overviewShown}<p>Estimated service value <strong>{estimatePrice(booking.estimate)}</strong>{#if booking.estimate.discount} · {money(booking.estimate.discount)} promo discount{/if}</p>
+ {:else if booking.estimate.discount}<p>Promo discount <strong>{money(booking.estimate.discount)}</strong></p>{/if}
+{/if}
 {#if booking.estimate?.lines?.length}
  <ul aria-label="Current service prices">{#each booking.estimate.lines as line (line.label)}<li>{line.label} · {linePrice(line)}</li>{/each}</ul>
 {/if}

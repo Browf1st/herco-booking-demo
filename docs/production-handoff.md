@@ -20,6 +20,14 @@ No dependency changes, remote requests to Git/PR hosts, commits, deployment, pro
 
 `npm` was absent from this shell's PATH, so checks used `node node_modules/@sveltejs/kit/svelte-kit.js sync`, `node node_modules/svelte-check/bin/svelte-check --tsconfig ./tsconfig.json` and `node node_modules/vite/bin/vite.js build`, equivalent to the repository scripts. Browser checks used bundled Playwright with the installed Edge executable and isolated test contexts containing fictional data.
 
+## Production migration status
+
+The [production roadmap](production-plan.md#production-implementation-checklist) is the ordered implementation checklist. The [configuration checklist](production-plan.md#configuration-you-can-do-in-parallel) lists resources that can be prepared alongside development.
+
+- The customer booking card changes are local working-tree edits at the time of this handoff. Request controls are in the header. The collapsed card shows the booking overview and View details expands the record inline. The Svelte check and build passed for these edits.
+- The schedule still uses the generic Unavailable label for elapsed same-day hours. The production availability milestone includes consistent Past slot labels and controls across both admin views.
+- Supabase project bindings, Brevo credentials, and live release configuration have not been verified. The GitHub Pages workflow remains the demo deployment. No production migration or release has been performed.
+
 ## Next safe increment
 
 ### Booking history update — 2026-11-17
