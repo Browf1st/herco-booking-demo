@@ -17,7 +17,7 @@ function restoreAccount(): Account | undefined {
  } catch { return undefined; }
 }
 export const account = $state<{ current?: Account }>({
- current: restoreAccount()
+ current: import.meta.env.MODE === 'worker' ? undefined : restoreAccount()
 });
 export function signIn(name: string, email: string, provider: string) {
  const id = email.trim().toLowerCase();

@@ -20,6 +20,61 @@ No dependency changes, remote requests to Git/PR hosts, commits, deployment, pro
 
 `npm` was absent from this shell's PATH, so checks used `node node_modules/@sveltejs/kit/svelte-kit.js sync`, `node node_modules/svelte-check/bin/svelte-check --tsconfig ./tsconfig.json` and `node node_modules/vite/bin/vite.js build`, equivalent to the repository scripts. Browser checks used bundled Playwright with the installed Edge executable and isolated test contexts containing fictional data.
 
+## Production migration status
+
+The [production roadmap](production-plan.md#production-implementation-checklist) is the ordered implementation checklist. The [configuration checklist](production-plan.md#configuration-you-can-do-in-parallel) lists resources that can be prepared alongside development.
+
+- The customer booking card changes are local working-tree edits at the time of this handoff. Request controls are in the header. The collapsed card shows the booking overview and View details expands the record inline. The Svelte check and build passed for these edits.
+- The demo schedule and Manage Availability now show Past slot for elapsed same-day hours. The server migration includes shared atomic date and slot controls. The admin UI still needs to call them.
+- Supabase project bindings, Brevo credentials, and live release configuration have not been verified. The GitHub Pages workflow remains the demo deployment. No production migration or release has been performed.
+
+### Backend increment on main
+
+- Added the first versioned Supabase migration and server endpoints for catalog, availability, signed-in booking submission, paginated personal booking reads, and password sessions. The API uses a request-scoped session and requires explicit Supabase bindings.
+- The Worker build reads business data from Supabase. The GitHub Pages build continues to use demo screens and data. Build the Worker with `npm run build:worker` and run it locally with `npx wrangler dev`. Add site bindings via `.dev.vars` locally or Worker environment settings in staging. The example env file lists placeholders.
+- Local checks passed for Svelte diagnostics, both builds, and the Worker browser flow at mobile width with mocked APIs. The browser check covered the sign-in gate, login, booking retry with the same request ID, confirmation, My Bookings after reload, and no business records in localStorage. Live Supabase sign-in and cross-device persistence still need verification.
+- Account now supports configurable email signup, verification, password recovery, Google/Facebook sign-in, and staff authenticator enrollment. The existing password session route remains available for accounts provisioned in Supabase.
+- The staff workspace now supports date/slot controls, booking confirmation, customer change requests, scheduled bookings for verified customers, staff grants, points and rewards, inventory, pricing and one active promotion, private completion photos, and aggregate booking reports. Database transactions protect repeat requests and capture staff actions.
+- The separate [email worker](email-worker.md) sends booking receipts, confirmations, and change decisions. Reminders are optional and recheck the appointment immediately before sending.
+- Customers can withdraw pending requests without changing their visit and save private contact details for future bookings. Staff can cancel or reschedule directly with separate grants, search the scoped customer directory, and open [a configured walk-in form](walk-in-intake.md) for the verified owner of an existing scheduled booking.
+- Signed-in customers can now submit today's walk-in from Book, sign the active versioned form, and enter the normal staff queue without taking a scheduled slot. The booking is linked to the verified account immediately.
+- Optional booking analytics collect four event names with consent and a random browser identifier. The site health route reports whether required Supabase settings are present. External uptime checks, alert delivery, and operational ownership still need configuration.
+- Staff pricing now accepts fixed prices, ranges, and shop quotes. Authorized staff can save an exact line price at any booking stage. A post-completion correction updates the report by the difference and preserves the original completion amount. Date-based reports include a separate net-corrections figure.
+- Scheduled and walk-in customer bookings save the ceramic finish, powder parts and wheel dimensions. The booking form shows a server estimate for the selected bike and options before submission. If a rule, base rate, or promotion changes the estimate, the customer reviews the refreshed amount before trying again. Already saved bookings retain the original estimate.
+- In **Staff workspace → Pricing → Coating price rules**, authorized staff can add, edit, enable, and disable fixed-price, range, or quote-required rules. New rules default to disabled. Exact bike rules take priority over general rules with the same options. Each save records the acting staff member and the before-and-after settings.
+- Stock on hand and movement history can be downloaded as permission-checked CSV files. The movement export defaults to the last 30 days and accepts up to 366 days per export, with a 10,000-row cap.
+- Test the complete workflow with a configured staging project and fictional accounts/catalog first. Leave demo fixtures out of production server paths.
+
+### Configuration before live staging tests
+
+1. Set `PUBLIC_SUPABASE_URL` and `PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the private dev inventory. Apply the versioned migrations in order to the isolated staging database. Use the [staff bootstrap instructions](staff-access.md) for the first Owner and assign only the grants needed by each staff account. Create fictional customers and enable a test catalog with approved or test-only prices.
+2. To enable email signup and password recovery, configure Brevo SMTP in Supabase, enable email confirmation, and make the signup and recovery templates include `{{ .Token }}`. Turn on `HERCO_AUTH_EMAIL_ENABLED` only after staging verification. For OAuth, enable each configured provider, allowlist the site's `/api/auth/callback` URL in Supabase, and configure the provider's callback at the Supabase project URL before enabling its named flag.
+3. Create a private Storage bucket named `herco-completion`. Limit it to JPEG, PNG, and WebP and 4 MB per object. Grant no browser upload or read access. Configure `HERCO_STORAGE_SECRET_KEY` in the site Worker's secrets so the server can upload and read evidence after checking staff permissions. Approve a retention policy and cover abandoned uploads and saved evidence in backup and cleanup procedures.
+4. Configure the [separate email worker](email-worker.md) with staging-only credentials and the test recipient allowlist. Test login mail and transactional mail separately. Leave reminder timing disabled until approved.
+5. Enable `HERCO_GA4_MEASUREMENT_ID` and `HERCO_GA4_API_SECRET` only after choosing the correct property and approving consent copy. Configure external checks for the Worker homepage and a small Supabase-backed route, direct alerts to the named recipients, and rehearse database and Storage restore before release.
+
+### Pending implementation
+
+- [ ] Populate the approved bike and dimension price matrix in Staff Pricing. Verify the live estimate, booking snapshot, and price correction workflows against the staging database before release.
+- Change requests stay open for manual handling. The staff queue, customer withdrawal, decision notifications, and optional email to the configured shop inbox are implemented.
+- Inventory supports optional supplier, storage location, unit cost, billing rate, and storage capacity. HERCO Points remain manually awarded and corrected as agreed.
+- [ ] Configure and verify the [photo cleanup and recovery tools](recovery.md), backup jobs, and operational alerts once the storage destinations, retention, and recovery targets are chosen. Rehearse restoration in staging.
+- [ ] Verify the live staging workflows with isolated Supabase, Storage, Brevo, MFA, and enabled OAuth providers. Run concurrent booking and points tests against hosted PostgreSQL before release.
+
+### Engineering checks
+
+Codex and Claude share [the repository guide](../AGENTS.md) and [the OWASP and performance checks](engineering-checks.md). The engineering workflow checks dependency advisories, Worker HTTP controls, static and Worker bundle budgets, and the migration chain with synthetic database roles. Production and staging provider setup remain separate.
+
+The Worker limits JSON payloads, blocks framing, and guards private API responses against shared caching. The database blocks direct browser access to completion objects and requires private bucket settings for authorized uploads and reads. Completion-only staff can record the finalized service total. A different final charge requires the price adjustment grant.
+
+### Values to supply for this increment
+
+- **Coating catalog** — approved service codes and labels, fixed prices or range endpoints, quote-required services, exact bike model names, and finish, part and dimension combinations. Enter base rates and option-specific rules in **Staff workspace → Pricing**. A blank bike name allows any eligible bike to match the exact selected options. With no enabled rule, the estimate uses the base rate. A quote-required base service lets the shop price unmatched configurations individually.
+- **Walk-in form** — approved title, full text, version, approving staff identity, and confirmation that the typed-name acknowledgement is acceptable. Configure it per [walk-in intake setup](walk-in-intake.md).
+- **Shop inbox and test recipients** — approved operational inbox for change requests, staging allowlist, and Brevo sender and server credentials. Configure per [email worker setup](email-worker.md). The inbox is empty by default.
+- **Photo cleanup** — target Supabase project, cleanup Worker credential, and approved age for unlinked uploads. Cleanup starts disabled. Configure per [recovery setup](recovery.md).
+- **Backup and alert operations** — approved schedule and retention, source and isolated restore project access, independent encrypted storage, runner and encryption key, alert destination, and acceptable data loss and downtime. Configure these outside Git before a restore drill.
+
 ## Next safe increment
 
 ### Booking history update — 2026-11-17

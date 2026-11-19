@@ -96,8 +96,9 @@ function loadSession(accounts: StaffAccount[]): string | null {
  catch { return null; }
 }
 
-const initialAccounts = loadAccounts();
-const state = $state({ accounts: initialAccounts, sessionId: loadSession(initialAccounts) });
+const demo = import.meta.env.MODE !== 'worker';
+const initialAccounts = demo ? loadAccounts() : [];
+const state = $state({ accounts: initialAccounts, sessionId: demo ? loadSession(initialAccounts) : null });
 export const staffAccess = {
  get accounts() { return state.accounts; },
  get sessionId() { return state.sessionId; },

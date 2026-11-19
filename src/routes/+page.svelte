@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ActionIcon from '#lib/ActionIcon.svelte';
+	import { onMount } from 'svelte';
 	import { asset, resolve } from '$app/paths';
 	import AvailabilityCalendar from '#lib/AvailabilityCalendar.svelte';
 	import CompareSlider from '#lib/CompareSlider.svelte';
@@ -11,6 +12,31 @@
 	const directions = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shop.address)}`;
 	const statusLabels = { open: 'Available', closed: 'Closed', blocked: 'Closed', full: 'Full' };
 	let calendarOpen = $state(false);
+	const demo = import.meta.env.MODE !== 'worker';
+	const days = upcoming().slice(0, 7);
+	type ServerSlot = { visit_date: string; status: 'past' | 'closed' | 'booked' | 'blocked' | 'open' };
+	let serverSlots = $state<ServerSlot[]>();
+	let scheduleError = $state(false);
+
+	onMount(() => {
+		if (demo) return;
+		const controller = new AbortController();
+		const query = new URLSearchParams({ from: days[0], to: days[days.length - 1] });
+		void fetch(resolve('/api/availability') + '?' + query, { signal: controller.signal })
+			.then(async response => {
+				if (!response.ok) throw new Error();
+				serverSlots = await response.json();
+			})
+			.catch(() => { if (!controller.signal.aborted) scheduleError = true; });
+		return () => controller.abort();
+	});
+
+	function scheduleStatus(date: string): keyof typeof statusLabels {
+		if (demo) return dayStatus(date);
+		const slots = serverSlots?.filter(slot => slot.visit_date === date) ?? [];
+		if (slots.some(slot => slot.status === 'open')) return 'open';
+		return slots.some(slot => slot.status === 'booked') ? 'full' : 'closed';
+	}
 
 	const steps = [
 		['Choose your service', 'Select ceramic coating or powder coating.'],
@@ -49,7 +75,9 @@
 			<div><a class="btn sm ghost" href={resolve('/book?service=ceramic')}><ActionIcon name="calendar" />Book ceramic coating</a></div>
 		</article>
 		<article class="work-photo card stack">
-			<img src={asset(photos.powder)} alt="Motorcycle fitted with red coated wheels" loading="lazy" />
+			<img src={asset(photos.powder)} srcset={`${asset('photos/herco-red-wheels-480.webp')} 480w, ${asset(photos.powder)} 720w`}
+				sizes="(min-width: 1100px) 490px, (min-width: 800px) calc(50vw - 60px), calc(100vw - 64px)"
+				alt="Motorcycle fitted with red coated wheels" width="720" height="960" loading="lazy" decoding="async" />
 			<h3>Powder coating</h3>
 			<p class="muted">For wheels and other suitable metal components. Tell the garage which parts you want coated and your preferred colour or finish.</p>
 			<div><a class="btn sm ghost" href={resolve('/book?service=wheel-colour')}><ActionIcon name="calendar" />Book powder coating</a></div>
@@ -68,9 +96,14 @@
 				<h3>Next 7 days</h3>
 				<p class="muted small">Select an available date to start your booking.</p>
 			</div>
+			{#if scheduleError}
+				<p role="alert">Availability is temporarily unavailable.</p>
+			{:else if !demo && !serverSlots}
+				<p role="status">Loading availability…</p>
+			{:else}
 			<ul class="schedule-days">
-				{#each upcoming().slice(0, 7) as date (date)}
-					{@const status = dayStatus(date)}
+				{#each days as date (date)}
+					{@const status = scheduleStatus(date)}
 					<li data-status={status}>
 						{#snippet day()}
 							<time datetime={date}>
@@ -87,9 +120,14 @@
 					</li>
 				{/each}
 			</ul>
+			{/if}
+			{#if demo}
 			<div><button type="button" class="btn sm ghost" aria-expanded={calendarOpen} onclick={() => calendarOpen = !calendarOpen}><ActionIcon name="calendar" />{calendarOpen ? 'Hide calendar' : 'See more dates'}</button></div>
 			{#if calendarOpen}
 				<AvailabilityCalendar />
+			{/if}
+			{:else}
+				<div><a class="btn sm ghost" href={resolve('/book')}><ActionIcon name="calendar" />See more dates</a></div>
 			{/if}
 		</div>
 	</div>

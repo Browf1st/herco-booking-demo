@@ -6,25 +6,30 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
+		"build:worker": "vite build --mode worker",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
 	},
 	"devDependencies": {
-		"@sveltejs/adapter-static": "^4.0.0",
-		"@sveltejs/kit": "^3.0.0",
+		"@sveltejs/adapter-cloudflare": "^9.0.0",
+		"@sveltejs/adapter-static": "^4.0.1",
+		"@sveltejs/kit": "^3.1.1",
 		"@sveltejs/vite-plugin-svelte": "^7.2.0",
 		"@types/three": "^0.187.0",
 		"svelte": "^5.57.1",
 		"svelte-check": "^4.6.0",
 		"typescript": "^6.0.3",
-		"vite": "^8.3.0"
+		"vite": "^8.3.0",
+		"wrangler": "^4.165.0"
 	},
 	"imports": {
 		"#lib/*": "./src/lib/*"
 	},
 	"dependencies": {
+		"@supabase/ssr": "^0.12.7",
+		"@supabase/supabase-js": "^2.119.1",
 		"three": "^0.187.0"
 	}
 }

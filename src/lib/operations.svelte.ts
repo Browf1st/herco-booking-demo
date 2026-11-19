@@ -92,7 +92,7 @@ function load(): Operations {
 	}
 	return data;
 }
-export const ops = $state<{ data: Operations }>({ data: load() });
+export const ops = $state<{ data: Operations }>({ data: import.meta.env.MODE === 'worker' ? empty() : load() });
 const id = () => crypto.randomUUID();
 const timestamp = () => new Date().toISOString();
 

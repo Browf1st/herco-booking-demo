@@ -147,8 +147,9 @@ const sampleBooking: Booking = {
  selection: sampleCurrent, estimate: sampleAfter.estimate, originalServices: sampleBefore,
  serviceChanges: [{ id: 'sample-addon', at: addDays(today(), -1) + 'T02:30:00Z', actor: 'Demo admin', before: sampleBefore, after: sampleAfter }]
 };
-const loaded = load();
-if (!loaded.bookings.some(booking => booking.id === sampleServiceBookingId)) loaded.bookings.push(sampleBooking);
+const demo = import.meta.env.MODE !== 'worker';
+const loaded: DemoData = demo ? load() : { bookings: [], blocked: [], scenarioVersion: SCENARIO_VERSION };
+if (demo && !loaded.bookings.some(booking => booking.id === sampleServiceBookingId)) loaded.bookings.push(sampleBooking);
 // Final prices for the completed demo scenarios, including older saved copies.
 const sampleFinalPrices = new Map([
  ['HG-DEMO-208', 2500],

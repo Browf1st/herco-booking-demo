@@ -39,7 +39,10 @@
 				{/each}
 			</div>
 				<div><a class="btn ghost" href={resolve(`/book?service=wheel-colour&finish=${encodeURIComponent(colour.name)}`)}><ActionIcon name="calendar" />Book powder coating</a></div>
-				<img class="photo" src={asset(photos.wheelSet)} alt="Wheels coated in red, purple, pink and blue by the shop" width="960" height="1280" loading="lazy" decoding="async" />
+				<img class="photo" src={asset(photos.wheelSet)}
+					srcset={`${asset('photos/wheel-set-480.webp')} 480w, ${asset('photos/wheel-set-720.webp')} 720w, ${asset(photos.wheelSet)} 960w`}
+					sizes="(min-width: 1100px) 522px, (min-width: 800px) calc(50vw - 28px), calc(100vw - 32px)"
+					alt="Wheels coated in red, purple, pink and blue by the shop" width="960" height="1280" loading="lazy" decoding="async" />
 				<p class="muted small">All four colours, fresh off the shop floor.</p>
 			</div>
 		</div>

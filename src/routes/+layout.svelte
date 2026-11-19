@@ -32,6 +32,7 @@
 	const activeAdmin = $derived(adminNavigation(page.url.searchParams));
 	const ownerLinks = [{ tab: 'Reports', label: 'Reports' }, { tab: 'Staff Access', label: 'Accounts' }, { tab: 'Activity log', label: 'Activity Log' }] as const;
 	const moreTabs = ['Booking', 'Customers', 'HERCO Points', 'Inventory', 'Pricing'] as const;
+	const demo = import.meta.env.MODE !== 'worker';
 	let sessionError = $state('');
 
 	function selectDemoView(event: MouseEvent, view: 'admin' | 'owner') {
@@ -72,6 +73,7 @@
 			if (event.key === 'herco-theme' || event.key === null) applyTheme(event.newValue ?? 'system');
 		};
 		window.addEventListener('storage', onThemeStorage);
+		if (!demo) return () => window.removeEventListener('storage', onThemeStorage);
 		const stopOperations = syncOperations();
 		if (account.current) saveFanProfile(account.current);
 		const stopBookings = syncBookings();
@@ -127,11 +129,11 @@
 				{/each}
 			</div>
 		</details>
-		<nav class="view-switch" aria-label="Demo views">
+		{#if demo}<nav class="view-switch" aria-label="Demo views">
 			<a href={resolve('/')} aria-current={page.route.id !== '/admin' ? 'true' : undefined}>User view</a>
 			<a href={resolve('/admin')} aria-current={page.route.id === '/admin' && !activeAdmin.owner ? 'true' : undefined} onclick={(event) => selectDemoView(event, 'admin')}>Admin view</a>
 			<a href={resolve(adminPath('Booking'))} aria-current={page.route.id === '/admin' && activeAdmin.owner ? 'true' : undefined} onclick={(event) => selectDemoView(event, 'owner')}>Owner view</a>
-		</nav>
+		</nav>{/if}
 	</div>
 	{#if sessionError}<p class="wrap error small" role="alert">{sessionError}</p>{/if}
 </div>
@@ -145,20 +147,20 @@
 		<button class="menu-trigger" type="button" bind:this={menuTrigger} aria-expanded={menuOpen} aria-controls="header-navigation" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'} onclick={() => menuOpen = !menuOpen}>
 			<ActionIcon name={menuOpen ? 'close' : 'menu'} />
 		</button>
-		{#if page.route.id !== '/admin'}
+		{#if !demo || page.route.id !== '/admin'}
 		<nav id="header-navigation" class="row main-nav" class:menu-open={menuOpen} aria-label="Customer navigation">
 			<a class="link" href={resolve('/#services')} aria-current={page.route.id === '/' && page.url.hash === '#services' ? 'location' : undefined}>Services</a>
 			<a class="link" href={resolve('/preview')} aria-current={page.route.id === '/preview' ? 'page' : undefined}>Showcase</a>
 			<a class="link" href={resolve('/points')} aria-current={page.route.id === '/points' ? 'page' : undefined}>HERCO Points</a>
 			<a class="link" href={resolve('/my-bookings')} aria-current={page.route.id === '/my-bookings' ? 'page' : undefined}>Bookings</a>
 			<a class="link" href={resolve('/account')} aria-current={page.route.id === '/account' ? 'page' : undefined}>Account</a>
-			<details class="book-menu" bind:this={bookMenu}>
+			{#if demo}<details class="book-menu" bind:this={bookMenu}>
 				<summary class="btn sm" class:booking-current={page.route.id === '/book'}><ActionIcon name="calendar" />Book <span aria-hidden="true">▾</span></summary>
 				<div class="book-options">
 					<a href={resolve('/book')} data-sveltekit-reload aria-current={page.route.id === '/book' && !page.url.searchParams.has('walk-in') ? 'page' : undefined}>Online</a>
 					<a href={resolve('/book?walk-in=1')} data-sveltekit-reload aria-current={page.route.id === '/book' && page.url.searchParams.has('walk-in') ? 'page' : undefined}>Walk-in</a>
 				</div>
-			</details>
+			</details>{:else}<a class="btn sm" href={resolve('/book')} aria-current={page.route.id === '/book' ? 'page' : undefined}><ActionIcon name="calendar" />Book</a>{/if}
 		</nav>
 		{:else}
 		<nav id="header-navigation" class="admin-sections main-nav" class:owner-sections={activeAdmin.owner} class:menu-open={menuOpen} aria-label="Admin sections">
@@ -197,6 +199,7 @@
 			<div>
 				<p class="display name">{shop.name}</p>
 				<p class="muted small">{shop.area}. Open Wednesday to Sunday, 9AM to 5PM.</p>
+				{#if !demo}<a class="small" href={resolve('/privacy-preferences')}>Privacy preferences</a>{/if}
 			</div>
 		</div>
 	</div>

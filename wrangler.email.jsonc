@@ -1,0 +1,14 @@
+{
+	"name": "herco-staging-email",
+	"main": "src/workers/email.ts",
+	"compatibility_date": "2026-11-19",
+	"workers_dev": false,
+	"preview_urls": false,
+	"triggers": {
+		"crons": ["*/5 * * * *"]
+	},
+	"vars": {
+		"HERCO_EMAIL_MODE": "disabled",
+		"HERCO_REMINDER_LEAD_HOURS": "0"
+	}
+}

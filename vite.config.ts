@@ -1,4 +1,5 @@
 import adapter from '@sveltejs/adapter-static';
+import cloudflare from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, loadEnv } from 'vite';
 
@@ -11,12 +12,12 @@ export default defineConfig(({ mode }) => ({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			// Static output for the UI-only demo; switch to adapter-cloudflare when the backend is added.
-			adapter: adapter(),
+			// GitHub Pages publishes the demo. The Worker build includes the server endpoints.
+			adapter: mode === 'worker' ? cloudflare() : adapter({ strict: false }),
 
-			// Static pages receive a hashed CSP meta tag. Hosting must supply frame-ancestors
-			// and other HTTP-only headers later; see docs/production-plan.md.
-			...(mode === 'production' ? { csp: {
+			// Static pages receive a hashed CSP meta tag. The Worker adds HTTP-only
+			// framing protection in _headers and hooks.server.ts.
+			...(mode === 'production' || mode === 'worker' ? { csp: {
 				mode: 'hash' as const,
 				directives: {
 					'default-src': ['self'],
