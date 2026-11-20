@@ -3,10 +3,9 @@
 	import { asset, resolve } from '$app/paths';
 
 	import CompareSlider from '#lib/shared/CompareSlider.svelte';
-	import { photos, wheelColours } from '#lib/shared/config.ts';
+	import { photos } from '#lib/shared/config.ts';
+	import { powderConcept, powderShowcase } from '#lib/shared/powder-showcase.ts';
 	import { features } from '#lib/demo/store.svelte.ts';
-
-	let colour = $state.raw(wheelColours[0]);
 </script>
 
 <section class="section wrap stack">
@@ -24,27 +23,32 @@
 			</div>
 		</div>
 
-		<div class="layout">
-			<div class="stack">
-				<img class="photo" src={asset(colour.photo as Parameters<typeof asset>[0])} alt="Wheel coated in {colour.name}" width="720" height="720" loading="lazy" decoding="async" />
-				<p class="muted small">Real photo from the shop.</p>
+		<div class="powder stack">
+			<div class="powder-intro">
+				<div class="stack">
+					<h3>Powder coating results</h3>
+					<p class="muted">Wheels, CVT covers, brackets and springs finished in the shop. Tap a finish to book it.</p>
+				</div>
+				<div><a class="btn ghost" href={resolve('/book?service=wheel-colour')}><ActionIcon name="calendar" />Book powder coating</a></div>
 			</div>
-			<div class="stack">
-				<h3>Powder coating results</h3>
-				<p class="muted">Browse the finished wheels in each colour.</p>
-			<p class="eyebrow">Wheel colour <span class="muted">{colour.name}</span></p>
-			<div class="row" role="group" aria-label="Wheel colour">
-				{#each wheelColours as c (c.id)}
-					<button class="swatch" class:on={colour === c} style:background={c.hex} aria-label={c.name} aria-pressed={colour === c} title={c.name} onclick={() => (colour = c)}></button>
+			<ul class="gallery">
+				{#each powderShowcase as item, index (item.slug)}
+					<li>
+						<figure>
+							<img src={asset(`photos/powder/${item.slug}-480.webp` as Parameters<typeof asset>[0])}
+								srcset={`${asset(`photos/powder/${item.slug}-480.webp` as Parameters<typeof asset>[0])} 480w, ${asset(`photos/powder/${item.slug}-800.webp` as Parameters<typeof asset>[0])} 800w`}
+								sizes="(min-width: 1100px) 340px, (min-width: 700px) 31vw, 46vw"
+								alt={item.alt} width="480" height="640" loading={index < 2 ? 'eager' : 'lazy'} decoding="async" />
+							<figcaption>
+								{#if item.finish}<a href={resolve(`/book?service=wheel-colour&finish=${encodeURIComponent(item.finish)}`)}>{item.title}</a>{:else}{item.title}{/if}
+							</figcaption>
+						</figure>
+					</li>
 				{/each}
-			</div>
-				<div><a class="btn ghost" href={resolve(`/book?service=wheel-colour&finish=${encodeURIComponent(colour.name)}`)}><ActionIcon name="calendar" />Book powder coating</a></div>
-				<img class="photo" src={asset(photos.wheelSet)}
-					srcset={`${asset('photos/wheel-set-480.webp')} 480w, ${asset('photos/wheel-set-720.webp')} 720w, ${asset(photos.wheelSet)} 960w`}
-					sizes="(min-width: 1100px) 522px, (min-width: 800px) calc(50vw - 28px), calc(100vw - 32px)"
-					alt="Wheels coated in red, purple, pink and blue by the shop" width="960" height="1280" loading="lazy" decoding="async" />
-				<p class="muted small">All four colours, fresh off the shop floor.</p>
-			</div>
+			</ul>
+			<img class="photo" src={asset(powderConcept.photo)} srcset={`${asset(powderConcept.small)} 480w, ${asset(powderConcept.photo)} 800w`}
+				sizes="(min-width: 1100px) 1060px, calc(100vw - 32px)" alt={powderConcept.alt} width="800" height="671" loading="lazy" decoding="async" />
+			<p class="muted small">Real photos from the shop.</p>
 		</div>
 	{:else}
 		<p class="muted">The preview is part of the Pro package. Switch the demo to Pro in the footer to see it.</p>
@@ -67,17 +71,60 @@
 		border-radius: 6px;
 	}
 
-	.swatch {
-		width: 48px;
-		height: 48px;
-		border: 2px solid var(--line);
-		border-radius: 50%;
-		cursor: pointer;
+	.powder {
+		padding-top: 24px;
+		border-top: 1px solid var(--line);
 	}
 
-	.swatch.on {
-		border-color: var(--text);
-		box-shadow: 0 0 0 3px var(--accent);
+	.powder-intro {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: end;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.gallery {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 12px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	figure {
+		margin: 0;
+	}
+
+	.gallery img {
+		display: block;
+		width: 100%;
+		height: auto;
+		aspect-ratio: 3 / 4;
+		object-fit: cover;
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		background: var(--panel);
+	}
+
+	figcaption {
+		margin-top: 6px;
+		font-size: .9rem;
+		font-weight: 650;
+	}
+
+	figcaption a {
+		color: inherit;
+		text-decoration-color: var(--accent);
+		text-underline-offset: 3px;
+	}
+
+	@media (min-width: 700px) {
+		.gallery {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+			gap: 16px;
+		}
 	}
 
 

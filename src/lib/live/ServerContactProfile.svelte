@@ -55,7 +55,7 @@
 </script>
 
 <section class="card stack" aria-labelledby="profile-heading">
-	<h1 id="profile-heading">Profile</h1>
+	<h2 id="profile-heading">Profile</h2>
 	{#if message}<p role="alert">{message}</p>{/if}
 	{#if notice}<p role="status">{notice}</p>{/if}
 	{#if ready}
@@ -80,7 +80,7 @@
 </section>
 
 <style>
-	#profile-heading { font-size: 1.5rem; }
+	#profile-heading { font: 750 1.25rem/1.2 var(--body); font-style: normal; text-transform: none; }
 	.choice { display: flex; align-items: center; gap: .5rem; }
 	.choice input { width: auto; }
 	.ranking-options { padding-block: .75rem; }

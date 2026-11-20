@@ -27,7 +27,7 @@
 
 
 {#if points}
-<section class="section wrap stack">
+<section class="section wrap stack points-page">
 	<p class="eyebrow">HERCO fan community</p>
 	<h1>HERCO Points</h1>
 	<p class="muted">See your points, track reward progress and explore the fan ranking.</p>
@@ -109,7 +109,7 @@
 	</div>
 </section>
 {:else}
-	<section class="section wrap points-intro">
+	<section class="section wrap points-intro points-page">
 		<div class="stack points-welcome">
 			<h1>HERCO Points</h1>
 			<p class="muted">Sign in to see your balance, redeem rewards, and check what’s ready to claim.</p>
@@ -139,10 +139,12 @@
 	}
 	.points-intro { display: grid; gap: clamp(20px, 5vw, 60px); align-items: center; }
 	.points-welcome { padding-block: 12px; }
-	.points-welcome h1 { font-size: clamp(2.9rem, 7vw, 5.4rem); }
+	/* Owner asked for smaller type here (2026-11-20): titles about 32-40px instead of up to 99px. */
+	.points-page h1 { font-size: clamp(2rem, 5vw, 2.5rem); line-height: 1.05; }
+	.points-page h2 { font-size: clamp(1.25rem, 3vw, 1.5rem); line-height: 1.15; }
+	.points-page h3 { font-size: 1.1rem; line-height: 1.2; }
 	.points-welcome p { max-width: 42ch; }
 	.reward-preview { padding: clamp(16px, 3vw, 26px); border-top: 4px solid var(--accent); }
-	.reward-preview h2 { font-size: clamp(1.6rem, 3vw, 2.25rem); }
 	.reward-preview ul { list-style: none; margin: 0; padding: 0; }
 	.reward-preview li { display: flex; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding-block: 12px; border-top: 1px solid var(--line); }
 	.reward-preview li strong { color: var(--accent); white-space: nowrap; }
@@ -156,10 +158,10 @@
 	.leaderboard .member-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.leaderboard strong { white-space: nowrap; }
 	.rank { color: var(--accent); }
-	.points { font: italic 800 2.6rem var(--display); }
+	.points { font: italic 800 1.8rem var(--display); }
 	.fan-account-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: .75rem; }
 	.fan-account-summary h2 { overflow-wrap: anywhere; }
-	.fan-account-summary .points { text-align: right; white-space: nowrap; font-size: clamp(1.5rem, 4vw, 2.6rem); }
+	.fan-account-summary .points { text-align: right; white-space: nowrap; font-size: clamp(1.4rem, 4vw, 1.8rem); }
 
 	progress { width: 100%; height: 12px; accent-color: var(--accent); }
 	.reward-reached { border-color: var(--ok); }

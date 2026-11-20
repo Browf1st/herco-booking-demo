@@ -64,6 +64,8 @@ UI parity: the Worker screens are being matched to the demo look. Open items in 
 - [ ] Q-21 F-004: Old bookings without an original price snapshot: (A) show "price history not available" (B) hide the history section.
 - [ ] Q-22 F-005: If someone signs in with Google using an email that already has a password account: (A) link them automatically after email check (B) keep separate. Also: how many failed sign-ins before a pause (e.g. 5 in 15 minutes)?
 - [ ] Q-23 F-011: Do you need report downloads (CSV)? If yes, which figures, and who may download them?
+- [x] Q-24 Photos: "Replace photos with gdrive": answered 2026-11-20 as (B) site pictures. The owner supplied the "Showcase for powder coating" folder, now shown on the Showcase page. Completion photos stay in the private Supabase bucket.
+- [x] Q-25 UI proposals from the 2026-11-20 bug list: approved and built 2026-11-20 (code screen with digit boxes, account layout, smaller fonts, My Bookings sections).
 
 ## Needs you (accounts, keys, content)
 Enter secret values only in the provider's settings or ignored local files, never in chat or Git.
@@ -87,3 +89,7 @@ Enter secret values only in the provider's settings or ignored local files, neve
 - 2026-11-20 F-012 First Owner set up (10 pages, 19 actions).
 - 2026-11-20 F-012 Password-only staff sign-in approved and applied.
 - 2026-11-20 UI parity audit written; customers, activity log and staff header matched to the demo; migrations 033–036 and TEST seed data applied (36 total).
+- 2026-11-20 F-001 bug fixes (code only, not yet tried in the app while signed in): review pop-up time no longer shows "undefined", mobile number optional for online bookings (new migration 037, not yet applied to hosted Supabase), and customers go to My Bookings with status after submitting.
+- 2026-11-20 UI updates (F-005, F-006, F-010): "Check your email" code screen with one box per digit and a Resend code link (new `resend` account action, `HERCO_AUTH_OTP_LENGTH` setting, default 6); account page with Profile, Appearance and Sign out sections; smaller type on My Bookings and HERCO Points; My Bookings split into Upcoming, Requests, Completed and Cancelled. Account, Points and My Bookings checked signed in on local dev; the code screen was not seen in the browser (needs a fresh signup).
+- 2026-11-20 QA and misuse-test fixes: code boxes keep digits in place when one is cleared; My Bookings waits for change requests before showing sections and has a Past section for completed or past-dated visits; the booking server now checks a typed mobile number (7-15 digits).
+- 2026-11-20 Showcase (`/preview`): powder coating section replaced with a gallery of the shop's own photos (10 tiles plus the HERCO Concept poster, WebP at 480/800 px, camera data removed); finish names link to booking. Both builds and size budgets pass.

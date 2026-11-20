@@ -34,6 +34,38 @@ insert into storage.objects(bucket_id,name) values
   ('herco-completion','00000000-0000-4000-8000-000000000003/00000000-0000-4000-8000-000000000002/00000000-0000-4000-8000-000000000004.jpg'),
   ('unrelated-bucket','other.jpg');
 
+-- Mobile number: optional on a customer's own online booking, still required for staff bookings.
+-- A past date passes contact validation and then fails the slot check (23P01) without creating a booking.
+do $$
+declare customer uuid := '00000000-0000-4000-8000-000000000001';
+begin
+  begin
+    perform herco_private.create_booking_for(customer, customer, false, gen_random_uuid(), current_date - 1, 10::smallint,
+      array['ceramic'], 'Fixture bike', 'Fixture Name', '', '');
+    raise exception 'Past-date booking was not refused';
+  exception when sqlstate '23P01' then null;
+  end;
+  begin
+    perform herco_private.create_booking_for(customer, customer, false, gen_random_uuid(), current_date - 1, 10::smallint,
+      array['ceramic'], 'Fixture bike', 'Fixture Name', null, '');
+    raise exception 'Past-date booking was not refused';
+  exception when sqlstate '23P01' then null;
+  end;
+  begin
+    perform herco_private.create_booking_for(customer, customer, false, gen_random_uuid(), current_date - 1, 10::smallint,
+      array['ceramic'], 'Fixture bike', 'Fixture Name', '12', '');
+    raise exception 'A two-character mobile number was accepted';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    perform herco_private.create_booking_for('00000000-0000-4000-8000-000000000002', customer, true, gen_random_uuid(),
+      current_date - 1, 10::smallint, array['ceramic'], 'Fixture bike', 'Fixture Name', '', '');
+    raise exception 'A staff booking without a mobile number was accepted';
+  exception when sqlstate '22023' then null;
+  end;
+end
+$$;
+
 set local role authenticated;
 select set_config('test.uid','00000000-0000-4000-8000-000000000002',true);
 select set_config('test.aal','aal1',true);

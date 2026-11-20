@@ -22,11 +22,24 @@ const photoLimits = {
 	'herco-cruiser-480.webp': 95,
 	'herco-red-wheels-480.webp': 150,
 	'wheel-set-480.webp': 140,
-	'wheel-set-720.webp': 280
+	'wheel-set-720.webp': 280,
+	// Showcase powder coating gallery (2026-11-20): phone-size tiles and the concept poster.
+	'powder/luminous-blue-two-tone-480.webp': 90,
+	'powder/fire-blue-cvt-cover-480.webp': 90,
+	'powder/high-gloss-black-topcoat-480.webp': 90,
+	'powder/red-black-two-tone-wheels-480.webp': 90,
+	'powder/gloss-black-wheels-480.webp': 90,
+	'powder/black-cvt-covers-480.webp': 90,
+	'powder/red-brackets-480.webp': 90,
+	'powder/purple-spring-480.webp': 90,
+	'powder/red-wheels-scooter-480.webp': 90,
+	'powder/blue-violet-scooter-480.webp': 90,
+	'powder/herco-concept-480.webp': 60,
+	'powder/herco-concept-800.webp': 120
 };
 const responsivePhotos = {
 	index: ['herco-cruiser-480.webp', 'herco-red-wheels-480.webp'],
-	preview: ['wheel-set-480.webp', 'wheel-set-720.webp']
+	preview: ['powder/herco-concept-480.webp', 'powder/herco-concept-800.webp']
 };
 
 const mode = process.argv[2];

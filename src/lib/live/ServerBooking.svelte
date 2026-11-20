@@ -15,6 +15,7 @@
  import { uiCoatingSnapshot, type UiCatalogConfig } from './ui-catalog';
  import { goto } from '$app/navigation';
 	import { displayEstimate, displayServicePrice, type PricedService } from './service-estimate';
+	import { contactError, slotFromHour } from './booking-contact';
 
 	type Service = {
 		code: string;
@@ -41,6 +42,8 @@
 	let visitHour = $state('');
 	let name = $state('');
 	let phone = $state('');
+	// Customers may skip the mobile number on their own online booking; walk-ins and staff bookings still need it.
+	const phoneRequired = $derived(walkIn || !!manualCustomer);
 	let unit=$state(''), custom=$state(''), powderBike=$state(''), modelYear=$state<number>(), notes=$state('');
  const manualModel=$derived(unit==='other'||unit==='other-big-bike');
  const bike=$derived(catalogSelection.ceramic?(manualModel?custom.trim():unit):powderBike.trim());
@@ -211,7 +214,7 @@
 		if (!availableHours.some((slot) => String(slot.visit_hour) === visitHour)) visitHour = '';
 	}
 
-	function submit(event:SubmitEvent){event.preventDefault();submitError='';if(!currentEstimate)return;if(!name.trim()||phone.replace(/\D/g,'').length<7){submitError='Enter your name and a valid mobile number.';return;}reviewDialog?.showModal();}
+	function submit(event:SubmitEvent){event.preventDefault();submitError='';if(!currentEstimate)return;submitError=contactError(name,phone,phoneRequired);if(submitError)return;reviewDialog?.showModal();}
  async function confirmBooking() {
 		if (submitting || !selected.length || (walkIn ? !intake || (!manualCustomer&&!acknowledged) : !visitDate || !visitHour)) return;
 		const estimate = currentEstimate;
@@ -236,9 +239,15 @@
 				body: JSON.stringify({ ...payload, requestId, priceFingerprint: estimate.fingerprint })
 			});
 			if (response.ok) {
-				booked = await response.json();
+				const saved: Booking = await response.json();
  reviewDialog?.close();
 				trackShopEvent('booking_submitted');
+				// Customers land on My Bookings, where the new booking shows its live status.
+				if (!manualCustomer) {
+					await goto(resolve('/my-bookings') + '?submitted=' + encodeURIComponent(saved.id));
+					return;
+				}
+				booked = saved;
 				return;
 			}
 			if (response.status === 401) signedOut = true;
@@ -343,7 +352,7 @@
     <legend><span>3</span> Contact details and vehicle plate</legend>
     <div class="cols">
      <label>Full name <input bind:value={name} autocomplete="name" placeholder="e.g. Jamie Reyes" maxlength="70" required /></label>
-     <label>Mobile number <input type="tel" bind:value={phone} autocomplete="tel" placeholder="e.g. 0917 000 0000" maxlength="20" required /></label>
+     <label>Mobile number{phoneRequired ? '' : ' (optional)'} <input type="tel" bind:value={phone} autocomplete="tel" placeholder="e.g. 0917 000 0000" maxlength="20" required={phoneRequired} /></label>
      <label>
       <span>Email <span class:required-label={!walkIn}>{walkIn ? '(optional)' : '(required)'}</span></span>
       <input type="email" bind:value={email} readonly autocomplete="email" placeholder="e.g. jamie@example.com" maxlength="254" required={!walkIn} aria-describedby={walkIn ? undefined : 'booking-email-help'} />
@@ -386,9 +395,9 @@
   <h2 id="review-title">Review booking</h2>
   <dl class="review-facts">
    <div><dt>Booking source</dt><dd>{walkIn ? 'Walk-in' : 'Online'}</dd></div>
-   <div><dt>Appointment · Philippine time</dt><dd>{visitDate ? fmtDate(visitDate, {month:'long', day:'numeric', year:'numeric'}) : ''} · {visitHour ? fmtSlot(visitHour) : ''}</dd></div>
+   <div><dt>Appointment · Philippine time</dt><dd>{visitDate ? fmtDate(visitDate, {month:'long', day:'numeric', year:'numeric'}) : ''} · {visitHour ? fmtSlot(slotFromHour(visitHour)) : ''}</dd></div>
    <div><dt>Customer</dt><dd>{name.trim()}</dd></div>
-   <div><dt>Mobile</dt><dd>{phone.trim()}</dd></div>
+   <div><dt>Mobile</dt><dd>{phone.trim() || 'Not provided'}</dd></div>
    <div><dt>Email</dt><dd>{email.trim() || 'Not provided'}</dd></div>
    <div><dt>Motorcycle</dt><dd>{bike}{isPcx && modelYear ? ' · ' + modelYear : ''}</dd></div>
    <div><dt>Plate number</dt><dd>{plate.trim() || 'Not provided'}</dd></div>

@@ -4,6 +4,7 @@
  import ServerSharedBookingDetails from './ServerSharedBookingDetails.svelte';
  import BookingServiceEditor from './BookingServiceEditor.svelte';
  import { resolve } from '$app/paths';
+ import { replaceState } from '$app/navigation';
  import { fmtDate, fmtSlot, today } from '#lib/shared/dates.ts';
  import ServerCustomerChangeForm from '#lib/live/ServerCustomerChangeForm.svelte';
  import ServerBookingActivity from '#lib/live/ServerBookingActivity.svelte';
@@ -11,6 +12,7 @@
  import type { CoatingOptions } from './booking-coating';
 
  import { displayEstimate, displayServicePrice, type PricedService } from './service-estimate';
+ import { bookingGroupEmpty, bookingGroupLabels, bookingGroupOrder, groupBookings, initialGroup, type BookingGroup } from './booking-groups';
  type Service = PricedService & { code: string; label: string;
   promotion?: { label: string; base_price_centavos: number } | null };
  type Booking = {
@@ -56,6 +58,15 @@
  let loading = $state(true);
  let signedOut = $state(false);
  let message = $state('');
+ // Set when the booking form sends the customer here right after a successful submit.
+ let submittedId = $state('');
+ const submittedBooking = $derived(submittedId ? bookings.find(booking => booking.id === submittedId) : undefined);
+ // Sections: Upcoming, Requests (open cancel/reschedule), Past, Cancelled. Grouped within the loaded page.
+ const groups = $derived(groupBookings(bookings, new Set(changes.filter(change => change.state === 'pending').map(change => change.booking_id)), upcoming));
+ let chosenGroup = $state<BookingGroup>();
+ // Sections wait for the first change-request check so bookings don't jump between sections.
+ let changesChecked = $state(false);
+ const activeGroup = $derived(chosenGroup ?? initialGroup(groups, submittedId));
 
  async function load(nextPage: number, signal?: AbortSignal) {
   loading = true;
@@ -64,6 +75,9 @@
   changeNotice = '';
   changeError = '';
   changeLoadId++;
+  changes = [];
+  changesChecked = false;
+  if (nextPage !== page) chosenGroup = undefined;
   try {
    const response = await fetch(resolve('/api/bookings') + '?page=' + nextPage, { signal });
    if (response.status === 401) {
@@ -87,10 +101,10 @@
 
  async function loadChanges(items: Booking[], signal?: AbortSignal) {
   const loadId = ++changeLoadId;
-  changes = [];
   changeStatus = 'loading';
   if (!items.length) {
    changeStatus = 'ready';
+   changesChecked = true;
    return;
   }
   const query = new URLSearchParams();
@@ -102,8 +116,12 @@
    if (loadId !== changeLoadId) return;
    changes = result;
    changeStatus = 'ready';
+   changesChecked = true;
   } catch {
-   if (!signal?.aborted && loadId === changeLoadId) changeStatus = 'failed';
+   if (!signal?.aborted && loadId === changeLoadId) {
+    changeStatus = 'failed';
+    changesChecked = true;
+   }
   }
  }
 
@@ -111,6 +129,7 @@
   requestDialog?.close();
   activeForm = undefined;
   changeNotice = 'Request sent. Your current slot stays booked while the shop reviews it.';
+  chosenGroup = 'requests';
   void loadChanges(bookings);
  }
 
@@ -129,6 +148,7 @@
     throw new Error(detail?.message ?? 'Could not confirm withdrawal. Try again.');
    }
    changeNotice = 'Request withdrawn. Your booking is unchanged.';
+   chosenGroup = 'upcoming';
    await loadChanges(bookings);
   } catch (error) {
    changeError = error instanceof Error ? error.message : 'Could not confirm withdrawal. Try again.';
@@ -144,6 +164,12 @@
  }
 
  onMount(() => {
+  const submitted = new URL(window.location.href).searchParams.get('submitted') ?? '';
+  if (/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(submitted)) submittedId = submitted;
+  // Show the "submitted" message once: drop it from the address so a refresh or bookmark doesn't repeat it.
+  if (submitted) {
+   try { replaceState(resolve('/my-bookings'), {}); } catch { /* router not ready: the message just shows again on refresh */ }
+  }
   const controller = new AbortController();
   void load(1, controller.signal);
   return () => controller.abort();
@@ -153,12 +179,13 @@
 <svelte:head><title>My bookings | HERCO</title></svelte:head>
 <section class="section wrap stack">
  <h1>My bookings</h1>
+ {#if submittedBooking}<p role="status" class="submitted-notice"><ActionIcon name="check" /> Booking{submittedBooking.reference_no ? ' HG-' + submittedBooking.reference_no : ''} submitted. Status: <strong>{labels[submittedBooking.status]}</strong>{submittedBooking.status === 'pending' ? ' — the shop will review it and email you when it is confirmed.' : '.'}</p>{/if}
  {#if changeNotice}<p role="status">{changeNotice}</p>{/if}
  {#if changeError}<p role="alert">{changeError}</p>{/if}
  {#if signedOut}
   <p>Sign in to see your bookings.</p>
   <div><a class="btn sm" href={resolve('/account')}>Sign in</a></div>
- {:else if loading}
+ {:else if loading || (bookings.length && !changesChecked)}
   <p role="status">Loading bookings…</p>
  {:else if message}
   <p role="alert">{message}</p>
@@ -167,39 +194,45 @@
   <p>No bookings on this page.</p>
   {#if page === 1}<div><a class="btn sm" href={resolve('/book')}>Book a visit</a></div>{/if}
  {:else}
-  {#each bookings as booking (booking.id)}
+  <div class="group-tabs" role="group" aria-label="Booking sections">
+   {#each bookingGroupOrder as name (name)}
+    <button type="button" class="group-tab" aria-pressed={activeGroup === name} onclick={() => chosenGroup = name}>
+     {bookingGroupLabels[name]} <span class="count" aria-label={groups[name].length + ' bookings'}>{groups[name].length}</span>
+    </button>
+   {/each}
+  </div>
+  {#if changeStatus === 'failed'}
+   <p role="alert" class="request-warning">Change requests could not be loaded, so open requests may not show and request buttons are hidden. <button class="btn sm ghost" onclick={() => loadChanges(bookings)}>Try again</button></p>
+  {/if}
+  {#each groups[activeGroup] as booking (booking.id)}
    {@const requests = changes.filter(change => change.booking_id === booking.id)}
    {@const pending = requests.find(change => change.state === 'pending')}
    {@const services = booking.current_services ?? booking.original_services}
-   <article class="card stack">
-    <div class="row between">
-     <div class="row">
-      <h2>{booking.reference_no?'HG-'+booking.reference_no:booking.id}</h2>
-      <span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{labels[booking.status]}</span>
+   <article class="card stack booking-card" data-status={booking.status} class:just-submitted={booking.id === submittedId}>
+    <div class="card-top">
+     <div class="when">
+      <h2>{fmtDate(booking.visit_date)}</h2>
+      <p class="small muted">{booking.visit_hour === null ? 'Walk-in' : fmtSlot(booking.visit_hour + ':00')} · Philippine time</p>
      </div>
-     {#if booking.visit_hour !== null && changeStatus === 'ready' && !pending && upcoming(booking) && (booking.status === 'pending' || booking.status === 'confirmed')}
-      <div class="row">
-       <button class="btn sm ghost" onclick={() => openRequest(booking.id,'cancel')}><ActionIcon name="block"/>Request cancellation</button>
-       <button class="btn sm ghost" onclick={() => openRequest(booking.id,'reschedule')}><ActionIcon name="calendar"/>Request rescheduling</button>
-      </div>
-     {/if}
+     <span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{labels[booking.status]}</span>
     </div>
-    <p><ActionIcon name="box"/> <strong>{services.map(service => service.label).join(' · ')}</strong> · {booking.bike}</p>
-    {#if booking.visit_hour === null}
-     <p><strong>Walk-in</strong> · {fmtDate(booking.visit_date)} Philippine time</p>
-     {#if booking.status === 'pending' || booking.status === 'confirmed'}<p class="small muted">Ask the shop if you need to change or cancel this walk-in.</p>{/if}
-    {:else}
-     <p><strong>Visit</strong> · {fmtDate(booking.visit_date)} at {fmtSlot(booking.visit_hour + ':00')} Philippine time</p>
-    {/if}
-    <p>Estimated service value <strong>{displayEstimate(services, booking.current_total_centavos ?? booking.original_total_centavos)}</strong></p>
+    <p class="what"><strong>{services.map(service => service.label).join(' · ')}</strong> · {booking.bike}</p>
+    <p class="small muted">{booking.reference_no ? 'HG-' + booking.reference_no + ' · ' : ''}Estimated <strong>{displayEstimate(services, booking.current_total_centavos ?? booking.original_total_centavos)}</strong></p>
+    {#if booking.visit_hour === null && (booking.status === 'pending' || booking.status === 'confirmed')}<p class="small muted">Ask the shop if you need to change or cancel this walk-in.</p>{/if}
     {#if pending}
-     <div class="row between">
-      <p class="small muted">{pending.kind === 'cancel' ? 'Cancellation' : 'Reschedule'} request pending. Your current slot stays booked.</p>
+     <div class="request-note">
+      <p class="small">{pending.kind === 'cancel' ? 'Cancellation' : 'Reschedule'} request pending{pending.kind === 'reschedule' && pending.target_date && pending.target_hour !== null ? ' (to ' + fmtDate(pending.target_date) + ' at ' + fmtSlot(pending.target_hour + ':00') + ')' : ''}. Your current slot stays booked.</p>
       <button class="btn sm ghost" disabled={!!withdrawing} onclick={() => withdraw(pending)}>Withdraw request</button>
      </div>
     {/if}
+    {#if booking.visit_hour !== null && changeStatus === 'ready' && !pending && upcoming(booking) && (booking.status === 'pending' || booking.status === 'confirmed')}
+     <div class="row actions">
+      <button class="btn sm ghost" onclick={() => openRequest(booking.id,'reschedule')}><ActionIcon name="calendar"/>Request rescheduling</button>
+      <button class="btn sm ghost" onclick={() => openRequest(booking.id,'cancel')}><ActionIcon name="block"/>Request cancellation</button>
+     </div>
+    {/if}
     <details ontoggle={event=>{if(event.currentTarget.open)opened=new Set([...opened,booking.id]);}}>
-     <summary>View details</summary>
+     <summary>{booking.status === 'pending' && upcoming(booking) ? 'View details or edit services' : 'View details'}</summary>
      <div class="stack">
       <p>Reference <strong>{booking.id}</strong></p>
       <div class="cols" aria-label="Booking dates in Philippine time"><p><ActionIcon name="clock"/> <strong>Booked on</strong><br/>{stamp.format(new Date(booking.created_at))}</p><p><ActionIcon name="check"/> <strong>Approved</strong><br/>{booking.approved_at?stamp.format(new Date(booking.approved_at)):'Awaiting approval'}</p><p><ActionIcon name="finish"/> <strong>Completed</strong><br/>{booking.completed_at?stamp.format(new Date(booking.completed_at)):'Not completed'}</p></div>
@@ -233,10 +266,10 @@
      </div>
     </details>
    </article>
+  {:else}
+   <p class="muted">{bookingGroupEmpty[activeGroup]}</p>
+   {#if activeGroup === 'upcoming' && page === 1}<div><a class="btn sm" href={resolve('/book')}>Book a visit</a></div>{/if}
   {/each}
- {/if}
- {#if !loading && changeStatus === 'failed'}
-  <p role="alert">Change requests are temporarily unavailable. <button class="btn sm ghost" onclick={() => loadChanges(bookings)}>Try again</button></p>
  {/if}
  {#if !signedOut && !loading && !message && (page > 1 || hasMore)}
   <nav class="row" aria-label="Booking pages">
@@ -248,7 +281,28 @@
 </section>
 <dialog bind:this={requestDialog} aria-label="Request a booking change">{#if activeForm}{#key activeForm.id+activeForm.kind}<ServerCustomerChangeForm bookingId={activeForm.id} kind={activeForm.kind} onSaved={changeSaved} onClose={()=>{requestDialog?.close();activeForm=undefined;}}/>{/key}{/if}</dialog>
 <style>
- h2 { font-size: 1.8rem; }
+ /* Owner asked for smaller type here (2026-11-20). */
+ h1 { font-size: clamp(2rem, 5vw, 2.5rem); line-height: 1.05; }
+ h2 { font: 750 1.15rem/1.2 var(--body); font-style: normal; text-transform: none; }
+ h3 { font-size: 1.05rem; }
+ .group-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+ .group-tab { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--text); font: 650 .95rem var(--body); cursor: pointer; }
+ .group-tab[aria-pressed='true'] { border-color: var(--accent); background: var(--accent); color: #fff; }
+ .count { min-width: 1.5em; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 16%, transparent); font-size: .8rem; text-align: center; }
+ .booking-card { border-inline-start: 5px solid var(--line); gap: .5rem; }
+ .booking-card[data-status='pending'] { border-inline-start-color: var(--warn-line); }
+ .booking-card[data-status='confirmed'] { border-inline-start-color: var(--info-line); }
+ .booking-card[data-status='done'] { border-inline-start-color: var(--ok-line); }
+ .booking-card[data-status='cancelled'] { border-inline-start-color: var(--line); opacity: .85; }
+ .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+ .when p, .what { margin: 0; }
+ .request-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); }
+ .request-note p { margin: 0; }
+ .actions { flex-wrap: wrap; }
+ .request-warning { padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); }
+ summary { cursor: pointer; font-weight: 650; }
+ .submitted-notice { padding: .75rem 1rem; border: 1px solid var(--accent); border-radius: 8px; }
+ .just-submitted { outline: 2px solid var(--accent); outline-offset: 2px; }
  dialog{width:min(570px,calc(100% - 24px));max-height:90dvh;padding:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text)}dialog::backdrop{background:#0009}
  details > div { margin-top: .75rem; overflow-wrap: anywhere; }
 </style>

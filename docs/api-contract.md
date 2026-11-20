@@ -40,7 +40,7 @@ Auth levels used below: **public** (no sign-in check in the route; the database 
 ### `GET /api/auth/account`
 - **Who:** public.
 - **Input:** none.
-- **Success:** `200` `{ email: boolean, providers: { google: boolean, facebook: boolean } }` showing which sign-in options are switched on. `Cache-Control: no-store`.
+- **Success:** `200` `{ email: boolean, providers: { google: boolean, facebook: boolean }, otpLength: number }` showing which sign-in options are switched on. `otpLength` (added 2026-11-20) is the number of digits in emailed codes (6-10, from `HERCO_AUTH_OTP_LENGTH`, default 6); the screen shows one box per digit. `Cache-Control: no-store`.
 - **Errors:** none.
 
 ### `POST /api/auth/account`
@@ -49,6 +49,7 @@ Auth levels used below: **public** (no sign-in check in the route; the database 
   - `{ action: "oauth", provider: "google" | "facebook" }` returns `200 { url: string }`: the provider page to send the browser to (callback is `/api/auth/callback`).
   - `{ action: "signup", email, password, name }`: `email` valid address up to 254 chars; `password` 8-1024 chars; `name` 1-120 chars. Returns `202 { accepted: true }` whether or not the email already exists (does not reveal registered emails). Fails with `503` if the auth provider would log the user in without email confirmation.
   - `{ action: "recover", email }`: returns `202 { accepted: true }` (always, if the email is well-formed).
+  - `{ action: "resend", email }` (added 2026-11-20): sends a new signup confirmation code. Returns `202 { accepted: true }` (always, if the email is well-formed; does not reveal registered emails). Supabase rate limits apply (`429`).
   - `{ action: "confirm", email, token }`: `token` is a 6-10 digit emailed code. Returns `200 { redirectTo: string }` and signs the user in.
   - `{ action: "reset-password", email, token, password }`: same as confirm plus a new password (8-1024 chars). Returns `200 { redirectTo: string }` and signs the user in.
 - **Errors:** `400` invalid field, weak password, wrong or expired code, unknown `action` ("Choose an account action."); `403` provider or email auth disabled; `429` too many requests; `503` account service unavailable.
@@ -124,7 +125,7 @@ Auth levels used below: **public** (no sign-in check in the route; the database 
 
 ### `POST /api/bookings`
 - **Who:** verified customer (route checks signed in; database reports `403` for unverified). Same-origin required.
-- **Input (JSON):** `requestId` string (retry key); `date` string; `hour` integer; `services` array of 1-20 strings (each up to 64); `bike` string; `name` string; `phone` string; `plate` optional string; `coating` optional object (under 3000 chars JSON); `priceFingerprint` optional 32 lowercase-hex string. Lengths of `bike`, `name`, `phone`, `plate` and the date/hour ranges are not checked in the route (database decides, unclear from code).
+- **Input (JSON):** `requestId` string (retry key); `date` string; `hour` integer; `services` array of 1-20 strings (each up to 64); `bike` string; `name` string; `phone` string (may be empty: the mobile number is optional for a customer's own online booking; if not empty, the route requires 7-15 digits with only `+`, spaces, `()` and `-`, same rule as `/api/auth/contact`, else `400 "Enter a valid mobile number, or leave it blank."`; the database also caps it at 40 characters); `plate` optional string; `coating` optional object (under 3000 chars JSON); `priceFingerprint` optional 32 lowercase-hex string. Lengths of `bike`, `name`, `phone`, `plate` and the date/hour ranges are not checked in the route (database decides, unclear from code).
 - **Success:** `200` `{ id: uuid, status: string, totalCentavos: number, estimateOpen: boolean }`. `estimateOpen` is true when any service needs a quote or has a price range.
 - **Errors:** `400` invalid input; `401`; `403` verify your email; `409` slot unavailable, or `{ code: "price_changed", message }` when prices changed since the estimate; `503` retry using the same `requestId`.
 

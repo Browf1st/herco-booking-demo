@@ -6,6 +6,9 @@
 	import ActionIcon from '#lib/shared/ActionIcon.svelte';
 	import StaffSecurity from '#lib/live/StaffSecurity.svelte';
 	import ServerContactProfile from '#lib/live/ServerContactProfile.svelte';
+	import CodeInput from '#lib/live/CodeInput.svelte';
+	import { codeLength, maskEmail, DEFAULT_CODE_LENGTH } from '#lib/live/code-digits.ts';
+	import { currentTheme, setTheme, themeOptions, THEME_EVENT, type ThemeChoice } from '#lib/shared/theme.ts';
 
 	type Session = { id: string; email: string | null };
 	type AccountAction = 'signup' | 'confirm' | 'recover' | 'reset-password';
@@ -24,6 +27,13 @@
 	let mode = $state<'login' | AccountAction>('login');
 	let emailEnabled = $state(false);
 	let providers = $state<Provider[]>([]);
+	let otpLength = $state(DEFAULT_CODE_LENGTH);
+	let theme = $state<ThemeChoice>('system');
+	let editEmail = $state(false);
+	// Bumped to clear the code boxes (new code requested or email changed).
+	let codeResets = $state(0);
+	const codeStep = $derived(mode === 'confirm' || mode === 'reset-password');
+	const showEmailField = $derived(!codeStep || editEmail || !email.trim());
 
 	const sessionUrl = resolve('/api/auth/session');
 	const accountUrl = resolve('/api/auth/account');
@@ -141,6 +151,29 @@
 		mode = next;
 		showForm = next === 'confirm' || next === 'recover' || next === 'reset-password';
 		token = password = message = notice = '';
+		editEmail = false;
+	}
+
+	async function resendCode() {
+		if (busy) return;
+		if (!email.trim()) { message = 'Enter your email address first.'; return; }
+		busy = true;
+		message = notice = '';
+		try {
+			const response = await sendAccountAction({ action: mode === 'confirm' ? 'resend' : 'recover', email: email.trim() });
+			if (!response.ok) {
+				message = await responseMessage(response, 'Could not send a new code. Try again.');
+				return;
+			}
+			token = '';
+			codeResets++;
+			editEmail = false;
+			notice = 'If an account uses this address, a new code will arrive by email.';
+		} catch {
+			message = 'Could not reach the account service. Try again.';
+		} finally {
+			busy = false;
+		}
 	}
 
 	function sendAccountAction(body: Record<string, string>) {
@@ -207,6 +240,7 @@
 			if (!response.ok) return;
 			const options = await response.json();
 			emailEnabled = options.email === true;
+			otpLength = codeLength(options.otpLength);
 			const supported: Provider[] = ['google', 'facebook'];
 			providers = supported.filter(provider => options.providers?.[provider] === true);
 		} catch {
@@ -216,6 +250,14 @@
 
 	onMount(() => {
 		const refresh = () => { void loadSession(); };
+		const syncTheme = () => { theme = currentTheme(); };
+		syncTheme();
+		// Another tab changed the theme: read the new value from the event, since the layout may not have applied it yet.
+		const syncStoredTheme = (event: StorageEvent) => {
+			if (event.key === 'herco-theme' || event.key === null) theme = event.newValue === 'light' || event.newValue === 'dark' ? event.newValue : 'system';
+		};
+		window.addEventListener(THEME_EVENT, syncTheme);
+		window.addEventListener('storage', syncStoredTheme);
 		window.addEventListener('herco-account-changed', refresh);
 		void loadOptions();
 		void loadSession().then(() => {
@@ -223,7 +265,11 @@
 				message = 'Social sign-in could not be completed. Please try again.';
 			}
 		});
-		return () => window.removeEventListener('herco-account-changed', refresh);
+		return () => {
+			window.removeEventListener('herco-account-changed', refresh);
+			window.removeEventListener(THEME_EVENT, syncTheme);
+			window.removeEventListener('storage', syncStoredTheme);
+		};
 	});
 </script>
 
@@ -235,11 +281,36 @@
   <p role="status">Checking your session…</p>
   {#if !busy && message}<button class="btn ghost" onclick={loadSession}>Try again</button>{/if}
  {:else if session}
-  <div class="account-heading"><button class="btn sm ghost" onclick={signOut} disabled={busy}><ActionIcon name="logout" />Sign out</button></div>
+  <header class="account-header">
+   <span class="avatar" aria-hidden="true">{(session.email ?? '?').slice(0, 1).toUpperCase()}</span>
+   <div class="account-title"><h1>Account</h1>{#if session.email}<p class="muted small">{session.email}</p>{/if}</div>
+  </header>
   {#key session.id}<ServerContactProfile /><StaffSecurity bind:busy />{/key}
+  <section class="card stack" aria-labelledby="appearance-heading">
+   <h2 id="appearance-heading" class="section-title">Appearance</h2>
+   <p class="small muted">Choose how HERCO looks on this device.</p>
+   <div class="theme-options" role="radiogroup" aria-labelledby="appearance-heading">
+    {#each themeOptions as option (option.value)}
+     <label class="theme-option" class:active={theme === option.value}>
+      <input type="radio" name="account-theme" value={option.value} checked={theme === option.value} onchange={() => setTheme(option.value)} />
+      {option.label}
+     </label>
+    {/each}
+   </div>
+  </section>
+  <section class="card signout-row" aria-labelledby="signout-heading">
+   <div><h2 id="signout-heading" class="section-title">Sign out</h2><p class="small muted">Sign out of HERCO on this device.</p></div>
+   <button class="btn sm ghost signout" onclick={signOut} disabled={busy}><ActionIcon name="logout" />Sign out</button>
+  </section>
  {:else}
-  <div class="login stack">
+  <div class="login stack" class:code-step={codeStep}>
+   {#if codeStep}
+    <span class="code-icon" aria-hidden="true"><ActionIcon name="mail" /></span>
+    <h1>{mode === 'confirm' ? 'Check your email' : headings[mode]}</h1>
+    <p class="muted code-hint">{showEmailField ? 'Enter your email and the ' + otpLength + '-digit code we sent you.' : 'We sent a ' + otpLength + '-digit code to ' + maskEmail(email) + '.'}</p>
+   {:else}
    <h1>{mode === 'login' ? 'Log In' : mode === 'signup' ? 'Sign Up' : headings[mode]}</h1>
+   {/if}
    {#if mode === 'login' || mode === 'signup'}
     {#if emailEnabled}<p>{mode === 'login' ? 'New to HERCO?' : 'Already have an account?'} <button type="button" class="mode" disabled={busy} onclick={() => setMode(mode === 'login' ? 'signup' : 'login')}><ActionIcon name={mode === 'login' ? 'add' : 'login'} />{mode === 'login' ? 'Sign Up' : 'Log In'}</button></p>{/if}
    {/if}
@@ -257,12 +328,17 @@
    {:else}
     <form class="stack demo-form" onsubmit={submitAccount}>
      {#if mode === 'signup'}<label>Name<input bind:value={name} autocomplete="name" maxlength="120" required /></label>{/if}
-     <label>Email<input type="email" bind:value={email} autocomplete="username" maxlength="254" required /></label>
-     {#if mode === 'confirm' || mode === 'reset-password'}<label>Email verification code<input bind:value={token} autocomplete="one-time-code" inputmode="numeric" minlength="6" maxlength="10" pattern={'[0-9]{6,10}'} required /></label>{/if}
+     {#if showEmailField}<label>Email<input type="email" bind:value={email} autocomplete="username" maxlength="254" required /></label>{/if}
+     {#if codeStep}{#key mode + ':' + otpLength + ':' + codeResets}<CodeInput bind:value={token} length={otpLength} disabled={busy} label="Email verification code" />{/key}{/if}
      {#if mode === 'login' || mode === 'signup' || mode === 'reset-password'}<label>{mode === 'reset-password' ? 'New password' : 'Password'}<input type="password" bind:value={password} autocomplete={mode === 'login' ? 'current-password' : 'new-password'} minlength={mode === 'login' ? undefined : 8} maxlength="1024" required /></label>{/if}
-     <button class="provider email" type="submit" disabled={busy}><ActionIcon name="login" />{busy ? 'Please wait…' : buttonLabels[mode]}</button>
+     <button class="provider email" class:primary={codeStep} type="submit" disabled={busy || (codeStep && token.length !== otpLength)}><ActionIcon name={codeStep ? 'check' : 'login'} />{busy ? 'Please wait…' : buttonLabels[mode]}</button>
+     {#if codeStep}
+      <p class="code-links small">
+       <span>Didn't get it? <button class="mode" type="button" disabled={busy} onclick={resendCode}>Resend code</button></span>
+       {#if !showEmailField}<button class="mode" type="button" disabled={busy} onclick={() => { editEmail = true; token = ''; codeResets++; }}>Use a different email</button>{/if}
+      </p>
+     {/if}
      {#if mode === 'login' && emailEnabled}<button class="mode" type="button" disabled={busy} onclick={() => setMode('recover')}>Forgot password?</button>{/if}
-     {#if mode === 'reset-password'}<button class="mode" type="button" disabled={busy} onclick={() => setMode('recover')}>Request a new code</button>{/if}
      <button class="mode" type="button" disabled={busy} onclick={() => { setMode(mode === 'signup' ? 'signup' : 'login'); showForm = false; }}><ActionIcon name="back" />Back to sign-in options</button>
     </form>
    {/if}
@@ -271,7 +347,26 @@
 </section>
 <style>
  .account { max-width: 680px; }
- .account-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; }
+ .account-header { display: flex; align-items: center; gap: 14px; }
+ .account-title { min-width: 0; }
+ .account-title h1 { font: 800 clamp(1.8rem, 5vw, 2.4rem)/1.1 var(--body); font-style: normal; text-transform: none; }
+ .account-title p { overflow-wrap: anywhere; }
+ .avatar { flex: none; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: #fff; font: 800 1.4rem var(--body); }
+ .section-title { font: 750 1.25rem/1.2 var(--body); font-style: normal; text-transform: none; }
+ .theme-options { display: flex; flex-wrap: wrap; gap: 8px; }
+ .theme-option { display: inline-flex; align-items: center; gap: .45rem; min-height: 44px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; }
+ .theme-option input { width: auto; margin: 0; }
+ .theme-option.active { border-color: var(--accent); outline: 1px solid var(--accent); }
+ .signout-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+ .signout:hover:not(:disabled) { color: #c62828; border-color: #c62828; }
+
+ .code-step h1 { font-size: clamp(1.8rem, 5vw, 2.4rem); }
+ .code-icon { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto; border-radius: 50%; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+ .code-icon :global(svg) { width: 26px; height: 26px; }
+ .code-hint { max-width: 36ch; margin-inline: auto; overflow-wrap: anywhere; }
+ .provider.email.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+ .provider.email:disabled { cursor: not-allowed; opacity: .6; }
+ .code-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; text-align: left; }
 
  .login { background: var(--panel); text-align: center; padding: clamp(20px, 5vw, 54px) 16px; border-radius: 8px; }
  .login h1 { font: 750 clamp(2.6rem, 7vw, 4.4rem)/1.1 var(--body); text-transform: none; }

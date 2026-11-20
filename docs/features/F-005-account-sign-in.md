@@ -23,6 +23,8 @@ Customers and staff create a verified account and sign in so bookings, points an
 
 ## Screens
 - `/account`: sign up, verify code, sign in, reset password, social buttons, saved contact details, staff workspace link, sign out.
+- Code step (approved 2026-11-20): "Check your email" card with a mail icon, "We sent a 6-digit code to ja***@example.com", one box per digit (count from `HERCO_AUTH_OTP_LENGTH`, must match Supabase Auth "Email OTP length", default 6). Typing moves to the next box, pasting or phone auto-fill fills all boxes, Backspace goes back. The button stays off until every box is filled. Links: "Resend code" and "Use a different email". Same for the password-reset code.
+- Signed-in layout (approved 2026-11-20): initial avatar, "Account" title and email at top; then cards for Profile, Staff access (staff only), Appearance (System / Light / Dark, the same setting as the header menu), and Sign out on its own row at the bottom.
 - `/privacy-preferences`: analytics consent.
 
 ## Data

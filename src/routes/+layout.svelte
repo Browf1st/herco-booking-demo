@@ -13,6 +13,7 @@
 	import { adminNavigation, adminPath } from '#lib/demo/adminNavigation.ts';
 	import { switchStaffSession, syncStaffAccess } from '#lib/demo/staffAccess.svelte.ts';
 	import { parseWorkspaceAccess, workspaceLanding, workspaceGroups, workspaceLinks, type WorkspaceAccess } from '#lib/shared/workspace-navigation.ts';
+	import { THEME_EVENT } from '#lib/shared/theme.ts';
 
 	let { children }: LayoutProps = $props();
 	let bookMenu = $state<HTMLDetailsElement>();
@@ -158,6 +159,7 @@
 			if (theme === 'system') localStorage.removeItem('herco-theme');
 			else localStorage.setItem('herco-theme', theme);
 		} catch {}
+		window.dispatchEvent(new Event(THEME_EVENT));
 		themeMenu.open = false;
 		themeTrigger.focus();
 	}
@@ -168,12 +170,14 @@
 			if (event.key === 'herco-theme' || event.key === null) applyTheme(event.newValue ?? 'system');
 		};
 		window.addEventListener('storage', onThemeStorage);
+		window.addEventListener(THEME_EVENT, syncTheme);
 		if (!demo) {
 			const refresh = () => { void refreshWorkerNavigation(); };
 			window.addEventListener('herco-account-changed', refresh);
 			window.addEventListener('focus', refresh);
 			return () => {
 				window.removeEventListener('storage', onThemeStorage);
+				window.removeEventListener(THEME_EVENT, syncTheme);
 				window.removeEventListener('herco-account-changed', refresh);
 				window.removeEventListener('focus', refresh);
 			};
@@ -184,6 +188,7 @@
 		const stopStaffAccess = syncStaffAccess();
 		return () => {
 			window.removeEventListener('storage', onThemeStorage);
+			window.removeEventListener(THEME_EVENT, syncTheme);
 			stopOperations();
 			stopBookings();
 			stopStaffAccess();

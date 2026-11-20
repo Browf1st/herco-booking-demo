@@ -18,6 +18,9 @@ A signed-in customer sees all their bookings on any device and can ask to cancel
 - Paginated list; only that account's permitted fields; private staff notes never shown.
 - Requests stay open for manual handling; sending or skipping an email does not change status.
 - Walk-in customers see status and signing event and contact the shop for changes.
+- Current build (checked in code 2026-11-20): customers edit services only while a booking is Pending and the visit is in the future; they can request cancel or reschedule on Pending or Confirmed future bookings, one open request at a time. Cancel and reschedule requests email the shop inbox only when one is set (Q-13); service edits send no email. All three are saved as booking events and appear in the staff Activity log (F-011).
+- Layout (approved 2026-11-20): section buttons with counts: Upcoming (future Pending and Booked, soonest first), Requests (future booking with an open cancel or reschedule request), Past (completed visits plus past-dated visits the shop never closed, latest first, each with its status badge), Cancelled. Sections appear only after the change-request check finishes; if that check fails, a warning shows and request buttons stay hidden. Each card has a coloured left strip and status badge, the visit date and time first, then services, bike, reference and estimate. Reschedule and cancel buttons only show where allowed; "View details or edit services" only on future Pending bookings. Grouping covers the bookings on the current page. Smaller type than the marketing pages.
+- After submitting a booking, the customer lands here with a "Booking submitted" message, the new booking highlighted, and its status (2026-11-20).
 - Request expiry, change windows and limits: TBD — ask owner (Q-08).
 - Whether the old time stays held during a reschedule review: TBD — ask owner (Q-08).
 - Approval note visibility to customers: TBD — ask owner (Q-12).

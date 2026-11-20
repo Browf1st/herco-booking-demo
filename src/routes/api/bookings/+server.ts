@@ -1,6 +1,7 @@
 import { readJsonBody } from '#lib/server/request-body.ts';
 import { error, json } from '@sveltejs/kit';
 import { requestSupabase, requireSameOrigin } from '#lib/server/supabase.ts';
+import { isValidMobile } from '#lib/shared/mobile.ts';
 import type { RequestHandler } from './$types';
 
 export const prerender = false;
@@ -55,6 +56,8 @@ export const POST: RequestHandler = async (event) => {
 			Array.isArray(body.coating) || JSON.stringify(body.coating).length > 3000)) ||
 		(body.priceFingerprint !== undefined && (typeof body.priceFingerprint !== 'string' || !/^[a-f0-9]{32}$/.test(body.priceFingerprint)))
 	) error(400, 'Check the visit, selected services, and contact details.');
+	// Mobile is optional on a customer's own booking; if given it must look like a real number.
+	if (body.phone.trim() !== '' && !isValidMobile(body.phone)) error(400, 'Enter a valid mobile number, or leave it blank.');
 
 	const supabase = requestSupabase(event);
 	const { data: { user } } = await supabase.auth.getUser();

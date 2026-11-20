@@ -18,6 +18,8 @@ Customers earn HERCO Points and redeem them for rewards, and staff award points 
 - Earlier points and reward history stay unchanged when settings change.
 - Handoff: points are awarded and corrected by hand. Production plan mentions preventing duplicate completion rewards (automatic). TBD — ask owner (Q-14).
 - Point values, rewards catalog, expiry: TBD — ask owner (Q-14).
+- Page type is smaller since 2026-11-20 (owner request): title about 32-40px, section titles about 20-24px, balance about 29px.
+- Current build (checked in code 2026-11-20): a completed booking earns no points automatically. Points change only when staff add or remove them by hand with a reason, or when a customer redeems a reward.
 
 ## Screens
 - `/points` (customer): balance, rewards, history, empty state.

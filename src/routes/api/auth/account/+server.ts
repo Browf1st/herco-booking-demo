@@ -1,7 +1,7 @@
 import { readJsonBody } from '#lib/server/request-body.ts';
 import { error, json } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
-import { HERCO_AUTH_EMAIL_ENABLED, HERCO_AUTH_FACEBOOK_ENABLED, HERCO_AUTH_GOOGLE_ENABLED } from '$app/env/private';
+import { HERCO_AUTH_EMAIL_ENABLED, HERCO_AUTH_FACEBOOK_ENABLED, HERCO_AUTH_GOOGLE_ENABLED, HERCO_AUTH_OTP_LENGTH } from '$app/env/private';
 import { requestSupabase, requireSameOrigin } from '#lib/server/supabase.ts';
 import type { RequestHandler } from './$types';
 import { accountLanding } from '#lib/server/account-landing.ts';
@@ -14,7 +14,7 @@ const authProviders = () => ({
 });
 
 export const GET: RequestHandler = () => json(
-	{ email: HERCO_AUTH_EMAIL_ENABLED, providers: authProviders() },
+	{ email: HERCO_AUTH_EMAIL_ENABLED, providers: authProviders(), otpLength: HERCO_AUTH_OTP_LENGTH },
 	{ headers: { 'cache-control': 'no-store' } }
 );
 
@@ -78,6 +78,14 @@ export const POST: RequestHandler = async (event) => {
 			const email = validEmail(body.email);
 			if (!email) error(400, 'Enter a valid email address.');
 			const { error: failure } = await requestSupabase(event).auth.resetPasswordForEmail(email);
+			reportServiceFailure(failure);
+			return json({ accepted: true }, { status: 202 });
+		}
+		case 'resend': {
+			// Sends a new signup confirmation code. Same reply whether or not the address has an account.
+			const email = validEmail(body.email);
+			if (!email) error(400, 'Enter a valid email address.');
+			const { error: failure } = await requestSupabase(event).auth.resend({ type: 'signup', email });
 			reportServiceFailure(failure);
 			return json({ accepted: true }, { status: 202 });
 		}
