@@ -1,10 +1,10 @@
 <script lang="ts">
-	import ActionIcon from '#lib/ActionIcon.svelte';
+	import ActionIcon from '#lib/shared/ActionIcon.svelte';
 	import { asset, resolve } from '$app/paths';
 
-	import CompareSlider from '#lib/CompareSlider.svelte';
-	import { photos, wheelColours } from '#lib/config.ts';
-	import { features } from '#lib/store.svelte.ts';
+	import CompareSlider from '#lib/shared/CompareSlider.svelte';
+	import { photos, wheelColours } from '#lib/shared/config.ts';
+	import { features } from '#lib/demo/store.svelte.ts';
 
 	let colour = $state.raw(wheelColours[0]);
 </script>

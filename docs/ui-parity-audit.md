@@ -42,7 +42,7 @@ Each numbered row is a correction or decision unit. File locations refer to the 
 
 ### Account and real authentication
 
-Reference `routes/account/DemoPage.svelte`; replacement `lib/ServerAccount.svelte`, `ServerContactProfile.svelte`, `StaffSecurity.svelte`.
+Reference `routes/account/DemoPage.svelte`; replacement `lib/live/ServerAccount.svelte`, `ServerContactProfile.svelte`, `StaffSecurity.svelte`.
 
 | ID | Demo reference | Current backend version / difference |
 |---|---|---|

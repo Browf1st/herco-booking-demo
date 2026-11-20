@@ -1,12 +1,12 @@
 <script lang="ts">
-	import ActionIcon from '#lib/ActionIcon.svelte';
+	import ActionIcon from '#lib/shared/ActionIcon.svelte';
 	import { onMount } from 'svelte';
 	import { asset, resolve } from '$app/paths';
-	import AvailabilityCalendar from '#lib/AvailabilityCalendar.svelte';
-	import CompareSlider from '#lib/CompareSlider.svelte';
-	import { photos, shop, wheelColours } from '#lib/config.ts';
-	import { addDays, fmtDate, fmtSlot, today, upcoming } from '#lib/dates.ts';
-	import { dayStatus, features } from '#lib/store.svelte.ts';
+	import AvailabilityCalendar from '#lib/shared/AvailabilityCalendar.svelte';
+	import CompareSlider from '#lib/shared/CompareSlider.svelte';
+	import { photos, shop, wheelColours } from '#lib/shared/config.ts';
+	import { addDays, fmtDate, fmtSlot, today, upcoming } from '#lib/shared/dates.ts';
+	import { dayStatus, features } from '#lib/demo/store.svelte.ts';
 
 	const hours = `${fmtSlot(String(shop.openHour) + ':00')} – ${fmtSlot(String(shop.closeHour) + ':00')}`;
 	const directions = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shop.address)}`;

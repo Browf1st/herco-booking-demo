@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { parseWorkspaceAccess, workspaceLanding } from '#lib/workspace-navigation.ts';
+import { parseWorkspaceAccess, workspaceLanding } from '#lib/shared/workspace-navigation.ts';
 import type { requestSupabase } from './supabase.ts';
 
 export async function accountLanding(client: ReturnType<typeof requestSupabase>) {

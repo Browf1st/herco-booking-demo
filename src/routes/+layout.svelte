@@ -1,18 +1,18 @@
 <script lang="ts">
-	import ActionIcon from '#lib/ActionIcon.svelte';
+	import ActionIcon from '#lib/shared/ActionIcon.svelte';
 	import { afterNavigate, goto } from '$app/navigation';
 	import '../app.css';
 	import { onMount } from 'svelte';
-	import { syncBookings } from '#lib/store.svelte.ts';
-	import { saveFanProfile, syncOperations } from '#lib/operations.svelte.ts';
-	import { account } from '#lib/account.svelte.ts';
+	import { syncBookings } from '#lib/demo/store.svelte.ts';
+	import { saveFanProfile, syncOperations } from '#lib/demo/operations.svelte.ts';
+	import { account } from '#lib/demo/account.svelte.ts';
 	import { asset, resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { photos, shop } from '#lib/config.ts';
+	import { photos, shop } from '#lib/shared/config.ts';
 	import type { LayoutProps } from './$types';
-	import { adminNavigation, adminPath } from '#lib/adminNavigation.ts';
-	import { switchStaffSession, syncStaffAccess } from '#lib/staffAccess.svelte.ts';
-	import { parseWorkspaceAccess, workspaceLanding, workspaceGroups, workspaceLinks, type WorkspaceAccess } from '#lib/workspace-navigation.ts';
+	import { adminNavigation, adminPath } from '#lib/demo/adminNavigation.ts';
+	import { switchStaffSession, syncStaffAccess } from '#lib/demo/staffAccess.svelte.ts';
+	import { parseWorkspaceAccess, workspaceLanding, workspaceGroups, workspaceLinks, type WorkspaceAccess } from '#lib/shared/workspace-navigation.ts';
 
 	let { children }: LayoutProps = $props();
 	let bookMenu = $state<HTMLDetailsElement>();

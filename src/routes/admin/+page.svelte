@@ -1,7 +1,7 @@
 <script lang="ts">
  import DemoPage from './DemoPage.svelte';
- import ServerStaffBookings from '#lib/ServerStaffBookings.svelte';
- import ServerStaffRequests from '#lib/ServerStaffRequests.svelte';
+ import ServerStaffBookings from '#lib/live/ServerStaffBookings.svelte';
+ import ServerStaffRequests from '#lib/live/ServerStaffRequests.svelte';
  import { resolve } from '$app/paths';
  import { page } from '$app/state';
  import { onMount } from 'svelte';

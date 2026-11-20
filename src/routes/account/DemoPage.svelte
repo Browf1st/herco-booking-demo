@@ -1,6 +1,6 @@
 <script lang="ts">
- import ActionIcon from '#lib/ActionIcon.svelte';
- import { account, saveProfilePhone, signIn, signOut } from '#lib/account.svelte.ts';
+ import ActionIcon from '#lib/shared/ActionIcon.svelte';
+ import { account, saveProfilePhone, signIn, signOut } from '#lib/demo/account.svelte.ts';
  let mode = $state<'Log in' | 'Sign up'>('Log in');
  const socialProviders = ['Facebook', 'Google'] as const;
  let provider = $state<'Email' | typeof socialProviders[number]>('Email');

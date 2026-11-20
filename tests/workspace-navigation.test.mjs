@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseWorkspaceAccess, workspaceLanding, workspaceLinks, workspaceGroups } from '../src/lib/workspace-navigation.ts';
+import { parseWorkspaceAccess, workspaceLanding, workspaceLinks, workspaceGroups } from '../src/lib/shared/workspace-navigation.ts';
 
 test('routes each role to its preferred permitted landing page', () => {
 	assert.equal(workspaceLanding(null), '/my-bookings');

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
-	import ActionIcon from '#lib/ActionIcon.svelte';
-	import { fmtDate, fmtSlot } from '#lib/dates.ts';
+	import ActionIcon from '#lib/shared/ActionIcon.svelte';
+	import { fmtDate, fmtSlot } from '#lib/shared/dates.ts';
 
 	type Status = 'pending' | 'confirmed' | 'done' | 'cancelled';
 	type Customer = { id: string; name: string | null; email: string; phone: string | null; bike: string | null; booking_count: number; points: number };

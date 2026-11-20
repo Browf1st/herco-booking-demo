@@ -1,9 +1,9 @@
 <script lang="ts">
  import {onMount} from 'svelte';
  import {resolve} from '$app/paths';
- import ActionIcon from '#lib/ActionIcon.svelte';
- import RewardReceipt from '#lib/RewardReceipt.svelte';
- import type {RewardReceipt as ReceiptView} from '#lib/operations.svelte.ts';
+ import ActionIcon from '#lib/shared/ActionIcon.svelte';
+ import RewardReceipt from '#lib/shared/RewardReceipt.svelte';
+ import type {RewardReceipt as ReceiptView} from '#lib/demo/operations.svelte.ts';
  type Member={id:string;name:string;email:string;phone:string;balance:number};
  type Receipt={id:string;reference:string;member_id:string;customer_name:string;customer_email:string;customer_phone:string;reward_label:string;reward_scope:string;cost:number;balance_after:number;created_at:string;approved_at:string|null;claimed_at:string|null;approved_name:string;claimed_name:string};
  type Reward={id:string;label:string;scope:string;cost:number;enabled:boolean};

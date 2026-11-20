@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
-	import CoatingRuleEditor from '#lib/CoatingRuleEditor.svelte';
- import ServerCatalogPricing from '#lib/ServerCatalogPricing.svelte';
+	import CoatingRuleEditor from '#lib/live/CoatingRuleEditor.svelte';
+ import ServerCatalogPricing from '#lib/live/ServerCatalogPricing.svelte';
 
 	type Setting = { code: string; label: string; enabled: boolean; revision: number };
 	type Service = Setting & { price_centavos: number; appointment_days: number[]; max_centavos?: number | null; quote_required?: boolean };

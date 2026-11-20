@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { fmtDate, fmtSlot } from '#lib/dates.ts';
+	import { fmtDate, fmtSlot } from '#lib/shared/dates.ts';
 
 	type Intake = {
 		bookingId: string; customerName: string; bike: string; date: string; hour: number | null;

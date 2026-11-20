@@ -1,8 +1,8 @@
 <script lang="ts">
- import ActionIcon from '#lib/ActionIcon.svelte';
+ import ActionIcon from '#lib/shared/ActionIcon.svelte';
  import { resolve } from '$app/paths';
- import { account } from '#lib/account.svelte.ts';
- import CustomerBookingHistory from '#lib/CustomerBookingHistory.svelte';
+ import { account } from '#lib/demo/account.svelte.ts';
+ import CustomerBookingHistory from '#lib/demo/CustomerBookingHistory.svelte';
 </script>
 <svelte:head><title>My bookings | HERCO</title></svelte:head>
 <section class="section wrap stack">

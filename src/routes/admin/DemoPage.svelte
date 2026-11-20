@@ -1,21 +1,21 @@
 <script lang="ts">
-	import ActionIcon from '#lib/ActionIcon.svelte';
+	import ActionIcon from '#lib/shared/ActionIcon.svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { adminNavigation, adminPath } from '#lib/adminNavigation.ts';
-	import { canPerform, staffAccess } from '#lib/staffAccess.svelte.ts';
-	import BookingSummary from '#lib/BookingSummary.svelte';
-	import StaffAccess from '#lib/StaffAccess.svelte';
-	import AdminBooking from '#lib/AdminBooking.svelte';
-	import AdminActivity from '#lib/AdminActivity.svelte';
-	import AdminPricing from '#lib/AdminPricing.svelte';
-	import OperationsAdmin from '#lib/OperationsAdmin.svelte';
-	import AdminCalendar from '#lib/AdminCalendar.svelte';
+	import { adminNavigation, adminPath } from '#lib/demo/adminNavigation.ts';
+	import { canPerform, staffAccess } from '#lib/demo/staffAccess.svelte.ts';
+	import BookingSummary from '#lib/demo/BookingSummary.svelte';
+	import StaffAccess from '#lib/demo/StaffAccess.svelte';
+	import AdminBooking from '#lib/demo/AdminBooking.svelte';
+	import AdminActivity from '#lib/demo/AdminActivity.svelte';
+	import AdminPricing from '#lib/demo/AdminPricing.svelte';
+	import OperationsAdmin from '#lib/demo/OperationsAdmin.svelte';
+	import AdminCalendar from '#lib/demo/AdminCalendar.svelte';
 
-	import { serviceOf, sizes } from '#lib/config.ts';
-	import { addDays, fmtDate, fmtSlot, isOpenDay, nowHour, today, upcoming } from '#lib/dates.ts';
-	import { serviceLabel } from '#lib/coating.ts';
-	import { bookingStatusLabels, bookingsOn, db, dayStatus, isSlotBlocked, setDateAvailability, slotsFor, toggleSlotBlock } from '#lib/store.svelte.ts';
+	import { serviceOf, sizes } from '#lib/shared/config.ts';
+	import { addDays, fmtDate, fmtSlot, isOpenDay, nowHour, today, upcoming } from '#lib/shared/dates.ts';
+	import { serviceLabel } from '#lib/shared/coating.ts';
+	import { bookingStatusLabels, bookingsOn, db, dayStatus, isSlotBlocked, setDateAvailability, slotsFor, toggleSlotBlock } from '#lib/demo/store.svelte.ts';
 
 	const navigation = $derived(adminNavigation(page.url.searchParams));
 	const tab = $derived(navigation.tab === 'Booking' ? navigation.section : navigation.tab);

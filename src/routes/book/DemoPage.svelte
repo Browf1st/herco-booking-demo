@@ -1,18 +1,18 @@
 <script lang="ts">
- import ActionIcon from '#lib/ActionIcon.svelte';
+ import ActionIcon from '#lib/shared/ActionIcon.svelte';
  import { resolve } from '$app/paths';
  import { page } from '$app/state';
  import { tick } from 'svelte';
- import BookingCatalog from '#lib/BookingCatalog.svelte';
- import { ceramicModels, ceramicTierNames, createCatalogOptions, defaultCeramicCatalogPricing } from '#lib/bookingCatalog.ts';
- import VisitPicker from '#lib/VisitPicker.svelte';
- import { account, rememberBooking } from '#lib/account.svelte.ts';
- import { estimatePrice, linePrice, money, quote, selection, serviceLabel } from '#lib/coating.ts';
- import { adminPath } from '#lib/adminNavigation.ts';
- import { bookingPages, canAccessPage, canPerform } from '#lib/staffAccess.svelte.ts';
- import { type Size } from '#lib/config.ts';
- import { currentShopTime, fmtDate, fmtSlot, isBookableDate, today } from '#lib/dates.ts';
- import { book, db, type Booking } from '#lib/store.svelte.ts';
+ import BookingCatalog from '#lib/demo/BookingCatalog.svelte';
+ import { ceramicModels, ceramicTierNames, createCatalogOptions, defaultCeramicCatalogPricing } from '#lib/shared/bookingCatalog.ts';
+ import VisitPicker from '#lib/demo/VisitPicker.svelte';
+ import { account, rememberBooking } from '#lib/demo/account.svelte.ts';
+ import { estimatePrice, linePrice, money, quote, selection, serviceLabel } from '#lib/shared/coating.ts';
+ import { adminPath } from '#lib/demo/adminNavigation.ts';
+ import { bookingPages, canAccessPage, canPerform } from '#lib/demo/staffAccess.svelte.ts';
+ import { type Size } from '#lib/shared/config.ts';
+ import { currentShopTime, fmtDate, fmtSlot, isBookableDate, today } from '#lib/shared/dates.ts';
+ import { book, db, type Booking } from '#lib/demo/store.svelte.ts';
 
  const query = page.url.searchParams;
  const legacyEditLink = query.has('edit');

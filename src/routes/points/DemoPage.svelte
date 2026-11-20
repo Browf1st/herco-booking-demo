@@ -1,9 +1,9 @@
 <script lang="ts">
-	import ActionIcon from '#lib/ActionIcon.svelte';
+	import ActionIcon from '#lib/shared/ActionIcon.svelte';
 	import { resolve } from '$app/paths';
-	import { account } from '#lib/account.svelte.ts';
-	import { ops, fanRanking, pointBalance, redeemReward, rewardStatus } from '#lib/operations.svelte.ts';
-	import RewardReceipt from '#lib/RewardReceipt.svelte';
+	import { account } from '#lib/demo/account.svelte.ts';
+	import { ops, fanRanking, pointBalance, redeemReward, rewardStatus } from '#lib/demo/operations.svelte.ts';
+	import RewardReceipt from '#lib/shared/RewardReceipt.svelte';
 	const rewardProgram = $derived(ops.data.rewardProgram);
 
 	const activeId = $derived(account.current?.id ?? '');

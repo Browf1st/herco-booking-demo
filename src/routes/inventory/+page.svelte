@@ -1,5 +1,5 @@
 <script lang="ts">
- import {onMount} from 'svelte';import {resolve} from '$app/paths';import {today,addDays} from '#lib/dates.ts';import ActionIcon from '#lib/ActionIcon.svelte';
+ import {onMount} from 'svelte';import {resolve} from '$app/paths';import {today,addDays} from '#lib/shared/dates.ts';import ActionIcon from '#lib/shared/ActionIcon.svelte';
  type Stock={id:string;name:string;unit:string;category:string;minimum:number;quantity:number;revision:number;supplier:string|null;storage_location:string|null;unit_cost:number|null;billing_rate:number|null;capacity:number|null};
  type Activity={request_id:string;operation:string;recorded_at:string;actor_name:string;input:{reason?:string};before_value:Stock|null;after_value:Stock};
  type Inventory={canManage:boolean;items:Stock[];recent:Activity[];options:{kind:'unit'|'category';name:string}[]};

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import ServerBooking from '#lib/ServerBooking.svelte';
+	import ServerBooking from '#lib/live/ServerBooking.svelte';
 	import { resolve } from '$app/paths';
 </script>
 

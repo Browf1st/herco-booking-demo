@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
- import ActionIcon from '#lib/ActionIcon.svelte';
+ import ActionIcon from '#lib/shared/ActionIcon.svelte';
 	import { resolve } from '$app/paths';
 
 	type Role = 'staff' | 'admin' | 'restricted_admin';

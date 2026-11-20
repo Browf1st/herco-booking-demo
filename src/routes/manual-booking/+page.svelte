@@ -1,5 +1,5 @@
 <script lang="ts">
-	import ManualBooking from '#lib/ManualBooking.svelte';
+	import ManualBooking from '#lib/live/ManualBooking.svelte';
 	import { resolve } from '$app/paths';
 </script>
 

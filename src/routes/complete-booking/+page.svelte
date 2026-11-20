@@ -1,3 +1,3 @@
-<script lang="ts">import { page } from '$app/state';import { resolve } from '$app/paths';import ServerCompletionForm from '#lib/ServerCompletionForm.svelte';const booking=$derived(page.url.searchParams.get('booking')??'');</script>
+<script lang="ts">import { page } from '$app/state';import { resolve } from '$app/paths';import ServerCompletionForm from '#lib/live/ServerCompletionForm.svelte';const booking=$derived(page.url.searchParams.get('booking')??'');</script>
 <svelte:head><title>Complete booking | HERCO</title></svelte:head>
 <section class="section wrap stack"><h1>Complete booking</h1>{#if booking}{#key booking}<ServerCompletionForm bookingId={booking} />{/key}{:else}<p>Choose a booking from the staff schedule.</p>{/if}<a class="btn sm ghost" href={resolve('/admin')}>Back to bookings</a></section>

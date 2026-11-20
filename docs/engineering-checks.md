@@ -38,7 +38,7 @@ Use the [OWASP Top 10:2025](https://top10.owasp.org/) to identify risks and [ASV
 ```text
 npm ci
 npm run check
-node --test tests/http-hardening.test.mjs
+npm test
 npm run build
 node scripts/performance-budget.mjs demo
 npm run build:worker

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
-	import ActionIcon from '#lib/ActionIcon.svelte';
-	import { addDays, today } from '#lib/dates.ts';
+	import ActionIcon from '#lib/shared/ActionIcon.svelte';
+	import { addDays, today } from '#lib/shared/dates.ts';
 
 	type Entry = { recorded_at: string; area: string; action: string; actor: string; actor_label?: string; reference: string };
 	const worker = import.meta.env.MODE === 'worker';
