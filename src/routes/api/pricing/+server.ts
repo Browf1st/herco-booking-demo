@@ -14,7 +14,7 @@ const maximumInteger = 2147483647;
 export const GET: RequestHandler = async (event) => {
 	const { data, error: failure } = await requestSupabase(event).rpc('herco_pricing');
 	if (failure?.code === '42501' || failure?.code === 'PGRST301') {
-		error(403, 'Pricing requires staff permission and MFA.');
+		error(403, 'Pricing requires staff permission.');
 	}
 	if (failure) error(503, 'Pricing is temporarily unavailable.');
 	return json(data);
@@ -71,7 +71,7 @@ export const POST: RequestHandler = async (event) => {
 	}
 	const { data, error: failure } = result;
 	if (failure?.code === '42501' || failure?.code === 'PGRST301') {
-		error(403, 'You need the relevant pricing permission and MFA.');
+		error(403, 'You need the relevant pricing permission.');
 	}
 	if (failure?.code === '40001' || failure?.code === '23505') {
 		error(409, 'Pricing changed. Reload pricing before editing again.');

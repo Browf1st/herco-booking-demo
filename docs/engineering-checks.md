@@ -15,13 +15,13 @@ Use the [OWASP Top 10:2025](https://top10.owasp.org/) to identify risks and [ASV
 
 | Risk area | Verify in HERCO |
 | --- | --- |
-| A01 Access control | A verified customer can only read or change their own bookings and contact details. Staff operations require active grants and MFA. Test the route and database RPC independently, including revocation. |
+| A01 Access control | A verified customer can only read or change their own bookings and contact details. Staff operations require verified email, an enabled membership, and the relevant grants. Password sign-in is sufficient; MFA is not required by the approved policy. Test the route and database RPC independently, including revocation. |
 | A02 Configuration | Verify CSP, framing protection, private caching, provider callback allowlists, CORS/origin behavior, and separation of demo and Worker environments. Check headers on both rendered and prerendered responses. |
 | A03 Software supply chain | Install with the lockfile in CI, audit runtime and development dependencies, and review dependency changes before release. Pin application and Pages workflow actions to verified commits. |
 | A04 Cryptography | Use HTTPS, secure session cookies, private Storage and encrypted backups. Review secret placement and ensure production credentials differ from staging credentials. |
 | A05 Injection | Validate product data, contact fields, upload type and size, and JSON body size. Bind SQL parameters and verify escaping in CSV, logging, email and other downstream consumers. |
 | A06 Insecure design | Recalculate quote totals, capacity and balances on the server. Check booking races, stale estimates, replay and concurrent staff edits. |
-| A07 Authentication | Verify sign-in, confirmation, reset, sign-out, OAuth callback and staff MFA flows. Confirm abuse limits on public account and booking routes in staging. |
+| A07 Authentication | Verify sign-in, confirmation, reset, sign-out, OAuth callback and password-based staff access flows. Confirm abuse limits on public account and booking routes in staging. |
 | A08 Integrity | Keep original service and price snapshots intact. Deliver email from the transactional outbox. Verify schema migration and recovery behavior with approved fixtures. |
 | A09 Logging and alerts | Verify staff activity, email failures, backup failures and external uptime alerts. Use redacted summaries and approved recipients. |
 | A10 Exceptional conditions | Test invalid, oversized, stale, rate-limited and unavailable responses. Confirm that failure leaves booking state consistent and shows an actionable message. |

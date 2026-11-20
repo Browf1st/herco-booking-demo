@@ -5,7 +5,7 @@
 	import AvailabilityCalendar from '#lib/AvailabilityCalendar.svelte';
 	import CompareSlider from '#lib/CompareSlider.svelte';
 	import { photos, shop, wheelColours } from '#lib/config.ts';
-	import { fmtDate, fmtSlot, upcoming } from '#lib/dates.ts';
+	import { addDays, fmtDate, fmtSlot, today, upcoming } from '#lib/dates.ts';
 	import { dayStatus, features } from '#lib/store.svelte.ts';
 
 	const hours = `${fmtSlot(String(shop.openHour) + ':00')} – ${fmtSlot(String(shop.closeHour) + ':00')}`;
@@ -17,6 +17,33 @@
 	type ServerSlot = { visit_date: string; status: 'past' | 'closed' | 'booked' | 'blocked' | 'open' };
 	let serverSlots = $state<ServerSlot[]>();
 	let scheduleError = $state(false);
+	let calendarSlots = $state<ServerSlot[]>([]);
+	let calendarIssue = $state('');
+	let calendarLoading = $state(false);
+	let calendarRequest = 0;
+
+	async function loadCalendar(from: string, through: string) {
+		if (demo) return;
+		const request = ++calendarRequest;
+		calendarIssue = '';
+		calendarSlots = [];
+		const horizon = addDays(today(), 365);
+		if (from > horizon) { calendarIssue = 'Bookings open up to one year ahead.'; return; }
+		calendarLoading = true;
+		try {
+			const response = await fetch(resolve('/api/availability') + '?' + new URLSearchParams({ from, to: through > horizon ? horizon : through }));
+			if (!response.ok) throw new Error();
+			const slots = await response.json();
+			if (request === calendarRequest) calendarSlots = slots;
+		} catch { if (request === calendarRequest) calendarIssue = 'Availability is temporarily unavailable. Select another month to retry.'; }
+		finally { if (request === calendarRequest) calendarLoading = false; }
+	}
+
+	function calendarStatus(date: string) {
+		if (demo) return dayStatus(date);
+		const slots = calendarSlots.filter(slot => slot.visit_date === date);
+		return slots.some(slot => slot.status === 'open') ? 'open' : slots.some(slot => slot.status === 'booked') ? 'full' : 'closed';
+	}
 
 	onMount(() => {
 		if (demo) return;
@@ -121,13 +148,11 @@
 				{/each}
 			</ul>
 			{/if}
-			{#if demo}
 			<div><button type="button" class="btn sm ghost" aria-expanded={calendarOpen} onclick={() => calendarOpen = !calendarOpen}><ActionIcon name="calendar" />{calendarOpen ? 'Hide calendar' : 'See more dates'}</button></div>
 			{#if calendarOpen}
-				<AvailabilityCalendar />
-			{/if}
-			{:else}
-				<div><a class="btn sm ghost" href={resolve('/book')}><ActionIcon name="calendar" />See more dates</a></div>
+				{#if calendarLoading}<p role="status">Loading calendar…</p>{/if}
+				{#if calendarIssue}<p role="alert">{calendarIssue}</p>{/if}
+				<AvailabilityCalendar statusFor={calendarStatus} onmonth={loadCalendar} allows={date => demo || date <= addDays(today(),365)} />
 			{/if}
 		</div>
 	</div>
@@ -149,7 +174,7 @@
 	</div>
 </section>
 
-{#if features().preview}
+{#if import.meta.env.MODE === 'worker' || features().preview}
 	<section class="section wrap teaser">
 		<div class="stack">
 			<p class="eyebrow">Showcase</p>
@@ -173,7 +198,7 @@
 		{/each}
 	</div>
 	<div class="row">
-		{#if features().preview}<a class="btn ghost" href={resolve('/preview')}><ActionIcon name="view" />Open preview</a>{/if}
+		{#if import.meta.env.MODE === 'worker' || features().preview}<a class="btn ghost" href={resolve('/preview')}><ActionIcon name="view" />Open preview</a>{/if}
 	</div>
 </section>
 

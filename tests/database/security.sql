@@ -12,16 +12,19 @@ begin
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname in ('public','herco_private') and p.prosecdef
       and has_function_privilege('anon',p.oid,'EXECUTE')
-      and not (n.nspname='public' and p.proname in ('herco_availability','herco_catalog'))
+      and not (n.nspname='public' and p.proname in ('herco_availability','herco_catalog','herco_reward_preview'))
   ) then raise exception 'Unexpected anonymous access to a privileged function'; end if;
 end;
 $$;
 
 insert into auth.users values
   ('00000000-0000-4000-8000-000000000001','one@example.test',now()),
-  ('00000000-0000-4000-8000-000000000002','two@example.test',now());
+  ('00000000-0000-4000-8000-000000000002','two@example.test',now()),
+  ('00000000-0000-4000-8000-000000000005','unverified@example.test',null);
 insert into herco_private.staff_memberships(user_id,role,page_grants,action_grants)
   values ('00000000-0000-4000-8000-000000000002','staff',array['Bookings'],array['completeBooking']);
+insert into herco_private.staff_memberships(user_id,role,page_grants,action_grants)
+  values ('00000000-0000-4000-8000-000000000005','owner',array['Bookings'],array['completeBooking']);
 insert into public.herco_bookings (id,customer_id,request_id,request_payload,visit_date,visit_hour,bike,customer_contact,
   original_services,original_total_centavos,status)
   values ('00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000001',gen_random_uuid(),'{}',
@@ -45,19 +48,14 @@ begin
   end if;
   begin
     perform public.herco_completion_upload_target('00000000-0000-4000-8000-000000000003');
-    raise exception 'Staff without MFA was authorized';
-  exception when insufficient_privilege then null; end;
-end;
-$$;
-select set_config('test.aal','aal2',true);
-do $$
-begin
-  begin
-    perform public.herco_completion_upload_target('00000000-0000-4000-8000-000000000003');
     raise exception 'An unsafe public bucket was authorized';
   exception when object_not_in_prerequisite_state then null; end;
+  if public.herco_workspace_permissions()->>'role' is distinct from 'staff' then
+    raise exception 'Verified staff cannot open workspace using password session';
+  end if;
 end;
 $$;
+-- Continue testing privileged operations at password-only AAL1.
 
 reset role;
 update storage.buckets set public=false where id='herco-completion';
@@ -84,6 +82,36 @@ select set_config('test.uid','00000000-0000-4000-8000-000000000001',true);
 do $$
 begin
   if (select count(*) from public.herco_bookings) <> 1 then raise exception 'Owner booking was unavailable'; end if;
+  if public.herco_workspace_permissions() is not null then raise exception 'Customer received staff permissions'; end if;
+  begin
+    perform public.herco_completion_upload_target('00000000-0000-4000-8000-000000000003');
+    raise exception 'Customer could perform staff completion';
+  exception when insufficient_privilege then null; end;
+end;
+$$;
+
+select set_config('test.uid','00000000-0000-4000-8000-000000000005',true);
+do $$
+begin
+  if public.herco_workspace_permissions() is not null then raise exception 'Unverified Owner received workspace access'; end if;
+  begin
+    perform public.herco_completion_upload_target('00000000-0000-4000-8000-000000000003');
+    raise exception 'Unverified Owner could perform staff completion';
+  exception when insufficient_privilege then null; end;
+end;
+$$;
+
+reset role;
+update herco_private.staff_memberships set enabled=false where user_id='00000000-0000-4000-8000-000000000002';
+set local role authenticated;
+select set_config('test.uid','00000000-0000-4000-8000-000000000002',true);
+do $$
+begin
+  if public.herco_workspace_permissions() is not null then raise exception 'Disabled staff retained workspace access'; end if;
+  begin
+    perform public.herco_booking_report(current_date,current_date);
+    raise exception 'Disabled staff retained report access';
+  exception when insufficient_privilege then null; end;
 end;
 $$;
 

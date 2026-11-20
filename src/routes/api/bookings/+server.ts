@@ -17,13 +17,23 @@ export const GET: RequestHandler = async (event) => {
 
 	const { data, error: failure } = await supabase
 		.from('herco_bookings')
-		.select('id,visit_date,visit_hour,bike,status,original_services,original_total_centavos,current_services,current_total_centavos,coating_options,created_at')
+		.select('id,reference_no,visit_date,visit_hour,bike,status,original_services,original_total_centavos,current_services,current_total_centavos,coating_options,current_coating_options,created_at')
 		.eq('customer_id', user.id)
 		.order('created_at', { ascending: false })
 		.order('id', { ascending: false })
 		.range(offset, offset + pageSize);
 	if (failure) error(503, 'Your bookings are temporarily unavailable.');
-	return json({ bookings: data.slice(0, pageSize), hasMore: data.length > pageSize });
+	const bookings = data.slice(0, pageSize);
+	if (!bookings.length) return json({ bookings, hasMore: false });
+	const { data: events, error: eventFailure } = await supabase.from('herco_booking_events')
+		.select('booking_id,to_status,created_at').in('booking_id', bookings.map(booking => booking.id))
+		.in('to_status', ['confirmed', 'done', 'cancelled']).order('id', { ascending: true }).limit(500);
+	if (eventFailure) error(503, 'Booking history is temporarily unavailable.');
+	return json({ bookings: bookings.map(booking => ({ ...booking,
+		approved_at: events.find(event => event.booking_id === booking.id && event.to_status === 'confirmed')?.created_at ?? null,
+		completed_at: events.find(event => event.booking_id === booking.id && event.to_status === 'done')?.created_at ?? null,
+		cancelled_at: events.find(event => event.booking_id === booking.id && event.to_status === 'cancelled')?.created_at ?? null
+	})), hasMore: data.length > pageSize });
 };
 
 export const POST: RequestHandler = async (event) => {

@@ -4,6 +4,7 @@ import { resolve } from '$app/paths';
 import { HERCO_AUTH_EMAIL_ENABLED, HERCO_AUTH_FACEBOOK_ENABLED, HERCO_AUTH_GOOGLE_ENABLED } from '$app/env/private';
 import { requestSupabase, requireSameOrigin } from '#lib/server/supabase.ts';
 import type { RequestHandler } from './$types';
+import { accountLanding } from '#lib/server/account-landing.ts';
 
 export const prerender = false;
 
@@ -60,8 +61,10 @@ export const POST: RequestHandler = async (event) => {
 			const email = validEmail(body.email);
 			if (!email) error(400, 'Enter a valid email address.');
 			const password = passwordValue(body.password);
+			const name = typeof body.name === 'string' ? body.name.trim() : '';
+			if (!name || name.length > 120) error(400, 'Enter your full name.');
 			const supabase = requestSupabase(event);
-			const { data, error: failure } = await supabase.auth.signUp({ email, password });
+			const { data, error: failure } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } });
 			reportServiceFailure(failure);
 			if (failure?.code === 'weak_password') error(400, 'Choose a stronger password.');
 			if (data.session) {
@@ -82,7 +85,7 @@ export const POST: RequestHandler = async (event) => {
 		case 'reset-password': {
 			const email = validEmail(body.email);
 			const token = typeof body.token === 'string' ? body.token.trim() : '';
-			if (!email || !/^\d{6}$/u.test(token)) error(400, 'Enter your email and the six-digit code.');
+			if (!email || !/^\d{6,10}$/u.test(token)) error(400, 'Enter your email and the full verification code from your email.');
 			const password = body.action === 'reset-password' ? passwordValue(body.password) : undefined;
 			const supabase = requestSupabase(event);
 			const { data, error: failure } = await supabase.auth.verifyOtp({
@@ -98,7 +101,7 @@ export const POST: RequestHandler = async (event) => {
 					error(400, 'The password could not be updated. Request a new code. ' + hint);
 				}
 			}
-			return new Response(null, { status: 204 });
+			return json({ redirectTo: await accountLanding(supabase) });
 		}
 		default:
 			error(400, 'Choose an account action.');

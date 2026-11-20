@@ -11,7 +11,7 @@ const nonnegativeInt = (value: unknown): value is number =>
 
 export const GET: RequestHandler = async (event) => {
 	const { data, error: failure } = await requestSupabase(event).rpc('herco_coating_rules');
-	if (failure?.code === '42501' || failure?.code === 'PGRST301') error(403, 'Pricing requires staff permission and MFA.');
+	if (failure?.code === '42501' || failure?.code === 'PGRST301') error(403, 'Pricing requires staff permission.');
 	if (failure) error(503, 'Coating rules are temporarily unavailable.');
 	return json(data);
 };
@@ -35,7 +35,7 @@ export const POST: RequestHandler = async (event) => {
 		service: body.service, bike: body.bike, options: body.options, minimum_centavos: body.minimumCentavos,
 		maximum_centavos: body.maximumCentavos, quote_required: body.quoteRequired, is_enabled: body.enabled
 	});
-	if (failure?.code === '42501' || failure?.code === 'PGRST301') error(403, 'Changing coating prices requires permission and MFA.');
+	if (failure?.code === '42501' || failure?.code === 'PGRST301') error(403, 'Changing coating prices requires permission.');
 	if (failure?.code === '40001') error(409, 'This coating rule changed. Reload coating rules before editing again.');
 	if (failure?.code === '23505') error(409, 'A rule already matches that bike and configuration. Edit that rule instead.');
 	if (failure?.code === '22023' || failure?.code === '23514') error(400, failure.message);

@@ -1,5 +1,8 @@
 <script lang="ts">
- import { onMount } from 'svelte';
+ import { onMount, tick } from 'svelte';
+ import ActionIcon from './ActionIcon.svelte';
+ import ServerSharedBookingDetails from './ServerSharedBookingDetails.svelte';
+ import BookingServiceEditor from './BookingServiceEditor.svelte';
  import { resolve } from '$app/paths';
  import { fmtDate, fmtSlot, today } from '#lib/dates.ts';
  import ServerCustomerChangeForm from '#lib/ServerCustomerChangeForm.svelte';
@@ -12,6 +15,8 @@
   promotion?: { label: string; base_price_centavos: number } | null };
  type Booking = {
   id: string;
+  reference_no: number;
+  approved_at: string|null; completed_at:string|null;cancelled_at:string|null;
   visit_date: string;
   visit_hour: number | null;
   bike: string;
@@ -38,6 +43,9 @@
  let bookings = $state<Booking[]>([]);
  let changes = $state<Change[]>([]);
  let changeStatus = $state<'loading' | 'ready' | 'failed'>('loading');
+ let requestDialog=$state<HTMLDialogElement>();
+ let opened=$state<Set<string>>(new Set());
+ async function openRequest(id:string,kind:Change['kind']){activeForm={id,kind};await tick();requestDialog?.showModal();}
  let activeForm = $state<{ id: string; kind: Change['kind'] }>();
  let changeNotice = $state('');
  let changeError = $state('');
@@ -100,6 +108,7 @@
  }
 
  function changeSaved() {
+  requestDialog?.close();
   activeForm = undefined;
   changeNotice = 'Request sent. Your current slot stays booked while the shop reviews it.';
   void loadChanges(bookings);
@@ -165,17 +174,17 @@
    <article class="card stack">
     <div class="row between">
      <div class="row">
-      <h2>{booking.bike}</h2>
+      <h2>{booking.reference_no?'HG-'+booking.reference_no:booking.id}</h2>
       <span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{labels[booking.status]}</span>
      </div>
      {#if booking.visit_hour !== null && changeStatus === 'ready' && !pending && upcoming(booking) && (booking.status === 'pending' || booking.status === 'confirmed')}
       <div class="row">
-       <button class="btn sm ghost" onclick={() => { activeForm = { id: booking.id, kind: 'cancel' }; }}>Request cancellation</button>
-       <button class="btn sm ghost" onclick={() => { activeForm = { id: booking.id, kind: 'reschedule' }; }}>Request rescheduling</button>
+       <button class="btn sm ghost" onclick={() => openRequest(booking.id,'cancel')}><ActionIcon name="block"/>Request cancellation</button>
+       <button class="btn sm ghost" onclick={() => openRequest(booking.id,'reschedule')}><ActionIcon name="calendar"/>Request rescheduling</button>
       </div>
      {/if}
     </div>
-    <p>{services.map(service => service.label).join(' · ')}</p>
+    <p><ActionIcon name="box"/> <strong>{services.map(service => service.label).join(' · ')}</strong> · {booking.bike}</p>
     {#if booking.visit_hour === null}
      <p><strong>Walk-in</strong> · {fmtDate(booking.visit_date)} Philippine time</p>
      {#if booking.status === 'pending' || booking.status === 'confirmed'}<p class="small muted">Ask the shop if you need to change or cancel this walk-in.</p>{/if}
@@ -189,17 +198,11 @@
       <button class="btn sm ghost" disabled={!!withdrawing} onclick={() => withdraw(pending)}>Withdraw request</button>
      </div>
     {/if}
-    {#if activeForm?.id === booking.id}
-     {#key activeForm.kind}
-      <ServerCustomerChangeForm bookingId={booking.id} kind={activeForm.kind} onSaved={changeSaved}
-       onClose={() => { activeForm = undefined; }} />
-     {/key}
-    {/if}
-    <details>
+    <details ontoggle={event=>{if(event.currentTarget.open)opened=new Set([...opened,booking.id]);}}>
      <summary>View details</summary>
      <div class="stack">
       <p>Reference <strong>{booking.id}</strong></p>
-      <p>Submitted {stamp.format(new Date(booking.created_at))} Philippine time</p>
+      <div class="cols" aria-label="Booking dates in Philippine time"><p><ActionIcon name="clock"/> <strong>Booked on</strong><br/>{stamp.format(new Date(booking.created_at))}</p><p><ActionIcon name="check"/> <strong>Approved</strong><br/>{booking.approved_at?stamp.format(new Date(booking.approved_at)):'Awaiting approval'}</p><p><ActionIcon name="finish"/> <strong>Completed</strong><br/>{booking.completed_at?stamp.format(new Date(booking.completed_at)):'Not completed'}</p></div>
       <CoatingOptionSummary options={booking.coating_options} />
       <ul>
        {#each services as service (service.code)}
@@ -211,9 +214,7 @@
         </li>
        {/each}
       </ul>
-      <div><a class="btn sm ghost" href={resolve('/booking-services') + '?booking=' + booking.id}>
-       {booking.status === 'pending' && upcoming(booking) ? 'Edit or view services' : 'View service history'}
-      </a></div>
+      {#if opened.has(booking.id)}<BookingServiceEditor bookingId={booking.id} fromStaff={false} embedded/><ServerSharedBookingDetails bookingId={booking.id}/>{/if}
       <ServerBookingActivity bookingId={booking.id} />
       {#if requests.length}
        <h3>Change requests</h3>
@@ -245,8 +246,9 @@
   </nav>
  {/if}
 </section>
-
+<dialog bind:this={requestDialog} aria-label="Request a booking change">{#if activeForm}{#key activeForm.id+activeForm.kind}<ServerCustomerChangeForm bookingId={activeForm.id} kind={activeForm.kind} onSaved={changeSaved} onClose={()=>{requestDialog?.close();activeForm=undefined;}}/>{/key}{/if}</dialog>
 <style>
  h2 { font-size: 1.8rem; }
+ dialog{width:min(570px,calc(100% - 24px));max-height:90dvh;padding:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text)}dialog::backdrop{background:#0009}
  details > div { margin-top: .75rem; overflow-wrap: anywhere; }
 </style>

@@ -5,4 +5,4 @@ description: Defensive OWASP and ASVS review of HERCO Auth, Supabase policies, A
 
 # herco-security
 
-Read `docs/engineering-checks.md` and the relevant parts of `docs/production-handoff.md` from the checkout root. Trace each changed boundary from the requesting identity through SvelteKit and Supabase to the record or operation. Check current grants, MFA, RLS, cache behavior, and failure handling independently. Run scoped local checks with fictional identities and report confirmed fixes, remaining risks, and staging checks.
+Read `docs/engineering-checks.md` and the relevant parts of `docs/production-handoff.md` from the checkout root. Trace each changed boundary from the requesting identity through SvelteKit and Supabase to the record or operation. Check verified-email sign-in, enabled staff membership, current grants, RLS, cache behavior, and failure handling independently. Run scoped local checks with fictional identities and report confirmed fixes, remaining risks, and staging checks.

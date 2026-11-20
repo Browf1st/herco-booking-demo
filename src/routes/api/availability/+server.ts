@@ -15,7 +15,7 @@ export const GET: RequestHandler = async (event) => {
 	});
 	if (failure) {
 		if (failure.code === '22007' || failure.code === '22008' || failure.code === '22023') {
-			error(400, 'Choose valid dates within the next 21 days.');
+			error(400, 'Choose a date range of up to 42 days within the booking calendar.');
 		}
 		error(503, 'Availability is temporarily unavailable.');
 	}

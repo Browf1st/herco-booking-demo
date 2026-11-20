@@ -2,6 +2,9 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { fmtDate, fmtSlot } from '#lib/dates.ts';
+	import ActionIcon from './ActionIcon.svelte';
+	import ServerStaffBookingCard from './ServerStaffBookingCard.svelte';
+	import type { StaffBooking } from './server-booking-types';
 
 	type Request = {
 		id: string;
@@ -14,15 +17,18 @@
 		target_date: string | null;
 		target_hour: number | null;
 		can_review: boolean;
+		booking?: StaffBooking;
 	};
 	const appointment = (date: string, hour: number) => fmtDate(date) + ' at ' + fmtSlot(hour + ':00');
 	let requests = $state<Request[]>([]);
 	let page = $state(1);
 	let hasMore = $state(false);
-	let status = $state<'loading' | 'ready' | 'signedOut' | 'verify' | 'denied' | 'failed'>('loading');
+	let status = $state<'loading' | 'ready' | 'signedOut' | 'denied' | 'failed'>('loading');
 	let busy = $state(false);
 	let error = $state('');
 	let notice = $state('');
+	let selected = $state<Request>();
+	let reviewDialog = $state<HTMLDialogElement>();
 
 	async function load(nextPage = page) {
 		status = 'loading';
@@ -32,7 +38,6 @@
 				headers: { accept: 'application/json' }
 			});
 			if (response.status === 401) status = 'signedOut';
-			else if (response.status === 428) status = 'verify';
 			else if (response.status === 403) status = 'denied';
 			else if (!response.ok) throw new Error();
 			else {
@@ -75,9 +80,10 @@
 
 <svelte:head><title>Booking change requests | HERCO</title></svelte:head>
 <section class="section wrap stack">
-	<h1>Booking change requests</h1>
-	{#if status === 'signedOut' || status === 'verify'}
-		<p>{status === 'signedOut' ? 'Sign in with your staff account.' : 'Verify your staff session with your authenticator.'}</p>
+	<h2>Requests awaiting review</h2>
+	<p class="muted">Customers submit cancellation and reschedule requests from Bookings. Their current appointment stays reserved until you approve the request.</p>
+	{#if status === 'signedOut'}
+		<p>Sign in with your staff account.</p>
 		<div><a class="btn sm" href={resolve('/account')}>Go to Account</a></div>
 	{:else if status === 'denied'}
 		<p role="alert">Your account does not have access to change requests.</p>
@@ -91,18 +97,13 @@
 		{#if !requests.length}<p>No pending requests on this page.</p>{/if}
 		{#each requests as request (request.id)}
 			<article class="card stack">
-				<h2>{request.kind === 'cancel' ? 'Cancellation' : 'Rescheduling'} · {request.customer_name}</h2>
+				<div class="row between"><p><strong>{request.customer_name}</strong> · {request.booking?.reference ?? request.booking_id} · {appointment(request.original_date, request.original_hour)}</p>{#if request.can_review}<button class="btn sm" onclick={() => { selected = request; reviewDialog?.showModal(); }}><ActionIcon name="edit" />Review {request.kind === 'cancel' ? 'cancellation' : 'reschedule'}</button>{/if}</div>
 				<p>Current visit · {appointment(request.original_date, request.original_hour)}</p>
 				{#if request.target_date && request.target_hour !== null}
 					<p>Requested visit · {appointment(request.target_date, request.target_hour)}</p>
 				{/if}
 				{#if request.reason}<p>Customer reason · {request.reason}</p>{/if}
-				{#if request.can_review}
-					<div class="row">
-						<button class="btn sm" disabled={busy} onclick={() => review(request.id, 'approved')}>Approve request</button>
-						<button class="btn sm ghost" disabled={busy} onclick={() => review(request.id, 'declined')}>Decline request</button>
-					</div>
-				{/if}
+				{#if request.booking}<ServerStaffBookingCard booking={request.booking} />{/if}
 			</article>
 		{/each}
 		{#if page > 1 || hasMore}
@@ -116,3 +117,5 @@
 	{#if error}<p role="alert">{error}</p>{/if}
 	{#if notice}<p role="status">{notice}</p>{/if}
 </section>
+<dialog bind:this={reviewDialog} aria-label="Review booking request">{#if selected}<div class="stack"><h3>{selected.kind === 'cancel' ? 'Cancellation request' : 'Reschedule request'}</h3><p>Current visit: {appointment(selected.original_date, selected.original_hour)}</p>{#if selected.target_date && selected.target_hour !== null}<p>Requested visit: {appointment(selected.target_date, selected.target_hour)}</p>{/if}{#if selected.reason}<p>Reason: {selected.reason}</p>{/if}{#if error}<p role="alert">{error}</p>{/if}<div class="row"><button class="btn sm" disabled={busy} onclick={async () => { await review(selected!.id, 'approved'); if (!error) reviewDialog?.close(); }}>Approve {selected.kind === 'cancel' ? 'cancellation' : 'reschedule'}</button><button class="btn sm danger" disabled={busy} onclick={async () => { await review(selected!.id, 'declined'); if (!error) reviewDialog?.close(); }}>Decline request</button><button class="btn sm ghost" disabled={busy} onclick={() => reviewDialog?.close()}>Go back</button></div></div>{/if}</dialog>
+<style>dialog{width:min(560px,calc(100% - 24px));max-height:90dvh;padding:1rem;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text)}dialog::backdrop{background:#0009}</style>

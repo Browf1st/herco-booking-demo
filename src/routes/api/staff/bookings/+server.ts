@@ -13,9 +13,7 @@ async function staffClient(event: RequestEvent) {
 	const { data: { user }, error: failure } = await client.auth.getUser();
 	if (failure?.status && failure.status >= 500) error(503, 'Account access is temporarily unavailable.');
 	if (!user) error(401, 'Sign in to use the staff workspace.');
-	const { data: assurance, error: assuranceFailure } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
-	if (assuranceFailure) error(503, 'Could not check your verification status.');
-	if (assurance.currentLevel !== 'aal2') error(428, 'Verify your session with an authenticator code.');
+	if (!user.email_confirmed_at) error(403, 'Confirm your email before using the staff workspace.');
 	return client;
 }
 
@@ -32,7 +30,7 @@ export const GET: RequestHandler = async (event) => {
 		const page = Number(event.url.searchParams.get('page') ?? '1');
 		if (!Number.isInteger(page) || page < 1 || page > 251) error(400, 'Choose a valid page.');
 		const client = await staffClient(event);
-		const { data, error: failure } = await client.rpc('herco_staff_booking_changes', { skip: (page - 1) * 20 });
+		const { data, error: failure } = await client.rpc('herco_staff_booking_change_cards', { skip: (page - 1) * 20 });
 		if (failure) reportFailure(failure.code);
 		return json({ requests: data.slice(0, 20), hasMore: page < 251 && data.length > 20 });
 	}
@@ -48,7 +46,12 @@ export const POST: RequestHandler = async (event) => {
 	requireSameOrigin(event);
 	const body = await readJsonBody(event.request);
 	const client = await staffClient(event);
-	if (body?.action === 'change') {
+	if (body?.action === 'share') {
+		if (typeof body.bookingId !== 'string' || !idFormat.test(body.bookingId) || typeof body.note !== 'string' ||
+			body.note.length > 1000 || typeof body.photos !== 'boolean') error(400, 'Check the customer message and photo choice.');
+		const { error: failure } = await client.rpc('herco_share_booking_details', { booking: body.bookingId, shared_note: body.note, share_photos: body.photos });
+		if (failure) reportFailure(failure.code);
+	} else if (body?.action === 'change') {
 		if (typeof body.bookingId !== 'string' || !idFormat.test(body.bookingId) ||
 			typeof body.requestId !== 'string' || !idFormat.test(body.requestId) ||
 			!['cancel', 'reschedule'].includes(body.kind) ||

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+ import ServerVisitPicker from './ServerVisitPicker.svelte';
 	import { resolve } from '$app/paths';
 	import { addDays, fmtDate, fmtSlot, today } from '#lib/dates.ts';
 	import { trackShopEvent } from '#lib/analytics.ts';
@@ -81,25 +82,7 @@
 		<p class="small">Your current slot stays booked while the shop reviews your request.</p>
 	{/if}
 	{#if kind === 'reschedule'}
-		{#if loading}
-			<p role="status">Loading available visits…</p>
-		{:else if days.length}
-			<div class="row">
-				<label>New visit date<select bind:value={date} required onchange={() => { hour = ''; }}>
-					<option value="">Choose date</option>
-					{#each days as day}<option value={day}>{fmtDate(day)}</option>{/each}
-				</select></label>
-				<label>New visit time<select bind:value={hour} required disabled={!date}>
-					<option value="">Choose time</option>
-					{#each openSlots.filter(slot => slot.visit_date === date) as slot (slot.visit_hour)}
-						<option value={String(slot.visit_hour)}>{fmtSlot(slot.visit_hour + ':00')}</option>
-					{/each}
-				</select></label>
-			</div>
-			<p class="small muted">Visit times are in Philippine time.</p>
-		{:else if !message}
-			<p>No open visits are available to request.</p>
-		{/if}
+		<ServerVisitPicker bind:date bind:hour disabled={busy}/>
 	{/if}
 	<label>{staffVisit ? 'Private reason (optional)' : 'Reason (optional)'}<textarea bind:value={reason} maxlength="500" rows="2"></textarea></label>
 	{#if message}<p role="alert">{message}</p>{/if}

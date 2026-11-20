@@ -22,7 +22,7 @@ jobs:
       - run: npm ci
       - run: npm audit --audit-level=high
       - run: npm run check
-      - run: node --test tests/http-hardening.test.mjs
+      - run: node --test tests/*.test.mjs
       - run: npm run build
       - run: node scripts/performance-budget.mjs demo
       - run: npm run build:worker
@@ -58,3 +58,5 @@ jobs:
             psql -v ON_ERROR_STOP=1 -f "$migration"
           done
           psql -v ON_ERROR_STOP=1 -f tests/database/security.sql
+          psql -v ON_ERROR_STOP=1 -f tests/database/customer-rewards.sql
+          psql -v ON_ERROR_STOP=1 -f tests/database/operations-ui.sql

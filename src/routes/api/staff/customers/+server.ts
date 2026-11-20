@@ -20,16 +20,16 @@ export const POST: RequestHandler = async (event) => {
 			(cursor !== null && (typeof cursor !== 'string' || !uuid.test(cursor)))) {
 			error(400, 'Enter at least two name characters or a complete email address.');
 		}
-		response = await supabase.rpc('herco_staff_customers', { search_term: term, after_customer: cursor });
+		response = await supabase.rpc('herco_staff_customer_directory', { search_term: term, after_customer: cursor });
 	} else {
 		const { customer, page } = body;
 		if (typeof customer !== 'string' || !uuid.test(customer) || typeof page !== 'number' ||
 			!Number.isInteger(page) || page < 1 || page > 50) error(400, 'Choose a customer and valid visit page.');
-		response = await supabase.rpc('herco_staff_customer_visits', { customer, visit_page: page });
+		response = await supabase.rpc('herco_staff_customer_details', { customer, visit_page: page });
 	}
 	const { data, error: failure } = response;
 	if (failure?.code === '42501' || failure?.code === 'PGRST301') {
-		error(403, 'Customer access requires staff permission and MFA.');
+		error(403, 'Customer access requires staff permission.');
 	}
 	if (failure?.code === '22023') {
 		error(400, body.operation === 'directory'

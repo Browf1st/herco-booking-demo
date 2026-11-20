@@ -28,7 +28,7 @@ export const GET: RequestHandler = async (event) => {
 	const { data, error: failure } = await requestSupabase(event).rpc('herco_inventory_export', {
 		export_kind: kind, from_date: kind === 'movements' ? from : null, through_date: kind === 'movements' ? through : null
 	});
-	if (failure?.code === '42501') error(403, 'Inventory exports require staff permission and MFA.');
+	if (failure?.code === '42501') error(403, 'Inventory exports require staff permission.');
 	if (failure?.code === '22023' || failure?.code === '22007' || failure?.code === '22008') error(400, failure.message);
 	if (failure || !Array.isArray(data)) error(503, 'Could not export inventory. Please try again.');
 	const header = columns[kind];

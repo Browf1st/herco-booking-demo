@@ -4,7 +4,7 @@
  import { addDays, fmtDate, isBookableDate, today } from './dates';
  import { dayStatus } from './store.svelte';
 
- let { selected = '', onpick, allows = () => true }: { selected?: string; onpick?: (date: string) => void; allows?: (date: string) => boolean } = $props();
+ let { selected = '', onpick, allows = () => true, statusFor = dayStatus, onmonth }: { selected?: string; onpick?: (date: string) => void; allows?: (date: string) => boolean; statusFor?: (date: string) => string; onmonth?: (from: string, to: string) => void } = $props();
  const currentMonth = today().slice(0, 7);
  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
  let browsedMonth = $state<string>();
@@ -14,6 +14,7 @@
  const days = $derived(new Date(Date.UTC(firstDay.getUTCFullYear(), firstDay.getUTCMonth() + 1, 0)).getUTCDate());
  const monthDates = $derived(Array.from({ length: days }, (_, i) => addDays(first, i)));
  const leading = $derived((firstDay.getUTCDay() + 6) % 7);
+ $effect(() => { onmonth?.(first, addDays(first, days - 1)); });
 </script>
 
 <div class="stack calendar" role="group" aria-label="Booking availability">
@@ -28,7 +29,7 @@
   {#each weekdays as day}<span class="weekday">{day}</span>{/each}
   {#each Array(leading) as _}<span aria-hidden="true"></span>{/each}
   {#each monthDates as date (date)}
-   {@const available = isBookableDate(date) && allows(date) && dayStatus(date) === 'open'}
+   {@const available = isBookableDate(date) && allows(date) && statusFor(date) === 'open'}
    {@const day = fmtDate(date, { day: 'numeric' })}
    {#if !available}
     <span class="cell unavailable" aria-label={fmtDate(date) + ', unavailable'}>{day}</span>

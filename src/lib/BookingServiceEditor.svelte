@@ -1,5 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+ import ServerBookingCatalog from './ServerBookingCatalog.svelte';
+ import { selection,type Selection } from './coating';
+ import { createCatalogOptions } from './bookingCatalog';
+ import { uiCoatingSnapshot,type UiCatalogConfig } from './ui-catalog';
+ import type {CoatingOptions} from './booking-coating';
 	import { resolve } from '$app/paths';
 	import { fmtDate } from '#lib/dates.ts';
 	import { displayEstimate, displayServicePrice, type PricedService } from './service-estimate';
@@ -8,12 +13,16 @@
 	type CatalogItem = Line & { appointment_days: number[] };
 	type Change = { revision: number; recorded_at: string; before_services: Line[]; after_services: Line[] };
 	type Services = { original: Line[]; current: Line[]; totalCentavos: number; revision: number;
-		date: string; canEdit: boolean; changes: Change[] };
-	let { bookingId, fromStaff }: { bookingId: string; fromStaff: boolean } = $props();
+		date: string; canEdit: boolean; changes: Change[];bike:string;options:CoatingOptions };
+	let { bookingId, fromStaff,embedded=false }: { bookingId: string; fromStaff: boolean;embedded?:boolean } = $props();
 	const stamp = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' });
 	let details = $state<Services>();
 	let catalog = $state<CatalogItem[]>([]);
 	let checked = $state<string[]>([]);
+ let rich=$state<Selection>({...selection(),catalog:createCatalogOptions()});
+ let config=$state<UiCatalogConfig>({});
+ let formYear=$state<number>(), formNotes=$state('');
+ $effect(()=>{rich.ceramic=checked.includes('ceramic');rich.powder=checked.includes('wheel-colour');});
 	let loading = $state(true);
 	let busy = $state(false);
 	let issue = $state('');
@@ -25,6 +34,9 @@
 	function show(result: Services) {
 		details = result;
 		checked = result.current.map(line => line.code);
+ const c=result.options?.ui_catalog;
+ rich={...selection(),ceramic:checked.includes('ceramic'),powder:checked.includes('wheel-colour'),powderParts:result.options?.powder_parts??[],finish:c?.finish??'',catalog:{...createCatalogOptions(),ceramicAddons:c?.ceramic_addons??[],wheelType:c?.wheel_type??'',wheelExtras:c?.wheel_extras??[],prismatic:c?.prismatic??false,bigBike:c?.big_bike??false,otherBigBike:c?.other_big_bike??false}};
+ formYear=c?.model_year;formNotes=c?.notes??'';
 	}
 
 	async function errorMessage(response: Response) {
@@ -43,6 +55,7 @@
 				const available = await fetch(resolve('/api/catalog'));
 				if (!available.ok) throw Error('Could not load the service catalog.');
 				catalog = await available.json();
+ const richCatalog=await fetch(resolve('/api/booking-catalog'));if(!richCatalog.ok)throw Error('Could not load catalog options.');config=(await richCatalog.json()).config;
 			}
 			show(result);
 		} catch (failure) {
@@ -58,7 +71,8 @@
 		busy = true;
 		notice = issue = '';
 		try {
-			const payload = { bookingId, revision: details.revision, services: [...checked].sort() };
+			const coating=uiCoatingSnapshot(rich,formYear,formNotes);
+ const payload = { bookingId, revision: details.revision, services: [...checked].sort(),coating };
 			const fingerprint = JSON.stringify(payload);
 			if (retry?.fingerprint !== fingerprint) retry = { fingerprint, id: crypto.randomUUID() };
 			const response = await fetch(resolve('/api/booking-services'), {
@@ -80,9 +94,8 @@
 </script>
 
 <svelte:head><title>Booking services | HERCO</title></svelte:head>
-<section class="section wrap stack">
-	<div><a class="btn sm ghost" href={resolve(fromStaff ? '/admin' : '/my-bookings')}>Back to bookings</a></div>
-	<h1>Booking services</h1>
+<section class:section={!embedded} class:wrap={!embedded} class="stack">
+	{#if !embedded}<div><a class="btn sm ghost" href={resolve(fromStaff ? '/admin' : '/my-bookings')}>Back to bookings</a></div><h1>Booking services</h1>{/if}
 	{#if loading}
 		<p role="status">Loading booking services…</p>
 	{:else if details}
@@ -98,8 +111,10 @@
 							{#if service.promotion}<small>{service.promotion.label}</small>{/if}</span>
 						</label>
 					{/each}
-				</fieldset>
-				<div><button class="btn sm" disabled={busy || !checked.length}>{busy ? 'Saving…' : 'Save services'}</button></div>
+                <ServerBookingCatalog bind:value={rich} bike={details.bike} year={formYear} {config} serviceControls={false}/>
+                <label>Notes for the shop<textarea bind:value={formNotes} maxlength="700"></textarea></label>
+                </fieldset>
+                <div><button class="btn sm" disabled={busy || !checked.length}>{busy ? 'Saving…' : 'Save services'}</button></div>
 			</form>
 		{:else}
 			<h2>Current services</h2>
@@ -111,7 +126,7 @@
 			{@render services(details.original)}
 			{#each details.changes as change (change.revision)}
 				<h3>{stamp.format(new Date(change.recorded_at))} Philippine time</h3>
-				<p>Services after change</p>
+				<p>Changed after booking</p><ul>{#each change.after_services.filter(line=>!change.before_services.some(old=>old.code===line.code)) as added}<li><strong>Added</strong> {added.label}</li>{/each}{#each change.before_services.filter(line=>!change.after_services.some(next=>next.code===line.code)) as removed}<li><strong>Removed</strong> {removed.label}</li>{/each}</ul>{#each change.after_services as line}{@const old=change.before_services.find(before=>before.code===line.code)}{#if old&&displayServicePrice(old)!==displayServicePrice(line)}<p>{line.label} · {displayServicePrice(old)} → {displayServicePrice(line)}</p>{/if}{/each}
 				{@render services(change.after_services)}
 			{/each}
 		</details>

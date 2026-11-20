@@ -1,37 +1,31 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
+	import ActionIcon from '#lib/ActionIcon.svelte';
 	import { fmtDate, fmtSlot } from '#lib/dates.ts';
 
-	type Customer = { id: string; name: string | null; email: string };
-	type Directory = { customers: Customer[]; nextCursor: string | null };
-	type Visit = { id: string; visit_date: string; visit_hour: number | null;
-		status: 'pending' | 'confirmed' | 'done' | 'cancelled' };
+	type Status = 'pending' | 'confirmed' | 'done' | 'cancelled';
+	type Customer = { id: string; name: string | null; email: string; phone: string | null; bike: string | null; booking_count: number; points: number };
+	type Directory = { customers: Customer[]; nextCursor: string | null; total: number };
+	type Visit = { id: string; reference: string; visit_date: string; visit_hour: number | null; status: Status; bike: string; services: string[]; source: 'online' | 'walk-in' };
 	type History = { visits: Visit[]; hasMore: boolean };
-	type Lookup = { operation: 'directory'; term: string; cursor: string | null }
-		| { operation: 'visits'; customer: string; page: number };
+	type Lookup = { operation: 'directory'; term: string; cursor: string | null } | { operation: 'visits'; customer: string; page: number };
 
 	const worker = import.meta.env.MODE === 'worker';
-	const statusLabels = { pending: 'Pending', confirmed: 'Booked', done: 'Completed', cancelled: 'Cancelled' };
-	let searchText = $state('');
+	const pageSize = 20;
+	const statusLabels: Record<Status, string> = { pending: 'Pending', confirmed: 'Booked', done: 'Completed', cancelled: 'Cancelled' };
+	let search = $state('');
 	let runningTerm = $state('');
 	let directory = $state<Directory>();
 	let cursors = $state<(string | null)[]>([null]);
 	let directoryPage = $state(0);
 	let loading = $state(worker);
 	let notice = $state('');
-	let details = $state<Customer>();
-	let history = $state<History>();
-	let visitPage = $state(1);
-	let visitsLoading = $state(false);
-	let historyNotice = $state('');
-	let detailsHeading = $state<HTMLHeadingElement>();
-	let visitTrigger: HTMLButtonElement | undefined;
+	let histories = $state<Record<string, { state: 'loading' | 'ready' | 'failed'; page: number; data?: History; message?: string }>>({});
 	let directoryRequest: AbortController | undefined;
-	let visitsRequest: AbortController | undefined;
-	let lastDirectoryRequest = { term: '', page: 0, cursor: null as string | null };
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
-	async function lookup<T>(operation: Lookup, signal: AbortSignal): Promise<T> {
+	async function lookup<T>(operation: Lookup, signal?: AbortSignal): Promise<T> {
 		const response = await fetch(resolve('/api/staff/customers'), {
 			method: 'POST', signal,
 			headers: { 'content-type': 'application/json', accept: 'application/json' },
@@ -44,34 +38,21 @@
 		return response.json();
 	}
 
-	function closeHistory() {
-		visitsRequest?.abort();
-		details = undefined;
-		history = undefined;
-		historyNotice = '';
-	}
-
-	function closeVisits() {
-		closeHistory();
-		visitTrigger?.focus();
-	}
-
 	async function loadDirectory(term: string, page: number, cursor: string | null) {
-		lastDirectoryRequest = { term, page, cursor };
 		directoryRequest?.abort();
 		const active = new AbortController();
 		directoryRequest = active;
 		loading = true;
 		notice = '';
-		closeHistory();
 		try {
 			const result = await lookup<Directory>({ operation: 'directory', term, cursor }, active.signal);
 			if (active.signal.aborted) return;
 			directory = result;
 			if (page === 0) cursors = [null];
-			else cursors[page] = cursor;
+			cursors[page] = cursor;
 			directoryPage = page;
 			runningTerm = term;
+			histories = {};
 		} catch (error) {
 			if (active.signal.aborted) return;
 			directory = undefined;
@@ -81,140 +62,101 @@
 		}
 	}
 
-	function submitSearch(event: SubmitEvent) {
-		event.preventDefault();
-		void loadDirectory(searchText.trim(), 0, null);
+	function searchChanged() {
+		clearTimeout(searchTimer);
+		const term = search.trim();
+		// The server needs two characters to search; a single character keeps the current list.
+		if (term.length === 1) return;
+		searchTimer = setTimeout(() => { if (term !== runningTerm || !directory) void loadDirectory(term, 0, null); }, 300);
 	}
 
-	async function loadVisits(customer: Customer, page: number, focus = false) {
-		visitsRequest?.abort();
-		const active = new AbortController();
-		visitsRequest = active;
-		details = customer;
-		visitPage = page;
-		history = undefined;
-		historyNotice = '';
-		visitsLoading = true;
-		if (focus) {
-			await tick();
-			if (!active.signal.aborted) detailsHeading?.focus();
-		}
+	async function loadVisits(customer: Customer, page: number) {
+		histories[customer.id] = { state: 'loading', page };
 		try {
-			const result = await lookup<History>({ operation: 'visits', customer: customer.id, page }, active.signal);
-			if (active.signal.aborted) return;
-			history = result;
+			const data = await lookup<History>({ operation: 'visits', customer: customer.id, page });
+			histories[customer.id] = { state: 'ready', page, data };
 		} catch (error) {
-			if (!active.signal.aborted) historyNotice = error instanceof Error ? error.message : 'Visits are temporarily unavailable.';
-		} finally {
-			if (!active.signal.aborted) visitsLoading = false;
+			histories[customer.id] = { state: 'failed', page, message: error instanceof Error ? error.message : 'Visits are temporarily unavailable.' };
 		}
 	}
+
+	function toggled(event: Event, customer: Customer) {
+		if ((event.currentTarget as HTMLDetailsElement).open && !histories[customer.id]) void loadVisits(customer, 1);
+	}
+
+	const offset = $derived(directoryPage * pageSize);
 
 	onMount(() => {
 		if (worker) void loadDirectory('', 0, null);
-		return () => {
-			directoryRequest?.abort();
-			visitsRequest?.abort();
-		};
+		return () => { directoryRequest?.abort(); clearTimeout(searchTimer); };
 	});
 </script>
 
-<svelte:head><title>Staff customers | HERCO</title></svelte:head>
-<section class="section wrap stack">
-	<div class="row between">
-		<h1>Customers</h1>
-		<a class="btn sm ghost" href={resolve('/admin')}>Bookings</a>
-	</div>
+<svelte:head><title>Customers | HERCO</title></svelte:head>
+<section class="section wrap stack customers-page">
+	<h3>Customers</h3>
 	{#if worker}
-		<form class="card stack" onsubmit={submitSearch}>
-			<label>Search by name or full email
-				<input type="search" bind:value={searchText} placeholder="Name or full email" maxlength="254" autocomplete="off" />
-			</label>
-			<div class="row">
-				<button class="btn sm" disabled={loading || searchText.trim().length === 1}>Search</button>
-				{#if searchText || runningTerm}
-					<button class="btn sm ghost" type="button" disabled={loading}
-						onclick={() => { searchText = ''; void loadDirectory('', 0, null); }}>Clear search</button>
-				{/if}
-			</div>
-		</form>
-		{#if loading}
+		<div class="card customer-total"><span class="muted small">Total accounts</span><b>{directory ? directory.total.toLocaleString('en-PH') : '—'}</b></div>
+		<label>Search customers<input type="search" bind:value={search} oninput={searchChanged} placeholder="Name, email, mobile number or account ID" maxlength="254" autocomplete="off" /></label>
+		{#if loading && !directory}
 			<p role="status">Loading customers…</p>
 		{:else if notice}
 			<p class="error" role="alert">{notice}</p>
 			<div class="row">
-				<button class="btn sm ghost" type="button" onclick={() => {
-					const { term, page, cursor } = lastDirectoryRequest;
-					void loadDirectory(term, page, cursor);
-				}}>Retry</button>
-				<a href={resolve('/account')}>Account</a>
+				<button class="btn sm ghost" type="button" onclick={() => loadDirectory(runningTerm, directoryPage, cursors[directoryPage] ?? null)}><ActionIcon name="reset" />Try again</button>
 			</div>
 		{:else if directory}
-			<section class="card stack" aria-labelledby="directory-heading">
-				<h2 id="directory-heading">Customer directory</h2>
+			<div class="stack" aria-busy={loading}>
 				{#each directory.customers as customer (customer.id)}
-					<article class="row between directory-row">
-						<div>
-							<strong>{customer.name || 'Name unavailable'}</strong>
-							<p class="muted">{customer.email}</p>
-						</div>
-						<button class="btn sm ghost" type="button" aria-label={'View visits for ' + (customer.name || customer.email)}
-							aria-expanded={details?.id === customer.id}
-							onclick={(event) => {
-								visitTrigger = event.currentTarget;
-								void loadVisits(customer, 1, true);
-							}}>View visits</button>
-					</article>
-				{:else}
-					<p>No matching customers with verified accounts and bookings.</p>
-				{/each}
-				{#if directoryPage > 0 || directory.nextCursor}
-					<nav class="row" aria-label="Customer pages">
-						<button class="btn sm ghost" disabled={directoryPage === 0}
-							onclick={() => loadDirectory(runningTerm, directoryPage - 1, cursors[directoryPage - 1])}>Previous</button>
-						<span>Page {directoryPage + 1}</span>
-						<button class="btn sm ghost" disabled={!directory.nextCursor}
-							onclick={() => { if (directory?.nextCursor) void loadDirectory(runningTerm, directoryPage + 1, directory.nextCursor); }}>Next</button>
-					</nav>
-				{/if}
-			</section>
-		{/if}
-		{#if details}
-			{@const selected = details}
-			<section class="card stack" aria-labelledby="visits-heading">
-				<div class="row between">
-					<h2 id="visits-heading" tabindex="-1" bind:this={detailsHeading}>Visits for {selected.name || selected.email}</h2>
-					<button class="btn sm ghost" onclick={closeVisits}>Close visits</button>
-				</div>
-				{#if visitsLoading}
-					<p role="status">Loading visits…</p>
-				{:else if historyNotice}
-					<p class="error" role="alert">{historyNotice}</p>
-					<div><button class="btn sm ghost" onclick={() => loadVisits(selected, visitPage)}>Retry</button></div>
-				{:else if history}
-					<p class="muted small">Appointment times are shown in Philippine time.</p>
-					{#each history.visits as visit (visit.id)}
-						<div class="row between directory-row">
-							<div>
-								<strong>{fmtDate(visit.visit_date)}{visit.visit_hour === null ? ' · Walk-in' : ' at ' + fmtSlot(visit.visit_hour + ':00')}</strong>
-								<p class="muted small">Reference {visit.id}</p>
+					{@const history = histories[customer.id]}
+					<details class="card customer-record" ontoggle={(event) => toggled(event, customer)}>
+						<summary>
+							<span><b>{customer.name || customer.email}</b> <span class="muted small">{customer.id.slice(0, 8)}</span></span>
+							<span class="customer-record-meta">{customer.bike ?? ''} <span class="badge">{customer.booking_count} {customer.booking_count === 1 ? 'booking' : 'bookings'}</span></span>
+						</summary>
+						<div class="stack customer-profile">
+							<div class="cols customer-details">
+								<div><span class="muted small">Mobile</span><p>{#if customer.phone}<a href={'tel:' + customer.phone}>{customer.phone}</a>{:else}Not provided{/if}</p></div>
+								<div><span class="muted small">Email</span><p><a href={'mailto:' + customer.email}>{customer.email}</a></p></div>
+								<div><span class="muted small">HERCO Points</span><p>{Number(customer.points).toLocaleString('en-PH')}</p></div>
 							</div>
-							<span class="badge" data-status={visit.status === 'confirmed' ? 'booked' : visit.status}>{statusLabels[visit.status]}</span>
+							<h3>Booking history ({customer.booking_count})</h3>
+							{#if !history || history.state === 'loading'}
+								<p role="status" class="muted">Loading bookings…</p>
+							{:else if history.state === 'failed'}
+								<p class="error" role="alert">{history.message}</p>
+								<div><button class="btn sm ghost" type="button" onclick={() => loadVisits(customer, history.page)}><ActionIcon name="reset" />Try again</button></div>
+							{:else if history.data}
+								{#each history.data.visits as visit (visit.id)}
+									<div class="ledger">
+										<div><span class="badge" data-status={visit.status === 'confirmed' ? 'booked' : visit.status}>{statusLabels[visit.status]}</span> <b>{visit.services.join(' · ') || 'Service'}</b><p class="muted small">{visit.bike} · {visit.reference}{visit.source === 'walk-in' ? ' · Walk-in' : ''}</p></div>
+										<span class="small">{fmtDate(visit.visit_date, { month: 'short', day: 'numeric', year: 'numeric' })}{visit.visit_hour === null ? '' : ' · ' + fmtSlot(visit.visit_hour + ':00')}</span>
+									</div>
+								{:else}<p class="muted">No linked bookings yet.</p>{/each}
+								{#if history.page > 1 || history.data.hasMore}
+									<nav class="row" aria-label="Booking history pagination">
+										<button type="button" class="btn sm ghost" disabled={history.page <= 1} onclick={() => loadVisits(customer, history.page - 1)}><ActionIcon name="left" />Previous</button>
+										<span class="small muted">Page {history.page}</span>
+										<button type="button" class="btn sm ghost" disabled={!history.data.hasMore} onclick={() => loadVisits(customer, history.page + 1)}><ActionIcon name="right" />Next</button>
+									</nav>
+								{/if}
+							{/if}
 						</div>
-					{:else}
-						<p>No visits on this page.</p>
-					{/each}
-					{#if visitPage > 1 || history.hasMore}
-						<nav class="row" aria-label="Visit pages">
-							<button class="btn sm ghost" disabled={visitPage === 1}
-								onclick={() => loadVisits(selected, visitPage - 1)}>Previous</button>
-							<span>Page {visitPage}</span>
-							<button class="btn sm ghost" disabled={!history.hasMore}
-								onclick={() => loadVisits(selected, visitPage + 1)}>Next</button>
+					</details>
+				{:else}<p class="muted">No matching customers.</p>{/each}
+			</div>
+			{#if directory.customers.length}
+				<div class="row between">
+					<span class="small muted" aria-live="polite">Showing {offset + 1}–{offset + directory.customers.length}{runningTerm ? '' : ' of ' + directory.total} accounts</span>
+					{#if directoryPage > 0 || directory.nextCursor}
+						<nav class="row" aria-label="Customers pagination">
+							<button type="button" class="btn sm ghost" disabled={loading || directoryPage === 0} onclick={() => loadDirectory(runningTerm, directoryPage - 1, cursors[directoryPage - 1] ?? null)}><ActionIcon name="left" />Previous</button>
+							<span class="small muted">Page {directoryPage + 1}</span>
+							<button type="button" class="btn sm ghost" disabled={loading || !directory.nextCursor} onclick={() => { if (directory?.nextCursor) void loadDirectory(runningTerm, directoryPage + 1, directory.nextCursor); }}><ActionIcon name="right" />Next</button>
 						</nav>
 					{/if}
-				{/if}
-			</section>
+				</div>
+			{/if}
 		{/if}
 	{:else}
 		<p>Open Customers from the demo staff workspace.</p>
@@ -222,7 +164,16 @@
 </section>
 
 <style>
-	h2 { font-size: 1.8rem; }
-	.directory-row { border-block-start: 1px solid var(--line); padding-block: .5rem; }
-	.directory-row > div, h2 { min-width: 0; overflow-wrap: anywhere; }
+	.customers-page h3 { overflow-wrap: anywhere; }
+	.customer-total { display: grid; gap: .25rem; }
+	.customer-total b { font-size: 1.6rem; }
+	.customer-record { padding: 0; overflow-wrap: anywhere; }
+	.customer-record > summary { padding: .65rem .9rem; cursor: pointer; }
+	.customer-record[open] > summary { background: var(--panel-2); border-radius: 6px 6px 0 0; }
+	.customer-record-meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-inline-start: .55rem; color: var(--muted); font-size: .85rem; }
+	.customer-profile { padding: .9rem; }
+	.customer-details { background: var(--bg); border: 1px solid var(--line); padding: .7rem; border-radius: 4px; }
+	.customer-details p { margin: 0; }
+	.ledger { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-block: 12px; border-bottom: 1px solid var(--line); }
+	.ledger p { margin: .15rem 0 0; }
 </style>

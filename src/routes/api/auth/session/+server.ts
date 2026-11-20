@@ -2,6 +2,7 @@ import { readJsonBody } from '#lib/server/request-body.ts';
 import { error, json } from '@sveltejs/kit';
 import { requestSupabase, requireSameOrigin } from '#lib/server/supabase.ts';
 import type { RequestHandler } from './$types';
+import { accountLanding } from '#lib/server/account-landing.ts';
 
 export const prerender = false;
 
@@ -25,11 +26,14 @@ export const POST: RequestHandler = async (event) => {
 	const supabase = requestSupabase(event);
 	const { data, error: failure } = await supabase.auth.signInWithPassword({ email, password: body.password });
 	if (failure || !data.user) {
+		if (failure?.code === 'email_not_confirmed') {
+			return json({ code: 'email_confirmation_required', message: 'Confirm your email to sign in.' }, { status: 403 });
+		}
 		if (failure?.status === 429) error(429, 'Too many sign-in attempts. Try again later.');
 		if (failure?.status && failure.status >= 500) error(503, 'Sign-in is temporarily unavailable.');
 		error(401, 'Sign-in failed. Check your email and password.');
 	}
-	return json({ id: data.user.id });
+	return json({ id: data.user.id, redirectTo: await accountLanding(supabase) });
 };
 
 export const DELETE: RequestHandler = async (event) => {

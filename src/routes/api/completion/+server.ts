@@ -52,7 +52,7 @@ export const GET: RequestHandler = async (event) => {
 	const photo = event.url.searchParams.get('photo');
 	if (!uuid.test(booking)) error(400, 'Choose a valid booking.');
 	const { data: photos, error: failure } = await requestSupabase(event).rpc('herco_completion_photos', { booking });
-	if (failure?.code === '42501') error(403, 'Completion evidence requires staff permission and MFA.');
+	if (failure?.code === '42501') error(403, 'Completion evidence requires staff permission.');
 	if (failure || !Array.isArray(photos)) error(503, 'Completion evidence is temporarily unavailable.');
 	if (photo === null) return json({ count: photos.length });
 	if (!/^[0-2]$/.test(photo) || !photos[Number(photo)]) error(404, 'Photo not found.');
@@ -69,7 +69,7 @@ export const PUT: RequestHandler = async (event) => {
 	if (!uuid.test(booking)) error(400, 'Choose a valid booking.');
 	const supabase = requestSupabase(event);
 	const { data: prefix, error: failure } = await supabase.rpc('herco_completion_upload_target', { booking });
-	if (failure?.code === '42501') error(403, 'Completion requires staff permission and MFA.');
+	if (failure?.code === '42501') error(403, 'Completion requires staff permission.');
 	if (failure?.code === '22023') error(409, 'This booking doesn’t accept completion photos.');
 	if (failure || typeof prefix !== 'string' || !PUBLIC_SUPABASE_URL || !HERCO_STORAGE_SECRET_KEY) {
 		error(503, 'Private photo storage is temporarily unavailable.');
@@ -99,7 +99,7 @@ export const POST: RequestHandler = async (event) => {
 	});
 	if (failure?.code === '42501') error(403, failure.message === 'Changing the final charge requires price adjustment permission.'
 		? 'Enter the finalized service total or ask someone with price adjustment permission to update it.'
-		: 'Completion requires staff permission and MFA.');
+		: 'Completion requires staff permission.');
 	if (failure?.code === '22023') error(400, 'Check the booking, final price, and uploaded photos.');
 	if (failure?.code === '23514') error(409, 'Check the booking status and finalize all service prices.');
 	if (failure) error(503, 'Could not confirm completion. Please retry with the same details.');

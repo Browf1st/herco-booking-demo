@@ -17,24 +17,10 @@
 </script>
 
 {#if import.meta.env.MODE === 'worker'}
- <nav class="wrap row" aria-label="Staff workspace">
-  <a class="btn sm ghost" href={resolve('/admin')} aria-current={!changes ? 'page' : undefined}>Bookings</a>
-  <a class="btn sm ghost" href={resolve('/admin') + '?view=requests'} aria-current={changes ? 'page' : undefined}>Change requests</a>
-  {#if access?.pages.includes('Customers')}<a class="btn sm ghost" href={resolve('/customers')}>Customers</a>{/if}
-  {#if access?.pages.includes('HERCO Points')}<a class="btn sm ghost" href={resolve('/staff-points')}>Manage points</a>{/if}
-  {#if access?.pages.includes('Inventory')}<a class="btn sm ghost" href={resolve('/inventory')}>Inventory</a>{/if}
-  {#if access?.pages.includes('Reports')}<a class="btn sm ghost" href={resolve('/reports')}>Reports</a>{/if}
-  {#if access?.pages.includes('Activity log')}<a class="btn sm ghost" href={resolve('/activity-log')}>Activity log</a>{/if}
-  {#if access?.pages.includes('Pricing')}<a class="btn sm ghost" href={resolve('/pricing')}>Pricing</a>{/if}
-  {#if access?.pages.includes('Staff Access')}<a class="btn sm ghost" href={resolve('/staff-access')}>Staff access</a>{/if}
-  {#if access?.pages.includes('Bookings') && access.actions.includes('createBooking')}
-   <a class="btn sm ghost" href={resolve('/manual-booking')}>Manual booking</a>
-  {/if}
- </nav>
  {#if changes}
   <ServerStaffRequests />
  {:else}
-  <ServerStaffBookings onVerified={loadAccess} canComplete={access?.actions.includes('completeBooking') ?? false}
+  <ServerStaffBookings canComplete={access?.actions.includes('completeBooking') ?? false}
    canAdjustPrices={access?.actions.includes('adjustPrices') ?? false}
    canRequestIntake={access?.pages.includes('Bookings') === true && access.actions.includes('createBooking')} />
  {/if}

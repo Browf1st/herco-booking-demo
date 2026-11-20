@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { requestSupabase } from '#lib/server/supabase.ts';
 import type { RequestHandler } from './$types';
+import { accountLanding } from '#lib/server/account-landing.ts';
 
 export const prerender = false;
 
@@ -13,6 +14,8 @@ export const GET: RequestHandler = async (event) => {
 		redirect(303, account + '?auth=retry');
 	}
 	event.setHeaders({ 'referrer-policy': 'no-referrer' });
-	const { error: failure } = await requestSupabase(event).auth.exchangeCodeForSession(code);
-	redirect(303, failure ? account + '?auth=retry' : account);
+	const supabase = requestSupabase(event);
+	const { error: failure } = await supabase.auth.exchangeCodeForSession(code);
+	if (failure) redirect(303, account + '?auth=retry');
+	redirect(303, await accountLanding(supabase));
 };

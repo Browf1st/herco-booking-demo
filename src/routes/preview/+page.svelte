@@ -12,7 +12,7 @@
 <section class="section wrap stack">
 	<p class="eyebrow">Showcase / Finished work</p>
 	<h2>Coating results</h2>
-	{#if features().preview}
+	{#if import.meta.env.MODE === 'worker' || features().preview}
 		<div class="layout">
 			<CompareSlider before={photos.before} after={photos.after} alt="Scooter coated by the shop" loading="eager" />
 			<div class="stack">

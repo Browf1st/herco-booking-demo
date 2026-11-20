@@ -25,7 +25,7 @@ function reportError(failure: { code: string }) {
 
 export const GET: RequestHandler = async (event) => {
 	const supabase = await staffClient(event);
-	const { data, error: failure } = await supabase.rpc('herco_staff_access');
+	const { data, error: failure } = await supabase.rpc('herco_staff_access_ui');
 	if (failure) reportError(failure);
 	return json(data);
 };
@@ -42,7 +42,7 @@ export const POST: RequestHandler = async (event) => {
 	const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iu;
 	const email = typeof body?.email === 'string' ? body.email.trim() : '';
 	if (
-		!body || !['staff', 'admin', 'restricted_admin'].includes(body.role) ||
+		!body || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 120 || !['staff', 'admin', 'restricted_admin'].includes(body.role) ||
 		typeof body.enabled !== 'boolean' || !isGrantList(body.pages, 20) || !isGrantList(body.actions, 40) ||
 		(editing
 			? !uuid.test(body.targetId) || !Number.isInteger(body.revision) || body.revision < 1 || body.revision > 2147483647
@@ -50,7 +50,8 @@ export const POST: RequestHandler = async (event) => {
 	) error(400, 'Check the staff account and permissions.');
 
 	const supabase = await staffClient(event);
-	const { error: failure } = await supabase.rpc('herco_save_staff_access', {
+	const { error: failure } = await supabase.rpc('herco_save_staff_access_ui', {
+		p_display_name: body.name.trim(),
 		p_target_id: editing ? body.targetId : null,
 		p_email: editing ? null : email,
 		p_role: body.role,

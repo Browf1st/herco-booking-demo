@@ -1,147 +1,56 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { resolve } from '$app/paths';
-
-	type Receipt = { id: string; member_id: string; reward_label: string; cost: number; created_at: string;
-		approved_at: string | null; approved_by: string | null; claimed_at: string | null; claimed_by: string | null };
-	type Reward = { id: string; label: string; cost: number; enabled: boolean };
-	const stamp = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' });
-	let data = $state<{ actions: string[]; receipts: Receipt[]; rewards: Reward[] }>();
-	let loading = $state(import.meta.env.MODE === 'worker');
-	let busy = $state(false);
-	let failure = $state('');
-	let notice = $state('');
-	let member = $state('');
-	let delta = $state<number>();
-	let reason = $state('');
-	let adjustment: { fingerprint: string; id: string } | undefined;
-	let draft = $state<{ id?: string; label: string; cost?: number; enabled: boolean }>({ label: '', enabled: false });
-
-	async function load() {
-		loading = true;
-		try {
-			const response = await fetch(resolve('/api/staff-points'));
-			if (response.status === 403) throw new Error('Staff permission and MFA are required.');
-			if (!response.ok) throw new Error('The points workspace is temporarily unavailable.');
-			data = await response.json();
-		} catch (error) {
-			data = undefined;
-			failure = error instanceof Error ? error.message : 'Could not reach HERCO Points.';
-		} finally {
-			loading = false;
-		}
-	}
-
-	async function submit(payload: Record<string, unknown>) {
-		if (busy) return false;
-		busy = true;
-		failure = notice = '';
-		try {
-			const response = await fetch(resolve('/api/staff-points'), {
-				method: 'POST',
-				headers: { 'content-type': 'application/json', accept: 'application/json' },
-				body: JSON.stringify(payload)
-			});
-			if (!response.ok) {
-				const detail = await response.json().catch(() => null);
-				throw new Error(detail?.message ?? 'Could not confirm this update.');
-			}
-			notice = 'Update saved.';
-			await load();
-			return true;
-		} catch (error) {
-			failure = error instanceof Error ? error.message : 'Could not reach HERCO Points.';
-			return false;
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function adjust(event: SubmitEvent) {
-		event.preventDefault();
-		const payload = { member: member.trim(), delta, reason: reason.trim() };
-		const fingerprint = JSON.stringify(payload);
-		if (adjustment?.fingerprint !== fingerprint) adjustment = { fingerprint, id: crypto.randomUUID() };
-		if (await submit({ action: 'adjust', ...payload, requestId: adjustment.id })) {
-			adjustment = undefined;
-			member = reason = '';
-			delta = undefined;
-		}
-	}
-
-	async function saveReward(event: SubmitEvent) {
-		event.preventDefault();
-		draft.id ??= crypto.randomUUID();
-		if (await submit({ action: 'saveReward', ...draft })) draft = { label: '', enabled: false };
-	}
-
-	onMount(() => { if (import.meta.env.MODE === 'worker') void load(); });
+ import {onMount} from 'svelte';
+ import {resolve} from '$app/paths';
+ import ActionIcon from '#lib/ActionIcon.svelte';
+ import RewardReceipt from '#lib/RewardReceipt.svelte';
+ import type {RewardReceipt as ReceiptView} from '#lib/operations.svelte.ts';
+ type Member={id:string;name:string;email:string;phone:string;balance:number};
+ type Receipt={id:string;reference:string;member_id:string;customer_name:string;customer_email:string;customer_phone:string;reward_label:string;reward_scope:string;cost:number;balance_after:number;created_at:string;approved_at:string|null;claimed_at:string|null;approved_name:string;claimed_name:string};
+ type Reward={id:string;label:string;scope:string;cost:number;enabled:boolean};
+ type Ledger={id:number;amount:number;reason:string;created_at:string;actor:string};
+ type Data={actions:string[];members:Member[];receipts:Receipt[];rewards:Reward[];ledger:Ledger[]};
+ let data=$state<Data>(); let loading=$state(true); let busy=$state(false); let failure=$state('');let notice=$state('');
+ let search=$state('');let sort=$state('points');let member=$state<Member>();let pointsSearch=$state('');let delta=$state<number>(1);let correcting=$state(false);let reason=$state('');let ledger=$state<Ledger[]>([]);
+ let pointsDialog:HTMLDialogElement;let rewardDialog:HTMLDialogElement;let draft=$state<Reward>({id:'',label:'',scope:'',cost:1,enabled:false});
+ let redemptionSearch=$state('');let redemptionFilter=$state('all');let redemptionSort=$state('newest');let fanPage=$state(1);let receiptPage=$state(1);
+ let memberSearchRequest=0;let memberSearchTimer:ReturnType<typeof setTimeout>;
+ function searchMembers(term:string){clearTimeout(memberSearchTimer);const ticket=++memberSearchRequest;memberSearchTimer=setTimeout(async()=>{try{const r=await fetch(resolve('/api/staff-points')+'?'+new URLSearchParams({search:term}));if(!r.ok)throw Error('Member search unavailable.');const next=await r.json();if(ticket===memberSearchRequest&&data)data={...data,members:next.members};}catch(e){if(ticket===memberSearchRequest)failure=e instanceof Error?e.message:'Member search unavailable.';}},250);}
+ const pageSize=10; const stamp=(s:string)=>new Date(s).toLocaleString('en-PH',{timeZone:'Asia/Manila',hour12:true});
+ const members=$derived((data?.members??[]).filter(m=>(m.name+' '+m.email+' '+m.phone+' '+m.id).toLowerCase().includes(search.toLowerCase())).toSorted((a,b)=>sort==='name'?a.name.localeCompare(b.name):sort==='lowest'?a.balance-b.balance:b.balance-a.balance));
+ const matches=$derived((data?.members??[]).filter(m=>(m.name+' '+m.email+' '+m.phone).toLowerCase().includes(pointsSearch.toLowerCase())).slice(0,20));
+ const receipts=$derived((data?.receipts??[]).filter(r=>(r.customer_name+' '+r.customer_email+' '+r.customer_phone+' '+r.reference).toLowerCase().includes(redemptionSearch.toLowerCase())&&(redemptionFilter==='all'||redemptionFilter===status(r))).toSorted((a,b)=>redemptionSort==='oldest'?a.created_at.localeCompare(b.created_at):b.created_at.localeCompare(a.created_at)));
+ const allowed=(a:string)=>data?.actions.includes(a)===true;
+ const status=(r:Receipt)=>r.claimed_at?'claimed':r.approved_at?'approved':'pending';
+ function receiptView(r:Receipt):ReceiptView{return{id:r.id,reference:r.reference,memberId:r.member_id,memberName:r.customer_name,reward:r.reward_label+(r.reward_scope?' · '+r.reward_scope:''),cost:r.cost,balanceBefore:Number(r.balance_after??0)+r.cost,balanceAfter:Number(r.balance_after??0),at:r.created_at,status:status(r),claimedAt:r.claimed_at??undefined,claimedBy:r.claimed_at?r.claimed_name:undefined};}
+ async function load(){loading=true;failure='';try{const r=await fetch(resolve('/api/staff-points'));if(!r.ok)throw Error((await r.json()).message??'Could not load HERCO Points.');data=await r.json();}catch(e){failure=e instanceof Error?e.message:'Could not load HERCO Points.';}finally{loading=false;}}
+ async function choose(m:Member){member=m;pointsSearch=m.name;ledger=[];try{const r=await fetch(resolve('/api/staff-points')+'?'+new URLSearchParams({member:m.id}));if(!r.ok)throw Error('Could not load points history.');ledger=(await r.json()).ledger;}catch(e){failure=e instanceof Error?e.message:'Could not load history.';}}
+ function openPoints(){member=undefined;pointsSearch='';delta=1;correcting=false;reason='';failure='';ledger=[];searchMembers('');pointsDialog.showModal();}
+ function openReward(r?:Reward){draft=r?{...r}:{id:crypto.randomUUID(),label:'',scope:'',cost:1,enabled:false};failure='';rewardDialog.showModal();}
+ const attempts=new Map<string,string>();
+ async function submit(payload:Record<string,unknown>){if(busy)return false;busy=true;failure=notice='';try{const r=await fetch(resolve('/api/staff-points'),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});if(!r.ok)throw Error((await r.json()).message??'Could not save.');await load();notice='Update saved.';return true;}catch(e){failure=e instanceof Error?e.message:'Could not save.';return false;}finally{busy=false;}}
+ async function adjust(e:SubmitEvent){e.preventDefault();if(!member)return;const p={action:'adjust',member:member.id,delta,reason:correcting?reason.trim():'Manual points grant'};const k=JSON.stringify(p);const id=attempts.get(k)??crypto.randomUUID();attempts.set(k,id);if(await submit({...p,requestId:id})){attempts.delete(k);pointsDialog.close();}}
+ async function saveReward(e:SubmitEvent){e.preventDefault();if(await submit({action:'saveReward',...draft}))rewardDialog.close();}
+ onMount(()=>{if(import.meta.env.MODE==='worker')void load();else loading=false;});
 </script>
-
-<svelte:head><title>Manage HERCO Points | HERCO</title></svelte:head>
+<svelte:head><title>HERCO Points | Staff</title></svelte:head>
 <section class="section wrap stack">
-	<h1>Manage HERCO Points</h1>
-	{#if failure}<p role="alert">{failure}</p>{/if}
-	{#if notice}<p role="status">{notice}</p>{/if}
-	{#if loading}
-		<p role="status">Loading points workspace…</p>
-	{:else if data}
-		{#if data.actions.includes('managePoints')}
-			<form class="card stack" onsubmit={adjust}>
-				<h2>Adjust points</h2>
-				<label>Member ID<input bind:value={member} required maxlength="36" /></label>
-				<label>Points to add or subtract<input type="number" bind:value={delta} required step="1" /></label>
-				<label>Reason<input bind:value={reason} required maxlength="300" /></label>
-				<div><button class="btn sm" disabled={busy}>Save adjustment</button></div>
-			</form>
-		{/if}
-		{#if data.actions.includes('manageRewards')}
-			<form class="card stack" onsubmit={saveReward}>
-				<h2>{draft.id ? 'Edit reward' : 'Add reward'}</h2>
-				<label>Reward name<input bind:value={draft.label} required maxlength="120" /></label>
-				<label>Point cost<input type="number" bind:value={draft.cost} min="1" required /></label>
-				<label><input type="checkbox" bind:checked={draft.enabled} /> Available to customers</label>
-				<div class="row">
-					<button class="btn sm" disabled={busy}>Save reward</button>
-					{#if draft.id}<button type="button" class="btn sm ghost" disabled={busy}
-						onclick={() => { draft = { label: '', enabled: false }; }}>Clear</button>{/if}
-				</div>
-				{#each data.rewards as reward (reward.id)}
-					<div class="row between">
-						<p>{reward.label} · {reward.cost} points · {reward.enabled ? 'Available' : 'Disabled'}</p>
-						<button class="btn sm ghost" type="button" disabled={busy} onclick={() => { draft = { ...reward }; }}>Edit</button>
-					</div>
-				{/each}
-			</form>
-		{/if}
-		<section class="card stack">
-			<h2>Recent redemptions</h2>
-			{#each data.receipts as receipt (receipt.id)}
-				<article class="stack">
-					<p><strong>{receipt.reward_label}</strong> · {receipt.cost} points</p>
-					<p class="small identity">Receipt {receipt.id} · Member {receipt.member_id}</p>
-					<p>Requested {stamp.format(new Date(receipt.created_at))} Philippine time</p>
-					{#if receipt.approved_at}<p class="small identity">Approved by {receipt.approved_by} · {stamp.format(new Date(receipt.approved_at))}</p>{/if}
-					{#if receipt.claimed_at}
-						<p class="small identity">Claimed by {receipt.claimed_by} · {stamp.format(new Date(receipt.claimed_at))}</p>
-					{:else if !receipt.approved_at && data.actions.includes('approveRewards')}
-						<div><button class="btn sm ghost" disabled={busy} onclick={() => submit({ action: 'approve', receipt: receipt.id })}>Approve</button></div>
-					{:else if receipt.approved_at && data.actions.includes('claimRewards')}
-						<div><button class="btn sm ghost" disabled={busy} onclick={() => submit({ action: 'claim', receipt: receipt.id })}>Mark claimed</button></div>
-					{/if}
-				</article>
-			{:else}
-				<p>No redemptions yet.</p>
-			{/each}
-		</section>
-	{:else if import.meta.env.MODE === 'worker'}
-		<div class="row"><a class="btn sm ghost" href={resolve('/admin')}>Staff workspace</a>
-			<button class="btn sm ghost" onclick={() => { failure = ''; void load(); }}>Try again</button></div>
-	{:else}
-		<p>The points workspace is available in the server build.</p>
-	{/if}
+ <div class="row between"><h1>HERCO Points</h1>{#if allowed('managePoints')}<button class="btn sm" onclick={openPoints}><ActionIcon name="adjust"/>Manage HERCO Points</button>{/if}</div>
+ {#if failure}<p class="error" role="alert">{failure}</p>{/if}{#if notice}<p role="status">{notice}</p>{/if}
+ {#if loading}<p role="status">Loading points workspace…</p>{:else if data}
+ <div class="admin-points-layout">
+ <section class="card stack"><h3>HERCO Points ranking</h3><div class="cols"><label>Find a fan<input type="search" bind:value={search} oninput={()=>{fanPage=1;searchMembers(search);}} placeholder="Name, email, phone or account ID"/></label><label>Sort leaderboard<select bind:value={sort} onchange={()=>fanPage=1}><option value="points">Most points</option><option value="lowest">Fewest points</option><option value="name">Name A–Z</option></select></label></div>
+ {#each members.slice((fanPage-1)*pageSize,fanPage*pageSize) as fan,i(fan.id)}<article class="rank-row"><b class="rank-number" class:podium={(fanPage-1)*pageSize+i<3}>{(fanPage-1)*pageSize+i+1}</b><div class="rank-fan"><strong>{fan.name}</strong><span class="small muted">{fan.email} · {fan.phone}</span></div><b class="rank-points">{fan.balance.toLocaleString('en-PH')}<span class="small muted">HERCO Points</span></b></article>{:else}<p>No fans match this search.</p>{/each}
+ <div class="row"><button class="btn sm ghost" disabled={fanPage<=1} onclick={()=>fanPage--}>Previous</button><span>Page {fanPage}</span><button class="btn sm ghost" disabled={fanPage*pageSize>=members.length} onclick={()=>fanPage++}>Next</button></div><p class="small muted">Up to 500 verified members shown.</p></section>
+ <section class="card stack"><div class="rewards-heading"><h3>HERCO Rewards Program</h3>{#if allowed('manageRewards')}<button class="btn sm" onclick={()=>openReward()}><ActionIcon name="add"/>Add reward</button>{/if}</div>
+ {#each data.rewards as reward(reward.id)}<article class="reward-line"><div><strong>{reward.label}</strong><p class="small muted">{reward.scope||'All eligible services'} · {reward.enabled?'Available':'Disabled'}</p>{#if allowed('manageRewards')}<button class="btn sm ghost" onclick={()=>openReward(reward)}><ActionIcon name="edit"/>Edit reward</button>{/if}</div><b class="reward-points">{reward.cost} points</b></article>{:else}<p>No rewards configured.</p>{/each}</section></div>
+ <section class="card stack"><h3>Redemptions</h3><div class="cols"><label>Search redemptions<input type="search" bind:value={redemptionSearch} oninput={()=>receiptPage=1} placeholder="Customer name, email, phone or AR reference"/></label><label>Status<select bind:value={redemptionFilter} onchange={()=>receiptPage=1}><option value="all">All statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="claimed">Claimed</option></select></label><label>Sort redemptions<select bind:value={redemptionSort}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label></div>
+ {#each receipts.slice((receiptPage-1)*pageSize,receiptPage*pageSize) as r(r.id)}<details class="redemption-row"><summary><span class="redemption-summary"><b>{r.customer_name}</b><span>{r.reward_label}</span><span class="badge">{status(r)}</span><span class="small muted">{r.reference} · {stamp(r.created_at)}</span></span></summary><div class="stack"><RewardReceipt receipt={receiptView(r)}/>{#if !r.approved_at&&allowed('approveRewards')}<div><button class="btn sm" disabled={busy} onclick={()=>submit({action:'approve',receipt:r.id})}><ActionIcon name="check"/>Approve redemption</button></div>{:else if !r.claimed_at&&allowed('claimRewards')}<div><button class="btn sm" disabled={busy} onclick={()=>submit({action:'claim',receipt:r.id})}><ActionIcon name="check"/>Mark as claimed</button></div>{/if}</div></details>{:else}<p>No redemptions match these filters.</p>{/each}
+ <div class="row"><button class="btn sm ghost" disabled={receiptPage<=1} onclick={()=>receiptPage--}>Previous</button><span>Page {receiptPage}</span><button class="btn sm ghost" disabled={receiptPage*pageSize>=receipts.length} onclick={()=>receiptPage++}>Next</button></div></section>
+ {:else}<div><button class="btn sm ghost" onclick={load}>Try again</button></div>{/if}
 </section>
-
+<dialog bind:this={pointsDialog} aria-labelledby="points-dialog-title"><form class="stack" onsubmit={adjust}><div class="dialog-heading row"><h3 id="points-dialog-title">Manage HERCO Points</h3><button class="close-dialog" type="button" aria-label="Close points popup" onclick={()=>pointsDialog.close()}><ActionIcon name="close"/></button></div><label>Find a fan<input type="search" bind:value={pointsSearch} oninput={()=>{member=undefined;searchMembers(pointsSearch);}} placeholder="Name, email, phone or account ID"/></label>
+ {#if !member}<ul class="fan-results">{#each matches as fan(fan.id)}<li><button class="opt" type="button" onclick={()=>choose(fan)}><strong>{fan.name}</strong><span>{fan.email} · {fan.balance} points</span></button></li>{/each}</ul>{:else}<h3>{member.name} · {member.balance} points</h3><label>Action<select bind:value={correcting} onchange={()=>{delta=1;reason='';}}><option value={false}>Add HERCO Points</option><option value={true}>Correct points balance</option></select></label><label>{correcting?'Adjustment (use a negative number to subtract)':'Points to add'}<input type="number" bind:value={delta} min={correcting?-member.balance:1} step="1" required/></label>{#if correcting}<label>Reason<input bind:value={reason} maxlength="300" required/></label>{/if}<div class="row"><button class="btn sm" disabled={busy}><ActionIcon name="save"/>{correcting?'Save correction':'Add HERCO Points'}</button><button class="btn sm ghost" type="button" onclick={()=>pointsDialog.close()}>Cancel</button></div><h3>Points history</h3>{#each ledger as entry(entry.id)}<div><strong>{entry.amount>0?'+':''}{entry.amount} · {entry.reason}</strong><p class="small muted">{entry.actor} · {stamp(entry.created_at)}</p></div>{:else}<p>No points activity.</p>{/each}{/if}{#if failure}<p role="alert">{failure}</p>{/if}</form></dialog>
+<dialog bind:this={rewardDialog} aria-labelledby="reward-dialog-title"><form class="stack" onsubmit={saveReward}><div class="dialog-heading row"><h3 id="reward-dialog-title">Edit reward</h3><button class="close-dialog" type="button" aria-label="Close reward popup" onclick={()=>rewardDialog.close()}><ActionIcon name="close"/></button></div><label>Reward name<input bind:value={draft.label} maxlength="120" required/></label><label>Scope (optional)<input bind:value={draft.scope} maxlength="200" placeholder="e.g. Small parts"/></label><label>Points required<input type="number" bind:value={draft.cost} min="1" step="1" required/></label><label class="choice"><input type="checkbox" bind:checked={draft.enabled}/>Available to customers</label><div class="row"><button class="btn sm" disabled={busy}><ActionIcon name="save"/>Save reward</button><button class="btn sm ghost" type="button" onclick={()=>rewardDialog.close()}>Cancel</button></div>{#if failure}<p role="alert">{failure}</p>{/if}</form></dialog>
 <style>
-	.identity { overflow-wrap: anywhere; }
+ .row.between{justify-content:space-between}.admin-points-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:1rem;align-items:start}.rank-row{display:flex;flex-wrap:wrap;gap:16px;align-items:center;padding-block:18px;border-bottom:1px solid var(--line)}.rank-number{font:italic 800 1.8rem var(--display);color:var(--muted);min-width:40px}.podium{color:var(--accent)}.rank-fan{display:grid;flex:1 1 160px;gap:4px;overflow-wrap:anywhere}.rank-points{font-size:1.3rem;min-width:95px}.rank-points span{display:block}.rewards-heading,.reward-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.6rem;align-items:baseline}.reward-points{font-size:1.2rem;text-align:right}.reward-line{border-top:1px solid var(--line);padding-block:.75rem}.redemption-row{border-top:1px solid var(--line);padding-block:.75rem}.redemption-row[open] summary{margin-bottom:.75rem}.redemption-summary{display:inline-flex;flex-wrap:wrap;align-items:center;gap:.35rem .9rem;vertical-align:middle}.fan-results{display:grid;gap:.4rem;list-style:none;padding:0;max-height:16rem;overflow:auto}.fan-results button{display:grid;width:100%;text-align:left}.choice{display:flex;gap:.5rem}.choice input{width:auto}dialog{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 48px);padding:24px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text)}dialog::backdrop{background:#000b}.dialog-heading{justify-content:space-between}.close-dialog{display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--line);border-radius:50%;background:var(--panel-2);color:var(--text)}@media(max-width:900px){.admin-points-layout{grid-template-columns:minmax(0,1fr)}}
 </style>

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import CoatingRuleEditor from '#lib/CoatingRuleEditor.svelte';
+ import ServerCatalogPricing from '#lib/ServerCatalogPricing.svelte';
 
 	type Setting = { code: string; label: string; enabled: boolean; revision: number };
 	type Service = Setting & { price_centavos: number; appointment_days: number[]; max_centavos?: number | null; quote_required?: boolean };
@@ -42,7 +43,7 @@
 		failure = '';
 		try {
 			const response = await fetch(resolve('/api/pricing'));
-			if (response.status === 403) throw new Error('Pricing requires staff permission and MFA.');
+			if (response.status === 403) throw new Error('Pricing requires staff permission.');
 			if (!response.ok) throw new Error('Pricing is temporarily unavailable.');
 			pricing = await response.json() as Pricing;
 			loadPromotion(pricing.promotion);
@@ -100,7 +101,7 @@
 		event.preventDefault();
 		if (!promotionDraft || promotionDraft.percent === undefined) return;
 		const { percent, ...setting } = promotionDraft;
-		void write({ ...setting, operation: 'promotion', discountBps: Math.round(percent * 100) });
+		void write({ ...setting, enabled: percent > 0, operation: 'promotion', discountBps: Math.round(percent * 100) });
 	}
 
 	onMount(() => { if (worker) void load(); });
@@ -109,8 +110,7 @@
 <svelte:head><title>Staff pricing | HERCO</title></svelte:head>
 <section class="section wrap stack">
 	<div class="row between">
-		<h1>Staff pricing</h1>
-		<a class="btn sm ghost" href={resolve('/admin')}>Bookings</a>
+		<h1>Pricing</h1>
 	</div>
 	{#if !worker}
 		<p>Use the staff workspace to manage demo prices.</p>
@@ -118,7 +118,8 @@
 		<p role="status">Loading pricing…</p>
 	{:else if pricing}
 		<p>Changes apply to new bookings. Saved bookings keep their original prices.</p>
-		<section class="card stack" aria-labelledby="catalog-heading">
+		<ServerCatalogPricing />
+<details class="card stack"><summary>Service availability and advanced catalog settings</summary><section class="stack" aria-labelledby="catalog-heading">
 			<div class="row between">
 				<h2 id="catalog-heading">Services</h2>
 				{#if pricing.canEditServices}<button type="button" class="btn sm" onclick={() => edit()}>Add service</button>{/if}
@@ -164,18 +165,17 @@
 				<p>No services are configured.</p>
 			{/each}
 		</section>
-		<CoatingRuleEditor />
+		</details><details class="card"><summary>Advanced coating matching rules</summary><CoatingRuleEditor /></details>
 
 		{#if promotionDraft}
 			<section class="card stack" aria-labelledby="promotion-heading">
 				<h2 id="promotion-heading">Booking promotion</h2>
-				<p>One percentage discount can apply to all new service lines.</p>
+				<p class="muted">Applies to ceramic and powder coating estimates. Set to 0% to turn it off.</p>
 				<form class="stack" onsubmit={savePromotion}>
 					<fieldset class="stack" disabled={!pricing.canEditPromotion || busy || stale}>
-						<label>Promotion code <input bind:value={promotionDraft.code} pattern="[a-z0-9][a-z0-9\-]*" maxlength="64" required /></label>
+						<details><summary>Promotion identification</summary><label>Promotion code <input bind:value={promotionDraft.code} pattern="[a-z0-9][a-z0-9\-]*" maxlength="64" required /></label>
 						<label>Customer-facing label <input bind:value={promotionDraft.label} maxlength="120" required /></label>
-						<label>Discount (%) <input type="number" bind:value={promotionDraft.percent} min="0" max="100" step="0.01" required /></label>
-						<label class="check"><input type="checkbox" bind:checked={promotionDraft.enabled} /> Apply to new bookings</label>
+						</details><label>Discount (%) <input type="number" bind:value={promotionDraft.percent} min="0" max="100" step="0.01" required /></label>
 					</fieldset>
 					{#if pricing.canEditPromotion}
 						<div><button class="btn sm" type="submit" disabled={busy || stale}>Save promotion</button></div>

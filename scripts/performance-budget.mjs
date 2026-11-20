@@ -5,13 +5,16 @@ import { gzipSync } from 'node:zlib';
 const budgets = {
 	worker: {
 		directory: '.svelte-kit/cloudflare/client',
-		javascript: { index: 60, book: 65, account: 60, 'my-bookings': 65, preview: 60, admin: 65, pricing: 65 },
-		styles: { index: 8, book: 7, account: 7, 'my-bookings': 7, preview: 7, admin: 7, pricing: 7 }
+		// Raised 2026-11-20 when the Worker screens adopted the demo UI (calendar, dialogs, cart);
+		// still well under the matching demo budgets below.
+		javascript: { index: 60, book: 70, account: 60, 'my-bookings': 72, preview: 60, admin: 85, pricing: 65 },
+		styles: { index: 8, book: 9, account: 7, 'my-bookings': 8, preview: 7, admin: 12, pricing: 7 }
 	},
 	demo: {
 		directory: 'build',
-		javascript: { index: 76, book: 84, account: 73, 'my-bookings': 87, preview: 72, admin: 120, pricing: 72 },
-		styles: { index: 9, book: 11, account: 8, 'my-bookings': 11, preview: 8, admin: 17, pricing: 7 }
+		// Admin includes the shared header, which now also carries the role-based staff menu.
+		javascript: { index: 76, book: 84, account: 73, 'my-bookings': 87, preview: 72, admin: 124, pricing: 72 },
+		styles: { index: 9, book: 11, account: 8, 'my-bookings': 11, preview: 8, admin: 18, pricing: 7 }
 	}
 };
 

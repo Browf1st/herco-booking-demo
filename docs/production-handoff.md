@@ -101,3 +101,36 @@ Known remaining limitations: browser storage is untrusted, full/corrupt booking 
 Require at least one photo for each new completion. The demo accepts up to three camera or album photos and stores compressed previews in browser storage. In production, validate uploaded media and check for an attached private photo that belongs to the booking before committing the completion and its audit entry. Preserve historical completed bookings that predate the requirement.
 
 Block completion while any saved service line still needs a shop quote or has a price range. Save an exact amount for each unresolved line through the service editor. Fixed-price lines need no extra confirmation. Check the current booking lines again inside the production completion transaction.
+
+## Hosted backend testing setup — 2026-11-20
+
+- With maintainer approval, applied all 31 repository migrations in order to Supabase project `zrwsyezqpizuiiebyssb`. Preflight found no HERCO schema or tables. Applied as one transaction using the authenticated Dashboard SQL editor because the direct database hostname was not reachable locally.
+- Recorded all 31 versions, names and original SQL statements in `supabase_migrations.schema_migrations` and reloaded the Data API schema cache.
+- Hosted verification: 31 migration records; zero public HERCO tables missing row-level security; anonymous booking reads denied; authenticated SELECT privilege present. The signed-in local My Bookings screen now loads its empty state successfully.
+- Brevo SMTP was saved by the maintainer. Signup and recovery email templates use the full verification token. Email confirmation and signup are enabled; local email-auth bindings are enabled in ignored files. The maintainer received confirmation mail and signed in. Email codes accept 6–10 digits to match provider configuration; authenticator MFA remains six digits.
+- This is backend testing setup, not a production release. Staff bootstrap/MFA, approved catalog prices, private completion bucket, transactional email worker and remaining release/recovery checks still require setup or verification. No role grants or real service prices were invented during migration installation.
+
+### First Owner bootstrap — 2026-11-20
+
+Following explicit maintainer approval in this session, the authenticated Supabase Dashboard administrator applied the guarded bootstrap from `docs/staff-access.md` to the maintainer-confirmed verified account. Confirmed enabled Owner membership with 10 page grants and 19 action grants. No existing Owner was overwritten. The local Account page recognizes staff eligibility and offers authenticator enrollment; MFA remains required and enrollment is left to the account owner. The exact approved identity is retained in the private setup record rather than this repository document.
+
+### Password-only staff policy — 2026-11-20
+
+The maintainer explicitly approved email-and-password staff access in every environment, including production. This supersedes earlier mandatory staff-MFA instructions in this handoff. Verified email, enabled database membership, page/action grants, ownership, and private evidence restrictions remain required. Existing optional MFA endpoints do not gate staff access.
+
+Applied migration `202611190032_password_staff_access.sql` to the confirmed hosted project after action-time confirmation and recorded the original statement in migration history. The migration replaces 15 current function definitions with checks for verified, enabled staff and returns the trusted role with workspace permissions. Account now displays Owner/Staff access and a workspace link rather than authenticator enrollment. Removed mandatory MFA checks from booking/manual-booking routes and obsolete UI verification states.
+
+Verification: zero Svelte/type errors or warnings; static and Worker builds passed; seven HTTP hardening tests passed. Hosted rollback-only assertions confirmed the actual Owner can obtain permissions using AAL1 and a non-staff identity cannot obtain workspace permissions or reports. The signed-in Owner opened the local staff workspace, with schedule, pricing, inventory, reporting and staff-management navigation visible. Updated isolated database assertions also cover unverified and disabled members, but the full SQL fixture suite was not run locally because PostgreSQL tooling is unavailable. No production hosting deployment or Git commit/push performed.
+
+### UI parity audit — 2026-11-20
+
+Maintainer rejected the simplified Worker presentation and requested a complete comparison before corrections. Produced `docs/ui-parity-audit.md` with 89 comparison units across all customer and staff UI areas plus `docs/ui-parity-file-inventory.txt`. Confirmed preserved demo copies and shared global styling, and traced the main drift to separately rendered Server components. Browser comparison confirmed the demo calendar/tiles/modal layout versus the simplified Worker cards. Audit-only after this instruction; no further UI correction performed. The recent role navigation work remains in the uncommitted working tree; Owner redirect to Reports and permitted staff main navigation were observed, but fresh password-login routing still needs end-to-end validation. Questions about navigation grouping, modal interactions and customer-visible/data-model differences remain open.
+
+### UI parity continuation — 2026-11-20 (Claude)
+
+- Finished the screens left generic: Customers now uses the demo's expandable records (total, live search, mobile/email/points, booking history) and Activity log uses the demo's module filter, search and labeled entries. The date range stays because the server caps queries at 31 days.
+- Staff header now uses the demo admin tab styling. The Booking menu shows pending booking and change-request counters (`herco_staff_pending_counts`, `/api/staff/counts`) and offers Manual booking Online and Walk-in. The Owner order follows the demo: Reports, Accounts, Activity Log, More.
+- Signed-out visitors to staff pages go to Account. Signed-in customers go to My Bookings, and staff without a section grant go to their landing page.
+- Fixed migration 035 (`herco_inventory_options_write` did not compile) and the missing `search` icon type error. Removed the maintainer's email from the UI seed, which now uses the enabled Owner.
+- Verified with Svelte check (0/0), 11 node tests, both builds and budgets (Worker budgets raised for the demo UI), and the full migration chain plus `security`, `customer-rewards` and `operations-ui` assertions in PGlite. Browser checks used stubbed staff responses because no staff session was available.
+- With maintainer approval, applied migrations 033–036 to the hosted project through the Dashboard SQL editor. Each script was checked by SHA-256 against the repository file and recorded in `supabase_migrations.schema_migrations`, giving 36 records. Applied `supabase/seeds/ui-parity-test.sql` after fixing the walk-in fixture's missing `booking_kind`. The first attempt rolled back with no rows written. The seed created 3 non-login TEST customers, 8 TEST bookings, 3 TEST rewards, 3 TEST stock items, the demo test price table, the TEST-labelled ceramic and powder services, and the `TEST-UI-v1` walk-in form. All TEST records are removable by the `f17e0000-` id prefix.

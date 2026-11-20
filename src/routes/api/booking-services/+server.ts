@@ -37,13 +37,15 @@ export const POST: RequestHandler = async (event) => {
 		typeof body.requestId !== 'string' || !uuid.test(body.requestId) ||
 		!Number.isInteger(body.revision) || body.revision < 0 || body.revision > 2147483647 ||
 		!Array.isArray(body.services) || !body.services.length || body.services.length > 20 ||
-		body.services.some((code: unknown) => typeof code !== 'string' || !code || code.length > 64)) {
+		body.services.some((code: unknown) => typeof code !== 'string' || !code || code.length > 64) ||
+		(body.coating !== undefined && (!body.coating || typeof body.coating !== 'object' || Array.isArray(body.coating) || JSON.stringify(body.coating).length > 3000))) {
 		error(400, 'Check the booking and selected services.');
 	}
 	const client = await clientFor(event);
-	const { data, error: failure } = await client.rpc('herco_save_booked_services', {
+	const { data, error: failure } = await client.rpc(body.coating ? 'herco_save_booked_services_configured' : 'herco_save_booked_services', {
 		booking_id: body.bookingId, request_id: body.requestId,
-		expected_revision: body.revision, service_codes: body.services
+		expected_revision: body.revision, service_codes: body.services,
+		...(body.coating ? { options: body.coating, expected_price_fingerprint: body.priceFingerprint ?? null } : {})
 	});
 	if (failure) reportFailure(failure.code, failure.message);
 	return json(data);

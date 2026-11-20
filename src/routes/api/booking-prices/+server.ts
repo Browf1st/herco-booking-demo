@@ -8,7 +8,7 @@ const uuid = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 
 function fail(failure: { code: string; message: string } | null) {
 	if (!failure) return;
-	if (failure.code === '42501') error(403, 'Price corrections require staff permission and MFA.');
+	if (failure.code === '42501') error(403, 'Price corrections require staff permission.');
 	if (failure.code === 'P0002') error(404, 'Booking not found.');
 	if (failure.code === '40001' || failure.code === '23514') error(409, failure.message);
 	if (failure.code === '22023') error(400, failure.message);

@@ -15,3 +15,14 @@
 		{/if}
 	</div>
 {/if}
+{#if options?.ui_catalog}
+ <div>
+  {#if options.ui_catalog.model_year}<p>Model year · {options.ui_catalog.model_year}</p>{/if}
+  {#if options.ui_catalog.ceramic_addons?.length}<p>Ceramic add-ons · {options.ui_catalog.ceramic_addons.join(', ')}</p>{/if}
+  {#if options.ui_catalog.wheel_type}<p>Mags · {options.ui_catalog.wheel_type}{options.ui_catalog.prismatic?' · Prismatic':''}</p>{/if}
+  {#if options.ui_catalog.wheel_extras?.length}<p>Wheel extras · {options.ui_catalog.wheel_extras.join(', ')}</p>{/if}
+  {#if options.ui_catalog.finish}<p>Preferred color · {options.ui_catalog.finish}</p>{/if}
+  {#if options.ui_catalog.notes}<p class="notes">Notes for the shop · {options.ui_catalog.notes}</p>{/if}
+ </div>
+{/if}
+<style>.notes{white-space:pre-wrap}</style>

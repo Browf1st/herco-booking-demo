@@ -12,7 +12,7 @@ export const GET: RequestHandler = async (event) => {
 	const { data, error: failure } = await requestSupabase(event).rpc('herco_booking_report', {
 		from_date: from, to_date: to
 	});
-	if (failure?.code === '42501') error(403, 'Reports require staff permission and MFA.');
+	if (failure?.code === '42501') error(403, 'Reports require staff permission.');
 	if (failure?.code === '22023' || failure?.code === '22007' || failure?.code === '22008') {
 		error(400, 'Choose a valid date range of up to 366 days.');
 	}
