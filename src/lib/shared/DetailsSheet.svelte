@@ -2,16 +2,21 @@
 	// One details popup for a whole list: a bottom sheet on phones, a side panel on desktop.
 	// The browser returns focus to the button that opened it when the dialog closes.
 	import type { Snippet } from 'svelte';
+	import { pushState } from '$app/navigation';
+	import { page } from '$app/state';
 
 	let { title, open, onclose, children }: { title: string; open: boolean; onclose: () => void; children: Snippet } = $props();
 	let dialog = $state<HTMLDialogElement>();
 
+	// A history entry lets the phone Back button close the sheet instead of leaving the page.
 	$effect(() => {
-		if (open) dialog?.showModal(); else dialog?.close();
+		const marked = page.state.detailsSheet;
+		if (open && !dialog?.open) dialog?.showModal(), pushState('', { detailsSheet: true });
+		else if (!(open && marked)) dialog?.close();
 	});
 </script>
 
-<dialog bind:this={dialog} aria-label={title} {onclose} onclick={(event) => { if (event.target === dialog) dialog.close(); }}>
+<dialog bind:this={dialog} aria-label={title} onclose={() => { onclose(); if (page.state.detailsSheet) history.back(); }} onclick={(event) => { if (event.target === dialog) dialog.close(); }}>
 	{#if open}
 		<header><h3>{title}</h3><button type="button" class="btn sm ghost" onclick={() => dialog?.close()}>Close</button></header>
 		<div class="body">{@render children()}</div>

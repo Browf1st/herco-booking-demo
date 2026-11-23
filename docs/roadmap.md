@@ -37,15 +37,17 @@ UI parity: the Worker screens are being matched to the demo look. Open items in 
 ### Owner revision list, 2026-11-23 (designs approved by the owner the same day)
 | Item | Request | Status | Spec |
 |---|---|---|---|
-| A | Showcase revamp: all 91 unique shop photos, masonry wall, category filters, photo viewer; Home shows 4 photos + "See all" | Done (uncommitted) | [F-001](features/F-001-customer-booking.md) |
-| 11 | HERCO Points ranking number did not follow the sort | Done (uncommitted): # is always the real points rank | [F-010](features/F-010-points-rewards.md) |
-| 12 | Page titles differ between staff tabs | Done (uncommitted): one Reports-style header on every staff tab, both builds | [F-007](features/F-007-staff-queue.md) |
-| 13 | Saving staff access gave an error; why "Restricted Admin"? | Done (uncommitted): form crash fixed; "Restricted Admin" removed (roles are labels only) | [F-012](features/F-012-staff-access.md) |
+| A | Showcase revamp: all 91 unique shop photos, masonry wall, category filters, photo viewer; Home shows 4 photos + "See all" | Done | [F-001](features/F-001-customer-booking.md) |
+| 11 | HERCO Points ranking number did not follow the sort | Done: # is always the real points rank | [F-010](features/F-010-points-rewards.md) |
+| 12 | Page titles differ between staff tabs | Done: one Reports-style header on every staff tab, both builds | [F-007](features/F-007-staff-queue.md) |
+| 13 | Saving staff access gave an error; why "Restricted Admin"? | Done: form crash fixed; "Restricted Admin" removed (roles are labels only) | [F-012](features/F-012-staff-access.md) |
 | 14 | Where should the light/dark switch go? | Done: moved out of the top strip into the staff account menu and the footer (System / Light / Dark); the Account page Appearance section stays | [F-005](features/F-005-account-sign-in.md) |
-| 15 | Reports too crowded | Done (uncommitted): income first, period chips, "Filters (n)", table on desktop / cards on phone, details in a popup sheet, filters apply instantly | [F-011](features/F-011-reports-activity-log.md) |
-| 16 | Staff Bookings and Booking history too noisy; "tap to view more" | Done (uncommitted): calm booking cards (time, status, name, "Bike · N services", one main button, "⋯" menu, Details), details in the same popup sheet; History is a flat list with date and time per card | [F-007](features/F-007-staff-queue.md) |
+| 15 | Reports too crowded | Done: income first, period chips, "Filters (n)", table on desktop / cards on phone, details in a popup sheet, filters apply instantly | [F-011](features/F-011-reports-activity-log.md) |
+| 16 | Staff Bookings and Booking history too noisy; "tap to view more" | Done: calm booking cards (time, status, name, "Bike · N services", one main button, "⋯" menu, Details), details in the same popup sheet; History is a flat list with date and time per card | [F-007](features/F-007-staff-queue.md) |
 | 17 | Sample of a change request | Done: the demo's two fictional requests (Admin view → Booking → Change requests); nothing added to Supabase | [F-006](features/F-006-my-bookings.md) |
-| 18 | Activity log: 10 per page | Done (uncommitted), both builds | [F-011](features/F-011-reports-activity-log.md) |
+| 18 | Activity log: 10 per page | Done, both builds | [F-011](features/F-011-reports-activity-log.md) |
+
+Follow-up fixes (2026-11-23): the booking card "⋯" menu closes on a tap elsewhere or Esc; the phone Back button closes the booking details sheet (no extra history entries); the Manage HERCO Points popup search no longer replaces the Points ranking list (it has its own results).
 
 ### M3: Release and operations
 | ID | Feature | Status | Depends on | Spec |

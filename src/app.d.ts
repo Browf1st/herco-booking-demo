@@ -8,6 +8,8 @@ declare global {
 		interface PageState {
 			/** Set while the Showcase photo viewer is open, so the phone Back button closes it. */
 			showcasePhoto?: boolean;
+			/** Set while a booking details sheet is open, so the phone Back button closes it. */
+			detailsSheet?: boolean;
 		}
 		// interface Platform {}
 	}

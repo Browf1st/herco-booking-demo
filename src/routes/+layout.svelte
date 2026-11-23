@@ -202,8 +202,14 @@
 	if (bookMenu?.open && event.target instanceof Node && !bookMenu.contains(event.target)) bookMenu.open = false;
 	if (accountMenu?.open && event.target instanceof Node && !accountMenu.contains(event.target)) accountMenu.open = false;
 	if (menuOpen && event.target instanceof Node && !header.contains(event.target)) menuOpen = false;
+	// Booking card "⋯ More actions" menus close when you tap anywhere else.
+	for (const more of document.querySelectorAll<HTMLDetailsElement>('.more[open]:has(.more-options)')) if (!more.contains(event.target as Node)) more.open = false;
 }} onkeydown={(event) => {
-	if (event.key === 'Escape' && accountMenu?.open) {
+	const more = event.key === 'Escape' && document.querySelector<HTMLDetailsElement>('.more[open]:has(.more-options)');
+	if (more) {
+		more.open = false;
+		more.querySelector('summary')?.focus();
+	} else if (event.key === 'Escape' && accountMenu?.open) {
 		accountMenu.open = false;
 		accountMenu.querySelector('summary')?.focus();
 	} else if (event.key === 'Escape' && bookMenu?.open) {
