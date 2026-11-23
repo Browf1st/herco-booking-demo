@@ -12,6 +12,7 @@ Staff see pending bookings and change requests, confirm, cancel or reschedule th
 3. With separate grants, cancel or reschedule a booking directly.
 4. Search the scoped customer directory (`/customers`): expandable records with mobile, email, points and booking history.
 5. Open **Booking History** (`/booking-history`): date filter (Today default, This month, Specific date, Custom range, All dates), clickable status counts, search, 10 per page.
+   - Owner-approved layout 2026-11-23: every staff tab uses the shared page header. Booking cards show time and status badge, customer, "Bike · N services", one main button, a "⋯" menu for other actions and a Details button; full details open in one popup sheet (bottom sheet on phones, side panel on desktop) instead of "Tap to view more". Filters apply as they change ("Filters (n)", Reset filters); History cards show date and time.
 
 ## Rules and details
 - Grants: `confirmBooking`, `cancelBooking`, `rescheduleBooking`, `reviewCancellation`, `reviewReschedule`; pages Bookings, Change requests, Booking history, Customers.

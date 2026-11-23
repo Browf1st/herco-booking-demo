@@ -1,5 +1,5 @@
 <script lang="ts">
- import {onMount} from 'svelte';import {resolve} from '$app/paths';import {today,addDays} from '#lib/shared/dates.ts';import ActionIcon from '#lib/shared/ActionIcon.svelte';
+ import {onMount} from 'svelte';import {resolve} from '$app/paths';import {today,addDays} from '#lib/shared/dates.ts';import ActionIcon from '#lib/shared/ActionIcon.svelte';import PageHeader from '#lib/shared/PageHeader.svelte';
  type Stock={id:string;name:string;unit:string;category:string;minimum:number;quantity:number;revision:number;supplier:string|null;storage_location:string|null;unit_cost:number|null;billing_rate:number|null;capacity:number|null};
  type Activity={request_id:string;operation:string;recorded_at:string;actor_name:string;input:{reason?:string};before_value:Stock|null;after_value:Stock};
  type Inventory={canManage:boolean;items:Stock[];recent:Activity[];options:{kind:'unit'|'category';name:string}[]};
@@ -24,7 +24,7 @@
  onMount(()=>{if(import.meta.env.MODE==='worker')void load();else loading=false;});
 </script>
 <svelte:head><title>Inventory | HERCO</title></svelte:head>
-<section class="section wrap stack"><h1>Workshop supplies &amp; inventory</h1>{#if message}<p class="error" role="alert">{message}</p>{/if}{#if notice}<p role="status">{notice}</p>{/if}
+<section class="section wrap stack"><PageHeader title="Workshop supplies & inventory" subtitle="Stock on hand, usage and low-stock alerts." />{#if message}<p class="error" role="alert">{message}</p>{/if}{#if notice}<p role="status">{notice}</p>{/if}
  {#if loading}<p role="status">Loading inventory…</p>{:else if inventory}
  {#if inventory.canManage}<div class="row"><button class="btn sm" onclick={()=>edit()}><ActionIcon name="add"/>Create new inventory item</button><button class="btn sm ghost" disabled={!inventory.items.length} onclick={()=>move()}><ActionIcon name="adjust"/>Update existing stock</button><button class="btn sm ghost" onclick={()=>openOptions()}><ActionIcon name="box"/>Manage units and categories</button></div>{/if}
  <section class="card stack"><h3>Inventory overview</h3><dl class="inventory-metrics"><div><dt>Total items</dt><dd>{inventory.items.length}</dd></div><div><dt>Healthy stock</dt><dd>{inventory.items.filter(i=>stockStatus(i)==='healthy').length}</dd></div><div><dt>Low stock</dt><dd>{inventory.items.filter(i=>stockStatus(i)==='low').length}</dd></div><div><dt>Out of stock</dt><dd>{inventory.items.filter(i=>stockStatus(i)==='out').length}</dd></div></dl></section>

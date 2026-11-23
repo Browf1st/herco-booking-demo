@@ -134,3 +134,18 @@ Maintainer rejected the simplified Worker presentation and requested a complete 
 - Fixed migration 035 (`herco_inventory_options_write` did not compile) and the missing `search` icon type error. Removed the maintainer's email from the UI seed, which now uses the enabled Owner.
 - Verified with Svelte check (0/0), 11 node tests, both builds and budgets (Worker budgets raised for the demo UI), and the full migration chain plus `security`, `customer-rewards` and `operations-ui` assertions in PGlite. Browser checks used stubbed staff responses because no staff session was available.
 - With maintainer approval, applied migrations 033–036 to the hosted project through the Dashboard SQL editor. Each script was checked by SHA-256 against the repository file and recorded in `supabase_migrations.schema_migrations`, giving 36 records. Applied `supabase/seeds/ui-parity-test.sql` after fixing the walk-in fixture's missing `booking_kind`. The first attempt rolled back with no rows written. The seed created 3 non-login TEST customers, 8 TEST bookings, 3 TEST rewards, 3 TEST stock items, the demo test price table, the TEST-labelled ceramic and powder services, and the `TEST-UI-v1` walk-in form. All TEST records are removable by the `f17e0000-` id prefix.
+
+### Owner bug list and Showcase photos — 2026-11-20/21 (Claude)
+
+- Customer fixes: review pop-up time ("11:undefined AM"), mobile number optional for a customer's own online booking (7-15 digits if typed, checked on screen and in `POST /api/bookings`), and customers land on My Bookings with status after submitting.
+- Account: "Check your email" code step with one box per digit and a `resend` account action. New setting `HERCO_AUTH_OTP_LENGTH` (default 6) must match Supabase Auth "Email OTP length". Signed-in page has Profile, Appearance (shared with the header theme menu) and Sign out sections.
+- My Bookings: Upcoming, Requests, Past and Cancelled sections; smaller type on My Bookings and HERCO Points.
+- Showcase: powder coating gallery from the owner's photo folder (`static/photos/powder/`, list in `src/lib/shared/powder-showcase.ts`); performance budget now checks those photos. Replaced 2026-11-23 by the 91-photo Showcase in `static/photos/showcase/` (see below).
+
+### Owner revision list — 2026-11-23 (Claude)
+- Showcase revamp: 91 unique photos (WebP 480/960, no camera data, ~11 MB in total, loaded lazily 24 at a time), masonry, filters, photo viewer; Home shows 4 of them. `scripts/performance-budget.mjs` checks every file in `photos/showcase` (480 ≤ 110 KiB, 960 ≤ 320 KiB).
+- Staff Access form crash fixed and "Restricted Admin" removed from the form (screen only, no migration); Points ranking shows real rank; shared `PageHeader` on staff tabs; Activity log 10 per page. No database or API change, nothing to apply to Supabase.
+- Demo `admin` route JS is 123.4/124 KiB gzip after these changes: little room left for demo staff features.
+- QA and misuse testers reviewed the work; their four findings were fixed. Verified with Svelte check (0/0), 37 node tests, both builds and both budgets. The new `tests/database/security.sql` mobile assertions run in CI only (PGlite is not installed locally).
+- Pushed as commit `04ec0da` on `main`. With the maintainer's go-ahead, applied migration 037 (`optional_online_mobile`) to the hosted project through the Dashboard SQL editor on 2026-11-21 and recorded it in `supabase_migrations.schema_migrations`, giving 37 records. A read-only check confirmed customers' online bookings accept a blank mobile, staff bookings still need one, and `authenticated` cannot execute `herco_private.create_booking_for`.
+- Not yet checked in a browser: the code step (needs a fresh signup) and a real online booking with a blank mobile.

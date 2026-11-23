@@ -7,6 +7,8 @@
 	import StaffSecurity from '#lib/live/StaffSecurity.svelte';
 	import ServerContactProfile from '#lib/live/ServerContactProfile.svelte';
 	import CodeInput from '#lib/live/CodeInput.svelte';
+	import AuthShell from '#lib/shared/AuthShell.svelte';
+	import PasswordField from '#lib/shared/PasswordField.svelte';
 	import { codeLength, maskEmail, DEFAULT_CODE_LENGTH } from '#lib/live/code-digits.ts';
 	import { currentTheme, setTheme, themeOptions, THEME_EVENT, type ThemeChoice } from '#lib/shared/theme.ts';
 
@@ -19,7 +21,6 @@
 	let busy = $state(false);
 	let email = $state('');
 	let name = $state('');
-	let showForm = $state(false);
 	let password = $state('');
 	let token = $state('');
 	let message = $state('');
@@ -42,7 +43,7 @@
 		recover: 'Reset your password', 'reset-password': 'Choose a new password'
 	} as const;
 	const buttonLabels = {
-		login: 'Sign in', signup: 'Create account', confirm: 'Confirm email',
+		login: 'Log in', signup: 'Create account', confirm: 'Confirm email',
 		recover: 'Send reset code', 'reset-password': 'Save new password'
 	} as const;
 
@@ -149,7 +150,6 @@
 
 	function setMode(next: typeof mode) {
 		mode = next;
-		showForm = next === 'confirm' || next === 'recover' || next === 'reset-password';
 		token = password = message = notice = '';
 		editEmail = false;
 	}
@@ -275,8 +275,11 @@
 
 <svelte:head><title>Account | HERCO</title></svelte:head>
 <section class="section wrap stack account">
- {#if message}<p role="alert">{message}</p>{/if}
- {#if notice}<p role="status">{notice}</p>{/if}
+ <!-- When signed out, these alerts show inside the sign-in card instead (accountForm). -->
+ {#if !checked || session}
+  {#if message}<p role="alert">{message}</p>{/if}
+  {#if notice}<p role="status">{notice}</p>{/if}
+ {/if}
  {#if !checked}
   <p role="status">Checking your session…</p>
   {#if !busy && message}<button class="btn ghost" onclick={loadSession}>Try again</button>{/if}
@@ -302,19 +305,20 @@
    <div><h2 id="signout-heading" class="section-title">Sign out</h2><p class="small muted">Sign out of HERCO on this device.</p></div>
    <button class="btn sm ghost signout" onclick={signOut} disabled={busy}><ActionIcon name="logout" />Sign out</button>
   </section>
+ {:else if codeStep}
+  <AuthShell icon="mail" heading={mode === 'confirm' ? 'Check your email' : headings[mode]}
+   subtext={showEmailField ? 'Enter your email and the ' + otpLength + '-digit code we sent you.' : 'We sent a ' + otpLength + '-digit code to ' + maskEmail(email) + '.'}>
+   {@render accountForm()}
+  </AuthShell>
+ {:else if mode === 'recover'}
+  <AuthShell heading={headings.recover} subtext="Enter your account email and we'll send you a code to reset your password.">
+   {@render accountForm()}
+  </AuthShell>
  {:else}
-  <div class="login stack" class:code-step={codeStep}>
-   {#if codeStep}
-    <span class="code-icon" aria-hidden="true"><ActionIcon name="mail" /></span>
-    <h1>{mode === 'confirm' ? 'Check your email' : headings[mode]}</h1>
-    <p class="muted code-hint">{showEmailField ? 'Enter your email and the ' + otpLength + '-digit code we sent you.' : 'We sent a ' + otpLength + '-digit code to ' + maskEmail(email) + '.'}</p>
-   {:else}
-   <h1>{mode === 'login' ? 'Log In' : mode === 'signup' ? 'Sign Up' : headings[mode]}</h1>
-   {/if}
-   {#if mode === 'login' || mode === 'signup'}
-    {#if emailEnabled}<p>{mode === 'login' ? 'New to HERCO?' : 'Already have an account?'} <button type="button" class="mode" disabled={busy} onclick={() => setMode(mode === 'login' ? 'signup' : 'login')}><ActionIcon name={mode === 'login' ? 'add' : 'login'} />{mode === 'login' ? 'Sign Up' : 'Log In'}</button></p>{/if}
-   {/if}
-   {#if !showForm && (mode === 'login' || mode === 'signup')}
+  <AuthShell heading={mode === 'signup' ? 'Create your account' : 'Welcome back'}
+   subtext={mode === 'signup' ? 'Sign up to book faster, track your bookings and earn HERCO Points.' : 'Log in to book visits, see your bookings and use HERCO Points.'}
+   tab={emailEnabled ? (mode === 'signup' ? 'signup' : 'login') : undefined} ontab={(next) => { if (!busy && next !== mode) setMode(next); }}>
+   {#if providers.length}
     <div class="providers stack">
      {#each providers as provider (provider)}
       <button type="button" class="provider" class:facebook={provider === 'facebook'} disabled={busy} onclick={() => signInWith(provider)}>
@@ -322,29 +326,38 @@
        {mode === 'signup' ? 'Sign up' : 'Log in'} with {provider === 'facebook' ? 'Facebook' : 'Google'}
       </button>
      {/each}
-     {#if providers.length}<p class="divider">or</p>{/if}
-     <button type="button" class="provider email" disabled={busy} onclick={() => showForm = true}><ActionIcon name="mail" />{mode === 'signup' ? 'Sign up' : 'Log in'} with Email</button>
     </div>
-   {:else}
-    <form class="stack demo-form" onsubmit={submitAccount}>
-     {#if mode === 'signup'}<label>Name<input bind:value={name} autocomplete="name" maxlength="120" required /></label>{/if}
-     {#if showEmailField}<label>Email<input type="email" bind:value={email} autocomplete="username" maxlength="254" required /></label>{/if}
-     {#if codeStep}{#key mode + ':' + otpLength + ':' + codeResets}<CodeInput bind:value={token} length={otpLength} disabled={busy} label="Email verification code" />{/key}{/if}
-     {#if mode === 'login' || mode === 'signup' || mode === 'reset-password'}<label>{mode === 'reset-password' ? 'New password' : 'Password'}<input type="password" bind:value={password} autocomplete={mode === 'login' ? 'current-password' : 'new-password'} minlength={mode === 'login' ? undefined : 8} maxlength="1024" required /></label>{/if}
-     <button class="provider email" class:primary={codeStep} type="submit" disabled={busy || (codeStep && token.length !== otpLength)}><ActionIcon name={codeStep ? 'check' : 'login'} />{busy ? 'Please wait…' : buttonLabels[mode]}</button>
-     {#if codeStep}
-      <p class="code-links small">
-       <span>Didn't get it? <button class="mode" type="button" disabled={busy} onclick={resendCode}>Resend code</button></span>
-       {#if !showEmailField}<button class="mode" type="button" disabled={busy} onclick={() => { editEmail = true; token = ''; codeResets++; }}>Use a different email</button>{/if}
-      </p>
-     {/if}
-     {#if mode === 'login' && emailEnabled}<button class="mode" type="button" disabled={busy} onclick={() => setMode('recover')}>Forgot password?</button>{/if}
-     <button class="mode" type="button" disabled={busy} onclick={() => { setMode(mode === 'signup' ? 'signup' : 'login'); showForm = false; }}><ActionIcon name="back" />Back to sign-in options</button>
-    </form>
+    <p class="auth-divider">or use your email</p>
    {/if}
-  </div>
+   {@render accountForm()}
+  </AuthShell>
  {/if}
 </section>
+
+{#snippet accountForm()}
+ {#if message}<p class="auth-alert" role="alert">{message}</p>{/if}
+ {#if notice}<p class="auth-notice" role="status">{notice}</p>{/if}
+ <form onsubmit={submitAccount}>
+  {#if mode === 'signup'}<label>Name<input bind:value={name} autocomplete="name" maxlength="120" required /></label>{/if}
+  {#if showEmailField}<label>Email<input type="email" bind:value={email} autocomplete="username" maxlength="254" required /></label>{/if}
+  {#if codeStep}{#key mode + ':' + otpLength + ':' + codeResets}<CodeInput bind:value={token} length={otpLength} disabled={busy} label="Email verification code" />{/key}{/if}
+  {#if mode === 'login'}
+   <PasswordField bind:value={password}>
+    {#snippet aside()}{#if emailEnabled}<button class="auth-link small" type="button" disabled={busy} onclick={() => setMode('recover')}>Forgot password?</button>{/if}{/snippet}
+   </PasswordField>
+  {:else if mode === 'signup' || mode === 'reset-password'}
+   <PasswordField bind:value={password} label={mode === 'reset-password' ? 'New password' : 'Password'} autocomplete="new-password" minlength={8} />
+  {/if}
+  <button class="auth-primary" type="submit" disabled={busy || (codeStep && token.length !== otpLength)}><ActionIcon name={codeStep ? 'check' : mode === 'signup' ? 'add' : mode === 'recover' ? 'send' : 'login'} />{busy ? 'Please wait…' : buttonLabels[mode]}</button>
+  {#if codeStep}
+   <p class="code-links small">
+    <span>Didn't get it? <button class="auth-link" type="button" disabled={busy} onclick={resendCode}>Resend code</button></span>
+    {#if !showEmailField}<button class="auth-link" type="button" disabled={busy} onclick={() => { editEmail = true; token = ''; codeResets++; }}>Use a different email</button>{/if}
+   </p>
+  {/if}
+  {#if mode !== 'login' && mode !== 'signup'}<button class="auth-link back" type="button" disabled={busy} onclick={() => setMode('login')}><ActionIcon name="back" />Back to log in</button>{/if}
+ </form>
+{/snippet}
 <style>
  .account { max-width: 680px; }
  .account-header { display: flex; align-items: center; gap: 14px; }
@@ -360,26 +373,14 @@
  .signout-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
  .signout:hover:not(:disabled) { color: #c62828; border-color: #c62828; }
 
- .code-step h1 { font-size: clamp(1.8rem, 5vw, 2.4rem); }
- .code-icon { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto; border-radius: 50%; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
- .code-icon :global(svg) { width: 26px; height: 26px; }
- .code-hint { max-width: 36ch; margin-inline: auto; overflow-wrap: anywhere; }
- .provider.email.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
- .provider.email:disabled { cursor: not-allowed; opacity: .6; }
- .code-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; text-align: left; }
+ .code-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin: 0; }
+ .back { display: inline-flex; align-items: center; gap: 6px; justify-self: center; min-height: 44px; }
+ .auth-alert, .auth-notice { margin: 0; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); }
+ .auth-alert { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 
- .login { background: var(--panel); text-align: center; padding: clamp(20px, 5vw, 54px) 16px; border-radius: 8px; }
- .login h1 { font: 750 clamp(2.6rem, 7vw, 4.4rem)/1.1 var(--body); text-transform: none; }
- .providers, .demo-form { width: min(100%, 440px); margin: 24px auto 0; }
- .demo-form label { text-align: left; }
- .mode { border: 0; padding: 0; color: var(--accent); background: transparent; font: inherit; font-weight: 650; cursor: pointer; }
- .mode:hover { text-decoration: underline; }
  .provider { position: relative; min-height: 56px; padding: 10px 42px; border: 1px solid transparent; border-radius: 3px; background: #2465ca; color: #fff; font: 650 1rem var(--body); cursor: pointer; }
  .provider.facebook { background: #395793; }
- .provider.email { background: var(--panel); color: var(--text); border-color: var(--line); }
  .provider:hover { filter: brightness(.94); }
  .logo { position: absolute; inset-inline-start: 10px; top: 50%; translate: 0 -50%; display: grid; place-items: center; width: 30px; height: 30px; background: #fff; border-radius: 2px; }
  .logo svg { width: 23px; height: 23px; }
- .divider { display: flex; align-items: center; gap: 14px; margin-block: 8px; color: var(--muted); }
- .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
 </style>

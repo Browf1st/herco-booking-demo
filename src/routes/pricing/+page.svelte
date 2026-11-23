@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import CoatingRuleEditor from '#lib/live/CoatingRuleEditor.svelte';
+	import PageHeader from '#lib/shared/PageHeader.svelte';
  import ServerCatalogPricing from '#lib/live/ServerCatalogPricing.svelte';
 
 	type Setting = { code: string; label: string; enabled: boolean; revision: number };
@@ -109,9 +110,7 @@
 
 <svelte:head><title>Staff pricing | HERCO</title></svelte:head>
 <section class="section wrap stack">
-	<div class="row between">
-		<h1>Pricing</h1>
-	</div>
+	<PageHeader title="Pricing" subtitle="Service prices, coating price rules and booking promotions." />
 	{#if !worker}
 		<p>Use the staff workspace to manage demo prices.</p>
 	{:else if loading}

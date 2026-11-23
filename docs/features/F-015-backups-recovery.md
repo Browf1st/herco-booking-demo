@@ -40,7 +40,11 @@ The shop's database and completion photos are backed up together, abandoned uplo
 
 ## Acceptance tests (all must pass)
 - [ ] Staging backup produces a verified receipt and encrypted archives.
-- [ ] Cleanup in report mode lists only unlinked, old uploads.
+- [ ] Cleanup in report mode lists only unlinked, old uploads. (2026-11-20: run once locally against the dev project in report mode with a 30-day placeholder retention; it returned 0 candidates and deleted nothing. Still to prove with a real old unlinked upload.)
+
+## Local setup status (2026-11-20)
+- Cleanup settings live in the gitignored `.dev.vars.cleanup`: dev project URL, its secret key, `HERCO_PHOTO_CLEANUP_MODE=report`, `HERCO_PHOTO_CLEANUP_RETENTION_DAYS=30` (placeholder until Q-03 is answered).
+- `wrangler.cleanup.jsonc` still ships `disabled`. No cleanup Worker is deployed. Switching to `active` waits for the retention answer (Q-03) and a report run on staging.
 - [ ] Isolated restore drill passes; timing and recovery point recorded.
 
 ## Ready checklist (no code until all are ticked and the owner approves)

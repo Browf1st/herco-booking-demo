@@ -8,6 +8,7 @@ Customers earn HERCO Points and redeem them for rewards, and staff award points 
 
 ## User steps (exactly how it works)
 1. Customer opens `/points` to see their balance, ranking and available rewards.
+   - Staff ranking (`/staff-points`, owner decision 2026-11-23): the # number is always the fan's points rank (highest points = #1), also when sorted by fewest points or name, or while searching. Fans outside the loaded top 500 show "–".
 2. Customer redeems a reward; a redemption record is created.
 3. Staff open `/staff-points` to award or correct points, manage rewards, approve redemptions and mark rewards as claimed.
 4. History shows member, reward, points, dates and which staff member handled the claim.
@@ -23,6 +24,7 @@ Customers earn HERCO Points and redeem them for rewards, and staff award points 
 
 ## Screens
 - `/points` (customer): balance, rewards, history, empty state.
+- Reward rows (approved 2026-11-23): the reward name sits on the left and wraps to at most 2 lines (then "…", full name on hover), with the cost ("1,000 pts") on the right of the same line. Used for the signed-in reward cards and the signed-out "Rewards to work toward" list, in both builds (`RewardHeading`).
 - `/staff-points` (staff): award/correct, rewards list, redemption approvals and claims.
 
 ## Data

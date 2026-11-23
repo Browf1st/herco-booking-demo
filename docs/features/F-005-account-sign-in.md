@@ -1,7 +1,13 @@
 # F-005: Customer account and sign-in
 > Documented from existing docs on 2026-11-20 — owner to confirm.
 
-**Status:** Testing (Google/Facebook blocked on provider apps) · **Milestone:** M2 · **Depends on:** none
+**Status:** Testing (Google login works locally; Facebook dropped by owner) · **Milestone:** M2 · **Depends on:** none
+
+> 2026-11-20 decision: the owner does not want Facebook login. `HERCO_AUTH_FACEBOOK_ENABLED=false` in `.env.local` and `.dev.vars`, so the button is hidden and the server refuses Facebook sign-in (403). The Supabase Facebook provider stays disabled, and no Meta app was created. The Facebook code path remains, off by default; removing it from the code is a separate change if wanted.
+
+> 2026-11-20 Google: Google Cloud project "HERCO dev" (owner account browf1st1211) with Google Auth Platform in Testing mode, External audience, test users browf1st1211 and elijahpayoc12. Web client "HERCO local" allows origin `http://localhost:5175` and redirect `https://zrwsyezqpizuiiebyssb.supabase.co/auth/v1/callback`. Supabase Google provider is enabled with that client. A full login on `localhost:5175` landed on My Bookings with a valid session. It joined the existing email-password account with the same email and showed its earlier booking, so Supabase's automatic linking of matching verified emails is what currently happens (Q-22). Before launch: publish the app, add branding and a custom auth domain, and add the staging and production origins.
+
+> 2026-11-20: `HERCO_AUTH_GOOGLE_ENABLED` and `HERCO_AUTH_FACEBOOK_ENABLED` are `true` in the gitignored `.env.local` and `.dev.vars`. The "Log in with Google" and "Log in with Facebook" buttons show on `http://localhost:5175/account`. Still pending: the Google and Meta apps, their client ID and secret in Supabase → Authentication → Sign In / Providers. The redirect URL `http://localhost:5175/api/auth/callback` is saved in Supabase → Authentication → URL Configuration. A full social login has not been completed yet.
 
 ## In one sentence
 Customers and staff create a verified account and sign in so bookings, points and staff tools belong to a real, checked person.
@@ -24,6 +30,7 @@ Customers and staff create a verified account and sign in so bookings, points an
 ## Screens
 - `/account`: sign up, verify code, sign in, reset password, social buttons, saved contact details, staff workspace link, sign out.
 - Code step (approved 2026-11-20): "Check your email" card with a mail icon, "We sent a 6-digit code to ja***@example.com", one box per digit (count from `HERCO_AUTH_OTP_LENGTH`, must match Supabase Auth "Email OTP length", default 6). Typing moves to the next box, pasting or phone auto-fill fills all boxes, Backspace goes back. The button stays off until every box is filled. Links: "Resend code" and "Use a different email". Same for the password-reset code.
+- Signed-out layout (approved 2026-11-23, option A): one centred card with the HERCO logo, "Welcome back" / "Create your account" and a short line under it, Log in | Sign up tabs (arrow keys work), the social buttons (unchanged), an "or use your email" divider, then the email form shown straight away (no extra "Log in with Email" click). Labels above inputs, a show/hide password button, "Forgot password?" beside the Password label, sign-up shows "At least 8 characters", one red main button. Error and info messages show inside the card. Reset-password and code steps use the same card with "Back to log in". Shared parts: `AuthShell`, `PasswordField` (also used by the demo account screen).
 - Signed-in layout (approved 2026-11-20): initial avatar, "Account" title and email at top; then cards for Profile, Staff access (staff only), Appearance (System / Light / Dark, the same setting as the header menu), and Sign out on its own row at the bottom.
 - `/privacy-preferences`: analytics consent.
 
@@ -43,7 +50,7 @@ Customers and staff create a verified account and sign in so bookings, points an
 ## Acceptance tests (all must pass)
 - [ ] Email sign-up, verify, sign-in, reset work on staging (done once by the maintainer on the hosted project).
 - [ ] Cross-device sign-in shows the same bookings.
-- [ ] Google and Facebook work per environment once enabled.
+- [ ] Google and Facebook work per environment once enabled. (Google passed locally on 2026-11-20; Facebook dropped by the owner; staging and production not yet.)
 - [ ] Unverified account cannot book or reach staff tools.
 
 ## Ready checklist (no code until all are ticked and the owner approves)

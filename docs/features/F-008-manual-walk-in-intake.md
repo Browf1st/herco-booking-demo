@@ -22,7 +22,7 @@ Intake for an existing appointment:
 
 ## Rules and details
 - Staff need **Bookings** page and `createBooking` grant. walk-in-intake.md also says staff verify with an authenticator, which conflicts with the password-only policy (Q-19).
-- Signature method built: typed full name plus acknowledgement (Q-01). Form text, version and approver: TBD — ask owner (Q-02).
+- Signature method built: typed full name plus acknowledgement (Q-01). Owner answer 2026-11-21: walk-in customers must sign in to their own HERCO account to sign the form (already how it works: staff start the walk-in, the customer signs from their own account). Typed name plus tick box stays the method unless the owner asks for a drawn signature. Form text, version and approver: TBD — ask owner (Q-02).
 - Only one active form version; a retired version cannot be signed; old signatures stay tied to their wording.
 - A link alone grants nothing; the signer must be the booking owner. Guest intake needs a separate identity workflow (Q-09).
 - Customers without an account: TBD — ask owner (Q-10).

@@ -5,7 +5,10 @@ declare global {
 		// interface Error {}
 		// interface Locals {}
 		// interface PageData {}
-		// interface PageState {}
+		interface PageState {
+			/** Set while the Showcase photo viewer is open, so the phone Back button closes it. */
+			showcasePhoto?: boolean;
+		}
 		// interface Platform {}
 	}
 }

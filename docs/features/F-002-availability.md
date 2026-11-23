@@ -19,8 +19,10 @@ Authorized staff open or close dates and block hours so customers only see times
 - **Unblock** appears only for a saved manual restriction.
 - Overrides, blocks and capacity are enforced inside booking and reschedule saves, not only in the screen.
 - Public availability shows open/full/closed only, no names or notes.
-- Regular opening hours: TBD — ask owner.
-- Slot capacity and service duration/resources: TBD — ask owner (Q-07).
+- Regular opening hours (owner answer 2026-11-21, Q-07): the admin sets the general opening hours themselves (for example 9 AM to 5 PM), and these become the time slots for every date. Today the hours are fixed in code (hourly slots 9 AM–4 PM, closing 5 PM) and open days are fixed to Wednesday–Sunday with per-date overrides, so an admin-editable "opening hours" setting is new work that needs its own spec section and approval before building.
+- Blocking (owner answer 2026-11-21): every slot inside opening hours is bookable unless the admin blocks it; a blocked slot is unavailable to customers until the admin reopens it. This already works (Block / Unblock, date open/close).
+- Slot capacity: how many bookings one hour slot can take is still open (Q-07b). Today a slot takes 1 booking and then shows as booked.
+- Service duration (owner answer 2026-11-21): not needed. Each booking holds only the hour slot it was booked for; long jobs do not block later slots.
 
 ## Screens
 - Manage Availability and the staff calendar: date controls, slot list with Past slot labels, Block/Unblock buttons.

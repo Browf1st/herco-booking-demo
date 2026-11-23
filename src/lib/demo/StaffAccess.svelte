@@ -50,7 +50,6 @@
 
 <section class="stack">
  <div class="row heading">
-  <h2>Staff Access</h2>
   <button type="button" class="btn sm" onclick={() => open()}>Add account</button>
  </div>
  <p class="muted">Choose which pages each account can open and which actions it can take. Preview an active account to try its permissions. Select Owner view to return.</p>

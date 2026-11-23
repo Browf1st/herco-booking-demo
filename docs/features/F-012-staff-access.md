@@ -13,7 +13,8 @@ The Owner gives each staff member exactly the pages and actions they need, and c
 4. Disables access when it should end.
 
 ## Rules and details
-- Roles mentioned: Owner, Superadmin, Admin, restricted Admin, Staff.
+- Roles mentioned: Owner, Superadmin, Admin, Staff. Owner decision 2026-11-23: roles are labels only; what someone can do comes from the ticked pages and actions, so "Restricted Admin" was removed from the form. Existing `restricted_admin` accounts keep their grants, show as Admin and are saved as `admin` when edited; the server still accepts the old value.
+- Fix 2026-11-23: an action that belongs to two pages ("Complete bookings and attach photos" on Bookings and Booking history) is listed once in the form. Before, ticking both pages crashed the form and saving failed (`src/lib/live/staff-access-actions.ts`).
 - Pages: Staff Access, Bookings, Change requests, Booking history, Customers, HERCO Points, Inventory, Reports, Pricing, Activity log.
 - Actions: manageStaff, createBooking, manageSchedule, confirmBooking, cancelBooking, rescheduleBooking, editServices, adjustPrices, completeBooking, reviewCancellation, reviewReschedule, managePoints, manageRewards, approveRewards, claimRewards, manageInventory, viewIncome, changePricing, changePromotions.
 - The Owner can only grant permissions they hold, and only to Admin and Staff. Owner and Superadmin assignments need a separately authorized project administrator.

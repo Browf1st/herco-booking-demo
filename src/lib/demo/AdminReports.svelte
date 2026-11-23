@@ -1,44 +1,34 @@
 <script lang="ts">
- import BookingSummary from './BookingSummary.svelte';
- import ActionIcon from '#lib/shared/ActionIcon.svelte';
  import { money, serviceLabel } from '../shared/coating';
  import { serviceOf } from '../shared/config';
  import { addDays, fmtDate, fmtSlot, today } from '../shared/dates';
- import { bookingStatusLabels, db, type Status } from './store.svelte';
- let { showIncome = false }: { showIncome?: boolean } = $props();
+ import Pager from '../shared/Pager.svelte';
+ import { pageCount } from '../shared/paging';
+ import RecordFilterBar from '../shared/RecordFilterBar.svelte';
+ import RecordsEmpty from '../shared/RecordsEmpty.svelte';
+ import ReportList from '../shared/ReportList.svelte';
+ import ReportSummary from '../shared/ReportSummary.svelte';
+ import { rangeIssue, servicesLine, type RecordFilters, type ReportRow } from '../shared/records-ui';
+ import { db, type Booking } from './store.svelte';
+ let { showIncome = false, onDetails }: { showIncome?: boolean; onDetails: (booking: Booking) => void } = $props();
 
  const dateOptions = { month: '2-digit', day: '2-digit', year: '2-digit' } as const;
  const shopDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' });
  const shopToday = today();
- const presets = [{ value: 'all', label: 'All dates' }, { value: 'today', label: 'Today' },
-  { value: 'week', label: 'Last 7 days' }, { value: 'month', label: 'This month' }, { value: 'custom', label: 'Custom range' }] as const;
- type Preset = typeof presets[number]['value'];
+ const periods = [{ value: 'all', label: 'All dates' }, { value: 'today', label: 'Today' },
+  { value: 'week', label: 'Last 7 days' }, { value: 'month', label: 'This month' }, { value: 'custom', label: 'Custom range' }];
+ const defaults = (): RecordFilters => ({ preset: 'all', from: shopToday.slice(0, 7) + '-01', through: shopToday, exact: shopToday, search: '', status: 'all', source: 'all' });
 
- let preset = $state<Preset>('all');
  const pageSize = 10;
  let recordPage = $state(1);
- let from = $state(shopToday.slice(0, 7) + '-01');
- let to = $state(shopToday);
- let status = $state<Status | 'all'>('all');
- let source = $state('all');
- let search = $state('');
- const start = $derived(preset === 'custom' ? from : preset === 'month' ? shopToday.slice(0, 7) + '-01' : preset === 'week' ? addDays(shopToday, -6) : shopToday);
- const end = $derived(preset === 'custom' ? to : shopToday);
- const validRange = $derived(preset !== 'custom' || Boolean(from && to && from <= to));
- const query = $derived(search.trim().toLowerCase());
+ let filters = $state<RecordFilters>(defaults());
+ const start = $derived(filters.preset === 'custom' ? filters.from : filters.preset === 'month' ? shopToday.slice(0, 7) + '-01' : filters.preset === 'week' ? addDays(shopToday, -6) : shopToday);
+ const end = $derived(filters.preset === 'custom' ? filters.through : shopToday);
+ const validRange = $derived(!rangeIssue(filters));
+ const query = $derived(filters.search.trim().toLowerCase());
 
  function inPeriod(date: string) {
-  return validRange && (preset === 'all' || (date >= start && date <= end));
- }
-
- function resetFilters() {
-  recordPage = 1;
-  preset = 'all';
-  from = shopToday.slice(0, 7) + '-01';
-  to = shopToday;
-  status = 'all';
-  source = 'all';
-  search = '';
+  return validRange && (filters.preset === 'all' || (date >= start && date <= end));
  }
 
  const periodRows = $derived(db.bookings.flatMap(booking => {
@@ -50,140 +40,53 @@
   const scheduledInPeriod = inPeriod(booking.date);
   const completedInPeriod = booking.status === 'done' && inPeriod(completion || booking.date);
   if (!scheduledInPeriod && !completedInPeriod) return [];
-  return [{ booking, service, completion, scheduledInPeriod, completedInPeriod, reportDate: completedInPeriod ? completion || booking.date : booking.date }];
+  return [{ booking, scheduledInPeriod, completedInPeriod, reportDate: completedInPeriod ? completion || booking.date : booking.date }];
  }));
- const statusRows = $derived(periodRows.filter(({ booking }) => source === 'all' || Boolean(booking.walkIn) === (source === 'walk-in')));
- const sourceRows = $derived(periodRows.filter(({ booking }) => status === 'all' || booking.status === status));
- const rows = $derived(statusRows.filter(({ booking }) => status === 'all' || booking.status === status)
+ const rows = $derived(periodRows
+  .filter(({ booking }) => (filters.source === 'all' || Boolean(booking.walkIn) === (filters.source === 'walk-in')) && (filters.status === 'all' || booking.status === filters.status))
   .toSorted((a, b) => b.reportDate.localeCompare(a.reportDate) || b.booking.slot.localeCompare(a.booking.slot)));
 
- const pages = $derived(Math.max(1, Math.ceil(rows.length / pageSize)));
+ const pages = $derived(pageCount(rows.length, pageSize));
  const currentPage = $derived(Math.min(recordPage, pages));
- const pageRows = $derived(rows.slice((currentPage - 1) * pageSize, currentPage * pageSize));
+ const listRows = $derived<ReportRow[]>(rows.slice((currentPage - 1) * pageSize, currentPage * pageSize).map(({ booking }) => ({
+  id: booking.id, ref: booking.id, name: booking.name, date: fmtDate(booking.date, dateOptions), time: fmtSlot(booking.slot),
+  services: servicesLine('', booking.estimate?.lines?.length ?? 1), status: booking.status,
+  price: booking.status === 'done' && booking.finalPrice !== undefined ? money(booking.finalPrice) : '—'
+ })));
  const scheduled = $derived(rows.filter(row => row.scheduledInPeriod));
  const completed = $derived(rows.filter(row => row.completedInPeriod));
  const missingFinalPrices = $derived(completed.filter(({ booking }) => booking.finalPrice === undefined).length);
  const income = $derived(completed.reduce((cents, { booking }) => cents + Math.round((booking.finalPrice ?? 0) * 100), 0) / 100);
- const metrics = $derived([
-  ...(showIncome ? [['Total income from completed services', money(income), 'income']] : []),
-  ['Bookings in period', scheduled.length],
-  ['Completed services', completed.length, 'completed'],
-  ['Pending and booked', scheduled.filter(({ booking }) => booking.status === 'pending' || booking.status === 'confirmed').length],
-  ['Walk-in bookings', scheduled.filter(({ booking }) => booking.walkIn).length],
-  ['Cancelled bookings', scheduled.filter(({ booking }) => booking.status === 'cancelled').length, 'cancelled']
- ]);
+ const notes = $derived(['Booking counts use the scheduled date. Completed totals use the completion date, or the scheduled date when an older record has no completion timestamp.',
+  ...(showIncome && missingFinalPrices ? [`Completed bookings missing a final price are excluded from income (${missingFinalPrices}).`] : [])]);
+ function resetFilters() {
+  recordPage = 1;
+  filters = defaults();
+ }
 </script>
 
-<div class="report-layout">
-<section class="card stack report-panel" aria-labelledby="reports-title">
- <div class="row report-toolbar">
-  <h3 id="reports-title">Booking reports</h3>
-  <div class="row report-actions">
-  <div class="report-period" role="group" aria-label="Report period">
-   {#each presets as option (option.value)}
-    <button type="button" aria-pressed={preset === option.value} onclick={() => { preset = option.value; recordPage = 1; }}><ActionIcon name="calendar" />{option.label}</button>
-   {/each}
-  </div>
-  <button type="button" class="report-reset" onclick={resetFilters}><ActionIcon name="reset" />Reset filters</button>
-  </div>
- </div>
- {#if preset === 'custom'}
-  <div class="cols">
-   <label>From<input type="date" bind:value={from} oninput={() => recordPage = 1} /></label>
-   <label>To<input type="date" bind:value={to} oninput={() => recordPage = 1} /></label>
-  </div>
- {/if}
- <div class="report-filters">
-  <label>Search bookings<input type="search" bind:value={search} oninput={() => recordPage = 1} placeholder="Name, reference, bike or service" /></label>
-  <label>Status<select bind:value={status} onchange={() => recordPage = 1}>
-   <option value="all">All statuses ({statusRows.length})</option>
-   {#each Object.entries(bookingStatusLabels) as [value, label] (value)}<option {value}>{label} ({statusRows.filter(({ booking }) => booking.status === value).length})</option>{/each}
-  </select></label>
-  <label>Booking source<select bind:value={source} onchange={() => recordPage = 1}>
-   <option value="all">All sources ({sourceRows.length})</option><option value="online">Online ({sourceRows.filter(({ booking }) => !booking.walkIn).length})</option><option value="walk-in">Walk-in ({sourceRows.filter(({ booking }) => booking.walkIn).length})</option>
-  </select></label>
- </div>
- {#if !validRange}<p class="error" role="alert">Choose a start and end date in order.</p>{/if}
-</section>
+<div class="stack">
+ <div class="card"><RecordFilterBar bind:filters {periods} onchange={() => recordPage = 1} onreset={resetFilters} /></div>
 
 {#if validRange}
- <dl class="report-metrics">
-  {#each metrics as [label, value, metric] (label)}
-   <div class="card" data-metric={metric}><dt class="muted">{label}</dt><dd>{value}</dd></div>
-  {/each}
- </dl>
+ <ReportSummary income={showIncome ? money(income) : null} {notes} items={[['Bookings in period', scheduled.length], ['Completed services', completed.length],
+  ['Pending and booked', scheduled.filter(({ booking }) => booking.status === 'pending' || booking.status === 'confirmed').length],
+  ['Walk-in bookings', scheduled.filter(({ booking }) => booking.walkIn).length],
+  ['Cancelled bookings', scheduled.filter(({ booking }) => booking.status === 'cancelled').length]]} />
 
- <section class="card stack report-panel" aria-labelledby="report-records">
-  <div class="row between">
-   <div class="row"><h3 id="report-records">Booking records</h3><p class="small muted" aria-live="polite">{rows.length} {rows.length === 1 ? 'record' : 'records'}</p></div>
-   <p class="small muted">Philippine time · Newest first</p>
-  </div>
-  <p class="small muted">All dates use Philippine time. Booking counts use the scheduled date. Completed totals use the completion date, or the scheduled date when an older record has no completion timestamp.</p>
-  {#if showIncome && missingFinalPrices}
-   <p class="small muted">Completed bookings missing a final price are excluded from income ({missingFinalPrices}).</p>
-  {/if}
+ <section class="stack" aria-labelledby="report-records">
+  <div class="row between"><h2 id="report-records">Booking records</h2><p class="small muted" aria-live="polite">{rows.length} {rows.length === 1 ? 'record' : 'records'} · Newest first</p></div>
   {#if rows.length}
-   <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users need to scroll the table horizontally.) -->
-   <div class="report-table" role="region" aria-labelledby="report-records" tabindex="0">
-    <table>
-     <thead><tr><th scope="col">Booking</th><th scope="col">Service</th><th scope="col">Scheduled</th><th scope="col">Completed</th><th scope="col">Status</th><th scope="col">Source</th>{#if showIncome}<th scope="col" class="report-price">Final price</th>{/if}</tr></thead>
-     <tbody>
-      {#each pageRows as { booking, service, completion } (booking.id)}
-       <tr>
-        <td><strong>{booking.name}</strong><div class="small muted">{booking.id}</div></td>
-        <td>{service}<div class="small muted">{booking.bike}</div><details><summary>Booking and service history</summary><div class="stack"><BookingSummary {booking} staff /></div></details></td>
-        <td class="report-visit">
-         <time datetime={booking.date}>{fmtDate(booking.date, dateOptions)}</time>
-         <div class="small muted">{fmtSlot(booking.slot)}</div>
-        </td>
-        <td>{#if completion}<time datetime={completion}>{fmtDate(completion, dateOptions)}</time>{:else}—{/if}</td>
-        <td><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span></td>
-        <td>{booking.walkIn ? 'Walk-in' : 'Online'}</td>
-        {#if showIncome}<td class="report-price">{booking.status === 'done' && booking.finalPrice !== undefined ? money(booking.finalPrice) : '—'}</td>{/if}
-       </tr>
-      {/each}
-     </tbody>
-    </table>
-   </div>
-   {#if pages > 1}
-    <nav class="row" aria-label="Booking records pagination">
-     <button type="button" class="btn sm ghost" disabled={currentPage === 1} onclick={() => recordPage = currentPage - 1}><ActionIcon name="left" />Previous</button>
-     <span class="small muted" aria-live="polite">Page {currentPage} of {pages}</span>
-     <button type="button" class="btn sm ghost" disabled={currentPage === pages} onclick={() => recordPage = currentPage + 1}><ActionIcon name="right" />Next</button>
-    </nav>
-   {/if}
+   <ReportList rows={listRows} showPrice={showIncome} onDetails={(id) => { const found = db.bookings.find(item => item.id === id); if (found) onDetails(found); }} />
+   <Pager page={currentPage} {pages} label="Booking records" onchange={(next) => recordPage = next} />
   {:else}
-   <p class="muted">No booking records match these filters.</p>
+   <RecordsEmpty title="No bookings found" text="Try another date, status or search to find your bookings." action="Reset filters" onaction={resetFilters} />
   {/if}
  </section>
 {/if}
 </div>
 
 <style>
- .report-layout { display: grid; gap: 1rem; min-width: 0; }
- .report-panel { gap: .85rem; min-width: 0; }
- .report-toolbar { align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: .7rem; }
- .report-actions { align-items: center; gap: .5rem; }
- .report-period { display: flex; flex-wrap: wrap; gap: .15rem; padding: .2rem; background: var(--panel-2); border: 1px solid var(--line); border-radius: .35rem; }
- .report-period button, .report-reset { font: inherit; font-size: .75rem; font-weight: 750; text-transform: uppercase; padding: .35rem .55rem; border: 1px solid transparent; border-radius: .25rem; cursor: pointer; color: var(--text); background: transparent; }
- .report-period button[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-fill); }
- .report-period button:hover[aria-pressed="false"], .report-reset:hover { background: var(--panel-2); border-color: var(--line); }
- .report-reset { color: var(--accent); border-color: var(--line); }
- .report-filters { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: .75rem; }
- .report-filters input, .report-filters select { padding-block: .45rem; }
- .report-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin: 0; }
- .report-metrics > div { display: flex; flex-direction: column; justify-content: space-between; padding: .85rem; }
- .report-metrics dt, th { font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
- .report-metrics dd { margin: .4rem 0 0; font-size: 1.5rem; font-weight: 750; font-variant-numeric: tabular-nums; }
- .report-metrics [data-metric="completed"] dd, .report-metrics [data-metric="income"] dd { color: var(--ok); }
- .report-metrics [data-metric="cancelled"] dd { color: var(--accent); }
- .report-table { overflow-x: auto; border: 1px solid var(--line); border-radius: .35rem; }
- table { width: 100%; min-width: 920px; border-collapse: collapse; }
- th, td { padding: .6rem .7rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
- th, tbody tr:nth-child(even) { background: var(--panel-2); }
- tbody tr:last-child td { border-bottom: 0; }
- .report-price { text-align: right; font-variant-numeric: tabular-nums; }
- .report-visit, td:nth-child(n+4) { white-space: nowrap; }
- @media (max-width: 850px) { .report-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
- @media (max-width: 570px) { .report-filters { grid-template-columns: minmax(0, 1fr); } }
+ h2 { font-size: 1.35rem; }
+ .between { justify-content: space-between; }
 </style>

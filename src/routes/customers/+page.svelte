@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import ActionIcon from '#lib/shared/ActionIcon.svelte';
+	import PageHeader from '#lib/shared/PageHeader.svelte';
 	import { fmtDate, fmtSlot } from '#lib/shared/dates.ts';
 
 	type Status = 'pending' | 'confirmed' | 'done' | 'cancelled';
@@ -94,7 +95,7 @@
 
 <svelte:head><title>Customers | HERCO</title></svelte:head>
 <section class="section wrap stack customers-page">
-	<h3>Customers</h3>
+	<PageHeader title="Customers" subtitle="Find a customer and see their past visits." />
 	{#if worker}
 		<div class="card customer-total"><span class="muted small">Total accounts</span><b>{directory ? directory.total.toLocaleString('en-PH') : '—'}</b></div>
 		<label>Search customers<input type="search" bind:value={search} oninput={searchChanged} placeholder="Name, email, mobile number or account ID" maxlength="254" autocomplete="off" /></label>

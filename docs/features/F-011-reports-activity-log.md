@@ -9,7 +9,8 @@ The Owner and permitted staff see booking counts, service value and promotion to
 ## User steps (exactly how it works)
 1. Owner signs in and lands on **Reports** (`/reports`).
 2. Picks a date range (Philippine time) and sees booking counts, **Completed service value**, average service value, promo totals and net corrections.
-3. Opens **Activity log** (`/activity-log`): module filter, search, labeled entries, date range up to 31 days.
+   - Reports layout (owner-approved 2026-11-23): period chips in one row, other filters behind "Filters (n)" and applied instantly, completed income first and large, then the other numbers, one expandable "How these numbers are counted" line, a table on desktop and cards on phones, details in a popup sheet.
+3. Opens **Activity log** (`/activity-log`): module filter, search, labeled entries, date range up to 31 days, 10 entries per page (owner 2026-11-23; the server returns at most the latest 100 for the dates).
 
 ## Rules and details
 - Page grants Reports and Activity log; `viewIncome` controls money figures.

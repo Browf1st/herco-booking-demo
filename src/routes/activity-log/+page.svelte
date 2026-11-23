@@ -2,6 +2,9 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import ActionIcon from '#lib/shared/ActionIcon.svelte';
+	import PageHeader from '#lib/shared/PageHeader.svelte';
+	import Pager from '#lib/shared/Pager.svelte';
+	import { pageCount } from '#lib/shared/paging.ts';
 	import { addDays, today } from '#lib/shared/dates.ts';
 
 	type Entry = { recorded_at: string; area: string; action: string; actor: string; actor_label?: string; reference: string };
@@ -25,8 +28,16 @@
 		(!selectedModule || entry.area === selectedModule) &&
 		(!query || [label(entry.action), entry.reference, entry.actor_label ?? entry.actor, entry.area].some(value => value.toLowerCase().includes(query)))));
 
+	// 10 entries per page (owner item 18). Any filter, search or date change goes back to page 1.
+	const perPage = 10;
+	let logPage = $state(1);
+	const pages = $derived(pageCount(visible.length, perPage));
+	const current = $derived(Math.min(logPage, pages));
+	const pageEntries = $derived(visible.slice((current - 1) * perPage, current * perPage));
+
 	async function load(event?: SubmitEvent) {
 		event?.preventDefault();
+		logPage = 1;
 		loading = true;
 		failure = '';
 		try {
@@ -52,20 +63,20 @@
 
 <svelte:head><title>Activity log | HERCO</title></svelte:head>
 <section class="section wrap stack">
+	<PageHeader title="Activity log" subtitle="Who changed what in the staff workspace, newest first." timezone />
 	{#if worker}
-		<section class="card stack" aria-labelledby="activity-heading">
-			<h3 id="activity-heading">Activity log</h3>
+		<section class="card stack" aria-label="Activity entries">
 			<form class="cols activity-dates" onsubmit={load}>
 				<label>From<input type="date" bind:value={from} max={through || undefined} required /></label>
 				<label>Through<input type="date" bind:value={through} min={from || undefined} required /></label>
 				<div class="apply"><button class="btn sm ghost" disabled={loading}><ActionIcon name="calendar" />{loading ? 'Loading…' : 'Apply dates'}</button></div>
 			</form>
 			<div class="cols">
-				<label>Module<select bind:value={selectedModule}>
+				<label>Module<select bind:value={selectedModule} onchange={() => (logPage = 1)}>
 					<option value="">All modules</option>
 					{#each modules as module (module)}<option value={module}>{module}</option>{/each}
 				</select></label>
-				<label>Search activity<input type="search" bind:value={search} placeholder="Action, actor, item or reference" /></label>
+				<label>Search activity<input type="search" bind:value={search} oninput={() => (logPage = 1)} placeholder="Action, actor, item or reference" /></label>
 			</div>
 			{#if failure}
 				<p class="error" role="alert">{failure}</p>
@@ -74,7 +85,7 @@
 				<p role="status">Loading activity…</p>
 			{:else if entries}
 				<p class="muted small">{visible.length} {visible.length === 1 ? 'entry' : 'entries'} · Philippine time · Newest first{entries.length >= 100 ? ' · Showing the latest 100 for these dates' : ''}</p>
-				{#each visible as entry, index (entry.recorded_at + entry.reference + entry.action + index)}
+				{#each pageEntries as entry, index (entry.recorded_at + entry.reference + entry.action + index)}
 					<article class="entry stack">
 						<div class="row entry-heading">
 							<span class="module">{entry.area}</span>
@@ -84,6 +95,7 @@
 						<p class="muted small">{entry.actor_label ?? entry.actor} · <time datetime={entry.recorded_at}>{stamp.format(new Date(entry.recorded_at))}</time></p>
 					</article>
 				{:else}<p class="muted">No activity matches these filters.</p>{/each}
+				<Pager page={current} {pages} label="Activity log" onchange={(next) => (logPage = next)} />
 			{/if}
 		</section>
 	{:else}

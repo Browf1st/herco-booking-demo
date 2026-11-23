@@ -1,10 +1,11 @@
 <script lang="ts">
 	import ActionIcon from '#lib/shared/ActionIcon.svelte';
+	import PageHeader from '#lib/shared/PageHeader.svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { adminNavigation, adminPath } from '#lib/demo/adminNavigation.ts';
 	import { canPerform, staffAccess } from '#lib/demo/staffAccess.svelte.ts';
-	import BookingSummary from '#lib/demo/BookingSummary.svelte';
+	import DemoBookingSheet from '#lib/demo/DemoBookingSheet.svelte';
 	import StaffAccess from '#lib/demo/StaffAccess.svelte';
 	import AdminBooking from '#lib/demo/AdminBooking.svelte';
 	import AdminActivity from '#lib/demo/AdminActivity.svelte';
@@ -12,11 +13,21 @@
 	import OperationsAdmin from '#lib/demo/OperationsAdmin.svelte';
 	import AdminCalendar from '#lib/demo/AdminCalendar.svelte';
 
-	import { serviceOf, sizes } from '#lib/shared/config.ts';
-	import { addDays, fmtDate, fmtSlot, isOpenDay, nowHour, today, upcoming } from '#lib/shared/dates.ts';
-	import { serviceLabel } from '#lib/shared/coating.ts';
-	import { bookingStatusLabels, bookingsOn, db, dayStatus, isSlotBlocked, setDateAvailability, slotsFor, toggleSlotBlock } from '#lib/demo/store.svelte.ts';
+		import { addDays, fmtDate, fmtSlot, isOpenDay, nowHour, today, upcoming } from '#lib/shared/dates.ts';
+		import { bookingsOn, db, dayStatus, isSlotBlocked, setDateAvailability, slotsFor, toggleSlotBlock, type Booking } from '#lib/demo/store.svelte.ts';
 
+	// One page header style on every staff tab, like the Reports tab (owner item 12, 2026-11-23).
+	const tabHeaders: Record<string, string> = {
+		'Change requests': 'Cancel and reschedule requests waiting for review.',
+		'Booking history': 'Track bookings by appointment date.',
+		Customers: 'Find a customer and see their past visits.',
+		'HERCO Points': 'Fan ranking, rewards and redemptions.',
+		Inventory: 'Stock on hand, usage and low-stock alerts.',
+		Reports: 'Review booking records and completed service value.',
+		Pricing: 'Service prices and booking promotions.',
+		'Activity log': 'Who changed what in the staff workspace, newest first.',
+		'Staff Access': 'Choose who can use each staff page and action.'
+	};
 	const navigation = $derived(adminNavigation(page.url.searchParams));
 	const tab = $derived(navigation.tab === 'Booking' ? navigation.section : navigation.tab);
 	const pendingRequests = $derived(db.bookings.reduce((total, booking) =>
@@ -27,6 +38,7 @@
 	let availabilityError = $state('');
 	let availabilityNotice = $state('');
 
+	let detail = $state<Booking>();
 	let source = $state('all');
 	const matchesSource = (booking: { walkIn?: unknown }) => source === 'all' || Boolean(booking.walkIn) === (source === 'walk-in');
 	let slotFilter = $state<'all' | 'pending' | 'confirmed' | 'done' | 'open'>('all');
@@ -121,20 +133,14 @@
 			{/if}
 		</nav>
 	{/if}
+	{#if tabHeaders[tab]}<PageHeader title={tab} subtitle={tabHeaders[tab]} timezone={tab === 'Booking history' || tab === 'Activity log' || tab === 'Reports'} />{/if}
 	{#if tab === 'Pricing'}
 		<AdminPricing />
 	{:else if tab === 'Change requests'}
-		<h3>Requests awaiting review</h3>
 		<p class="muted">Customers submit cancellation and reschedule requests from Bookings. Their current appointment stays reserved until you approve the request.</p>
 		{#each db.bookings.filter(b => b.requests?.some(r => r.state === 'Pending')) as booking (booking.id)}
 			<article class="card stack">
-				<AdminBooking {booking}>
-					{#snippet heading()}<p><strong>{booking.name}</strong> · {booking.id} · {fmtDate(booking.date)} at {fmtSlot(booking.slot)}</p>{/snippet}
-					<details class="slot-details">
-						<summary><span class="closed-label">Tap to view more</span><span class="open-label">Show less</span></summary>
-						<div class="stack slot-detail-body"><BookingSummary {booking} staff /></div>
-					</details>
-				</AdminBooking>
+				<AdminBooking {booking} when={fmtDate(booking.date) + ' · ' + fmtSlot(booking.slot)} onDetails={() => detail = booking} />
 			</article>
 		{:else}<p class="card">No requests awaiting review.</p>{/each}
 	{:else if tab === 'Staff Access' && navigation.owner}
@@ -240,52 +246,16 @@
 		<label>Booking source<select bind:value={source}><option value="all">All sources</option><option value="online">Online</option><option value="walk-in">Walk-in</option></select></label>
 		{#each db.bookings.filter(b => b.date === date && b.walkIn?.immediate && b.status !== 'cancelled' && matchesSource(b)) as booking (booking.id)}
 			<article class="card stack">
-				<AdminBooking {booking}>
-					{#snippet heading()}
-						<p><strong>{booking.name}</strong></p>
-						<p class="small muted">Walk-in · {fmtSlot(booking.slot)} <span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{bookingStatusLabels[booking.status]}</span></p>
-					{/snippet}
-					<details class="slot-details">
-						<summary><span class="closed-label">Tap to view more</span><span class="open-label">Show less</span></summary>
-						<div class="stack slot-detail-body"><BookingSummary {booking} staff /></div>
-					</details>
-				</AdminBooking>
+				<AdminBooking {booking} when={'Walk-in · ' + fmtSlot(booking.slot)} onDetails={() => detail = booking} />
 			</article>
 		{/each}
 		<ol class="stack">
 			{#each visibleSlots as { time, open, blocked, past, booking: b } (date + time)}
 				<li class="card slot-card" data-slot-status={b?.status ?? (blocked ? 'blocked' : open ? 'open' : 'unavailable')}>
-					{#snippet slotHeading()}
-						<div class="slot-summary">
-							<time class="display time" datetime={time}>{fmtSlot(time)}</time>
-							<div class="slot-identity">
-								{#if b}
-									<b>{b.name}</b>
-									<p class="small muted">{b.selection ? serviceLabel(b.selection) : serviceOf(b.serviceId).name} · {b.bike}</p>
-									<span class="badge" data-status={b.status === 'confirmed' ? 'booked' : b.status}>{bookingStatusLabels[b.status]}</span>
-								{:else}
-								<b>{past ? 'Past slot' : blocked ? 'Blocked' : closed ? 'Closed' : open ? 'Open slot' : 'Unavailable'}</b>
-								{/if}
-							</div>
-						</div>
-					{/snippet}
 					{#if b}
-						<AdminBooking booking={b} heading={slotHeading}>
-						<details class="slot-details">
-							<summary><span class="closed-label">Tap to view more</span><span class="open-label">Show less</span></summary>
-							<div class="stack slot-detail-body">
-								<BookingSummary booking={b} staff />
-								<p class="muted small">
-									{b.bike}{#if b.finish} · Finish: {b.finish}{/if}{#if b.size} ({sizes[b.size]}){/if}<br />
-									{#if b.plateNumber}Plate number {b.plateNumber}<br />{/if}
-									<a href="tel:{b.phone}">{b.phone}</a>{b.email ? `, ${b.email}` : ''}<br />
-									{b.notes}
-								</p>
-							</div>
-						</details>
-						</AdminBooking>
+						<AdminBooking booking={b} when={fmtSlot(time)} onDetails={() => detail = b} />
 					{:else}
-						{@render slotHeading()}
+						<div class="slot-summary"><time class="display time" datetime={time}>{fmtSlot(time)}</time><b>{past ? 'Past slot' : blocked ? 'Blocked' : closed ? 'Closed' : open ? 'Open slot' : 'Unavailable'}</b></div>
 					{/if}
 				</li>
 			{:else}
@@ -297,6 +267,7 @@
 	{/if}
 	{/if}
 	{/key}
+		<DemoBookingSheet bind:booking={detail} />
 </section>
 
 <style>
@@ -308,7 +279,7 @@
 	.manual-options a:hover { background: var(--panel-2); }
 	.admin-content { grid-template-columns: minmax(0, 1fr); }
 	.booking-workspace { max-width: 1420px; }
-	.booking-workspace :is(.booking-sections, .day-controls, .schedule-heading, .slot-detail-body) :global(.btn) {
+	.booking-workspace :is(.booking-sections, .day-controls, .schedule-heading) :global(.btn) {
 		clip-path: none;
 		border-radius: 6px;
 		font-style: normal;
@@ -385,12 +356,6 @@
 	.slot-card[data-slot-status='blocked'] { background: var(--panel-2); }
 	.slot-card[data-slot-status='open'] { border-style: dashed; border-inline-start: 4px solid var(--ok-line); }
 	.slot-summary { display: grid; grid-template-columns: minmax(4rem, max-content) minmax(0, 1fr); gap: .7rem; align-items: start; flex: 1 1 14rem; min-width: 0; }
-	.slot-identity { overflow-wrap: anywhere; padding-inline-start: .7rem; border-inline-start: 1px solid var(--line); }
-	.slot-identity .badge { display: inline-block; margin-block-start: .25rem; }
-	.slot-details { border-top: 1px solid var(--line); margin-top: .55rem; }
-	.slot-details summary { width: fit-content; padding: .35rem .35rem 0 0; color: var(--muted); font-size: .8rem; font-weight: 700; cursor: pointer; }
-	.slot-details:not([open]) .open-label, .slot-details[open] .closed-label { display: none; }
-	.slot-detail-body { padding-block: .6rem .25rem; overflow-wrap: anywhere; }
 	.time {
 		color: var(--accent);
 		font-size: 1.2rem;

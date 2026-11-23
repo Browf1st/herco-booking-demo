@@ -63,18 +63,24 @@ export const photos = {
 	logo: 'photos/logo.webp',
 	hero: 'photos/herco-cruiser.webp',
 	ceramic: 'photos/ceramic-application.webp',
-	powder: 'photos/herco-red-wheels.webp',
+	powder: 'photos/powder/fire-red-scooter-wheels-960.webp',
+	powderSmall: 'photos/powder/fire-red-scooter-wheels-480.webp',
 	before: 'photos/bike-before.webp',
 	after: 'photos/bike-after.webp',
 	wheelSet: 'photos/wheel-set.webp'
 } as const;
 
-// The wheel photos are square crops of the wheel set photo, one per colour.
+// Real shop wheel finishes from the owner's "MAGS POWDER COAT" photos (2026-11-23).
+// Each colour has square 480px and 720px crops in static/photos/colours.
 export const wheelColours = [
-	{ id: 'purple', name: 'Purple', hex: '#5a1fb5', photo: 'photos/wheel-purple.webp' },
-	{ id: 'pink', name: 'Pink', hex: '#f2357f', photo: 'photos/wheel-pink.webp' },
-	{ id: 'blue', name: 'Blue', hex: '#1a2fd0', photo: 'photos/wheel-blue.webp' },
-	{ id: 'red', name: 'Red', hex: '#d81e1e', photo: 'photos/wheel-red.webp' }
+	{ id: 'fire-red', name: 'Fire Red', hex: '#c8101e', photo: 'photos/colours/fire-red-720.webp', photoSmall: 'photos/colours/fire-red-480.webp' },
+	{ id: 'fire-pink', name: 'Fire Pink', hex: '#e4196f', photo: 'photos/colours/fire-pink-720.webp', photoSmall: 'photos/colours/fire-pink-480.webp' },
+	{ id: 'fire-violet', name: 'Fire Violet', hex: '#5a22d8', photo: 'photos/colours/fire-violet-720.webp', photoSmall: 'photos/colours/fire-violet-480.webp' },
+	{ id: 'fire-aqua-teal', name: 'Fire Aqua Teal', hex: '#1aa6c4', photo: 'photos/colours/fire-aqua-teal-720.webp', photoSmall: 'photos/colours/fire-aqua-teal-480.webp' },
+	{ id: 'fire-gold', name: 'Fire Gold', hex: '#c9a419', photo: 'photos/colours/fire-gold-720.webp', photoSmall: 'photos/colours/fire-gold-480.webp' },
+	{ id: 'chrome-black', name: 'Chrome Black', hex: '#1d1d1f', photo: 'photos/colours/chrome-black-720.webp', photoSmall: 'photos/colours/chrome-black-480.webp' },
+	{ id: 'high-gloss-white', name: 'High Gloss White', hex: '#f4f4f6', photo: 'photos/colours/high-gloss-white-720.webp', photoSmall: 'photos/colours/high-gloss-white-480.webp' },
+	{ id: 'miko-silver', name: 'Miko Silver', hex: '#b9bcc2', photo: 'photos/colours/miko-silver-720.webp', photoSmall: 'photos/colours/miko-silver-480.webp' }
 ];
 
 export const serviceOf = (id: string) => services.find((s) => s.id === id) ?? services[0];

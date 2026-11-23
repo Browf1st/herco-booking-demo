@@ -4,6 +4,7 @@
 	import { account } from '#lib/demo/account.svelte.ts';
 	import { ops, fanRanking, pointBalance, redeemReward, rewardStatus } from '#lib/demo/operations.svelte.ts';
 	import RewardReceipt from '#lib/shared/RewardReceipt.svelte';
+	import RewardHeading from '#lib/shared/RewardHeading.svelte';
 	const rewardProgram = $derived(ops.data.rewardProgram);
 
 	const activeId = $derived(account.current?.id ?? '');
@@ -74,8 +75,7 @@
 					{#each rewardProgram as reward (reward.points)}
 						{@const reached = pointBalance(fan.id) >= reward.points}
 						<div class="card stack" class:reward-reached={reached}>
-							<p class="eyebrow">{reward.points.toLocaleString('en-PH')} points</p>
-							<h3>{reward.name}</h3>
+							<RewardHeading name={reward.name} points={reward.points} />
 							{#if reward.scope}<p class="muted">{reward.scope}</p>{/if}
 							<progress max={reward.points} value={Math.min(pointBalance(fan.id), reward.points)} aria-label={reward.name + ' ' + (reward.scope ?? '') + ' progress'}></progress>
 							<p class="small" class:muted={!reached}>{reached ? 'Points target reached' : (reward.points - pointBalance(fan.id)).toLocaleString('en-PH') + ' more points to reach this reward'}</p>
@@ -129,7 +129,7 @@
 			<h2 id="reward-preview-title">Rewards to work toward</h2>
 			<ul>
 				{#each rewardProgram.toSorted((a, b) => a.points - b.points) as reward (reward.points)}
-					<li><span>{reward.name}{#if reward.scope} · {reward.scope}{/if}</span><strong>{reward.points.toLocaleString('en-PH')} pts</strong></li>
+					<li><RewardHeading name={reward.name} points={reward.points} tag="span" />{#if reward.scope}<span class="small muted">{reward.scope}</span>{/if}</li>
 				{/each}
 			</ul>
 		</aside>
@@ -150,8 +150,7 @@
 	.reward-preview { padding: clamp(16px, 3vw, 26px); border-top: 4px solid var(--accent); }
 	.reward-preview h2 { font-size: clamp(1.6rem, 3vw, 2.25rem); }
 	.reward-preview ul { list-style: none; margin: 0; padding: 0; }
-	.reward-preview li { display: flex; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding-block: 12px; border-top: 1px solid var(--line); }
-	.reward-preview li strong { color: var(--accent); white-space: nowrap; }
+	.reward-preview li { display: grid; gap: 4px; padding-block: 12px; border-top: 1px solid var(--line); }
 	@media (min-width: 760px) {
 		.points-intro { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
 	}

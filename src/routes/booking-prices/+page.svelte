@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import PageHeader from '#lib/shared/PageHeader.svelte';
 	const worker = import.meta.env.MODE === 'worker';
 	const booking = $derived(page.url.searchParams.get('booking') ?? '');
 	const url = resolve('/api/booking-prices');
@@ -65,8 +66,9 @@
 
 <svelte:head><title>Booking prices | HERCO</title></svelte:head>
 <section class="section wrap stack">
-	<h1>Booking prices</h1>
-	<a class="btn sm ghost" href={resolve('/admin')}>Staff workspace</a>
+	<PageHeader title="Booking prices" subtitle="Correct the price of one booking. Every change is kept in its history.">
+		<a class="btn sm ghost" href={resolve('/admin')}>Staff workspace</a>
+	</PageHeader>
 	{#if message}<p role="alert">{message}</p><div><button class="btn sm ghost" onclick={load} disabled={busy}>Reload</button></div>{/if}
 	{#if notice}<p role="status">{notice}</p>{/if}
 	{#if info}

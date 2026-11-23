@@ -1,7 +1,11 @@
 # F-014: Email notifications (Brevo worker)
 > Documented from existing docs on 2026-11-20 — owner to confirm.
 
-**Status:** Blocked (email worker not configured) · **Milestone:** M2 · **Depends on:** F-001, F-006
+**Status:** Testing (first booking email sent locally; templates, events and reminders await Q-13) · **Milestone:** M2 · **Depends on:** F-001, F-006
+
+> 2026-11-20 delivery test: a new restricted Brevo key ("HERCO dev - Booking Emails", transactional email only) is in `.dev.vars.email`. A real test booking queued a `booking_submitted` job, and one worker run sent it to the owner's allowlisted inbox: Brevo returned 201 and the outbox recorded `accepted` on the first attempt. The older unused key ending `t4F8S3` is still active in Brevo.
+
+> 2026-11-20 local setup: the gitignored `.dev.vars.email` now has `HERCO_EMAIL_MODE=allowlist`, `HERCO_REMINDER_LEAD_HOURS=0` (reminders off until Q-13), `EMAIL_FROM` and `EMAIL_REPLY_TO` set to the Brevo-verified sender, and `STAGING_EMAIL_ALLOWLIST` limited to the owner's own two inboxes. `BREVO_API_KEY` was added by the owner (see the delivery test above). Supabase Auth SMTP is on (`smtp-relay.brevo.com`, port 587, Brevo SMTP login). `wrangler.email.jsonc` still ships `disabled`, and no email Worker is deployed. The outbox was empty when checked.
 
 ## In one sentence
 Customers get emails when they book, when the shop confirms, and when a change request is decided, and the shop gets an email for new change requests.
@@ -39,7 +43,7 @@ Customers get emails when they book, when the shop confirms, and when a change r
 - Booking saves (F-001) and request status (F-006).
 
 ## Acceptance tests (all must pass)
-- [ ] Staging: receipt, confirmation and decision emails reach the allowlisted inbox.
+- [ ] Staging: receipt, confirmation and decision emails reach the allowlisted inbox. (Receipt sent locally on 2026-11-20; confirmation and decision emails not yet tested.)
 - [ ] Brevo outage leaves bookings intact and jobs retry.
 - [ ] Reminder is skipped for a cancelled or moved booking.
 - [ ] Recovery after worker interruption.

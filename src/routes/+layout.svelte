@@ -38,8 +38,6 @@
 		if (!demo) void refreshWorkerNavigation();
 	});
 	let theme = $state<'system' | 'light' | 'dark'>('system');
-	let themeMenu: HTMLDetailsElement;
-	let themeTrigger: HTMLElement;
 	const themes = [{ value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }] as const;
 	const activeAdmin = $derived(adminNavigation(page.url.searchParams));
 	const ownerLinks = [{ tab: 'Reports', label: 'Reports' }, { tab: 'Staff Access', label: 'Accounts' }, { tab: 'Activity log', label: 'Activity Log' }] as const;
@@ -160,8 +158,6 @@
 			else localStorage.setItem('herco-theme', theme);
 		} catch {}
 		window.dispatchEvent(new Event(THEME_EVENT));
-		themeMenu.open = false;
-		themeTrigger.focus();
 	}
 
 	onMount(() => {
@@ -203,7 +199,6 @@
 <svelte:window onclick={(event) => {
 	const open = openOwnerMenu();
 	if (open && event.target instanceof Node && !open.contains(event.target)) open.open = false;
-	if (themeMenu?.open && event.target instanceof Node && !themeMenu.contains(event.target)) themeMenu.open = false;
 	if (bookMenu?.open && event.target instanceof Node && !bookMenu.contains(event.target)) bookMenu.open = false;
 	if (accountMenu?.open && event.target instanceof Node && !accountMenu.contains(event.target)) accountMenu.open = false;
 	if (menuOpen && event.target instanceof Node && !header.contains(event.target)) menuOpen = false;
@@ -211,9 +206,6 @@
 	if (event.key === 'Escape' && accountMenu?.open) {
 		accountMenu.open = false;
 		accountMenu.querySelector('summary')?.focus();
-	} else if (event.key === 'Escape' && themeMenu?.open) {
-		themeMenu.open = false;
-		themeTrigger.focus();
 	} else if (event.key === 'Escape' && bookMenu?.open) {
 		bookMenu.open = false;
 		bookMenu.querySelector('summary')?.focus();
@@ -227,21 +219,17 @@
 	}
 }} />
 
-<div class="demo-switch">
+<!-- Light/dark choice (owner item 14, 2026-11-23): in the staff account menu and the footer, not in a strip at the top. -->
+{#snippet themeChoices()}
+	<div class="theme-switch" role="group" aria-label="Theme">
+		{#each themes as option (option.value)}
+			<button type="button" aria-pressed={theme === option.value} onclick={() => chooseTheme(option.value)}><ActionIcon name={option.value === 'system' ? 'system' : option.value === 'light' ? 'sun' : 'moon'} />{option.label}</button>
+		{/each}
+	</div>
+{/snippet}
+
+{#if demo || sessionError}<div class="demo-switch">
 	<div class="wrap">
-		<details class="theme-picker" bind:this={themeMenu}>
-			<summary bind:this={themeTrigger} aria-label={'Appearance: ' + theme} title={'Appearance: ' + theme}>
-				<ActionIcon name={theme === 'system' ? 'system' : theme === 'light' ? 'sun' : 'moon'} />
-			</summary>
-			<div class="theme-options" role="group" aria-label="Appearance choices">
-				{#each themes as option (option.value)}
-					<button type="button" aria-pressed={theme === option.value} onclick={() => chooseTheme(option.value)}><ActionIcon name={option.value === "system" ? "system" : option.value === "light" ? "sun" : "moon"} />
-						<span class="theme-label">{option.label}</span>
-						{#if theme === option.value}<span class="theme-check" aria-hidden="true">✓</span>{/if}
-					</button>
-				{/each}
-			</div>
-		</details>
 		{#if demo}<nav class="view-switch" aria-label="Demo views">
 			<a href={resolve('/')} aria-current={page.route.id !== '/admin' ? 'true' : undefined}>User view</a>
 			<a href={resolve('/admin')} aria-current={page.route.id === '/admin' && !activeAdmin.owner ? 'true' : undefined} onclick={(event) => selectDemoView(event, 'admin')}>Admin view</a>
@@ -249,7 +237,7 @@
 		</nav>{/if}
 	</div>
 	{#if sessionError}<p class="wrap error small" role="alert">{sessionError}</p>{/if}
-</div>
+</div>{/if}
 
 <header bind:this={header}>
 	<div class="wrap row" class:admin-header={demo ? page.route.id === '/admin' : Boolean(workerAccess)} class:owner-header={demo ? page.route.id === '/admin' && activeAdmin.owner : workerAccess?.role === 'owner' || workerAccess?.role === 'superadmin'}>
@@ -284,6 +272,8 @@
 				<div class="account-options">
 					{#if workerAccess}<span class="muted small">{workerAccess.role === 'owner' ? 'Owner' : workerAccess.role === 'superadmin' ? 'Superadmin' : workerAccess.role === 'staff' ? 'Staff' : 'Admin'}</span>{/if}
 					<a href={resolve('/account')}>Account settings</a>
+					<span class="muted small">Theme</span>
+					{@render themeChoices()}
 					{#if workerAccess}<button type="button" onclick={signOutWorker} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button>{/if}
 				</div>
 			</details>
@@ -344,6 +334,7 @@
 				{#if !demo}<a class="small" href={resolve('/privacy-preferences')}>Privacy preferences</a>{/if}
 			</div>
 		</div>
+		<div class="footer-theme"><span class="muted small">Theme</span>{@render themeChoices()}</div>
 	</div>
 </footer>
 
@@ -364,14 +355,13 @@
 		padding-block: .2rem;
 	}
 
-	.theme-picker { position: relative; }
-	.theme-picker summary { display: grid; place-items: center; width: 2.15rem; height: 2.15rem; list-style: none; border: 1px solid var(--line); border-radius: .35rem; background: var(--panel); cursor: pointer; }
-	.theme-picker summary::-webkit-details-marker { display: none; }
-	.theme-picker summary:hover, .theme-picker[open] summary { color: var(--accent); }
-	.theme-options { position: absolute; inset-inline-end: 0; top: calc(100% + .35rem); display: grid; gap: .15rem; min-width: 7.5rem; padding: .25rem; background: var(--panel); border: 1px solid var(--line); border-radius: .4rem; box-shadow: 0 4px 12px var(--card-shadow); }
-	.theme-options button { display: grid; grid-template-columns: 1em minmax(0, 1fr) 1em; align-items: center; gap: .5rem; padding: .35rem .55rem; border: 0; border-radius: .2rem; background: transparent; color: var(--text); font: inherit; font-size: .85rem; text-align: start; cursor: pointer; }
-	.theme-options button:hover, .theme-options button[aria-pressed='true'] { background: var(--panel-2); }
-	.theme-check { color: var(--accent); text-align: center; }
+	/* System / Light / Dark as one small segmented control. */
+	.theme-switch { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+	/* [type] outranks the account menu's button style. */
+	.theme-switch button[type] { display: inline-flex; align-items: center; gap: .3rem; min-height: 2.25rem; padding: 0 .6rem; border: 0; border-radius: 4px; background: transparent; color: var(--text); font: 650 .82rem var(--body); cursor: pointer; }
+	.theme-switch button[type]:hover { background: var(--panel-2); }
+	.theme-switch button[type][aria-pressed='true'] { background: var(--accent-fill); color: var(--accent-ink); }
+	.footer-theme { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 
 	.view-switch { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: .45rem; background: var(--panel); }
 	.view-switch a { padding: .3rem .55rem; border-radius: .29rem; color: var(--muted); font-size: .77rem; font-weight: 700; text-decoration: none; white-space: nowrap; }

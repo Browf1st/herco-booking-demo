@@ -3,6 +3,7 @@
  import { resolve } from '$app/paths';
  import { onMount } from 'svelte';
  import RewardReceipt from '../shared/RewardReceipt.svelte';
+ import RewardHeading from '../shared/RewardHeading.svelte';
  import { rewardStatus, type RewardReceipt as Receipt } from '../demo/operations.svelte';
  type Reward = {id:string;label:string;scope:string;cost:number};
  type Points = {memberId:string;memberName:string;balance:number;ownRank:number;ranking:{position:number;name:string;balance:number;isCurrent:boolean}[];rewards:Reward[];ledger:{id:number;amount:number;reason:string;created_at:string}[];receipts:{id:string;reference:string;reward_label:string;reward_scope:string;cost:number;balance_after:number;member_name:string;created_at:string;approved_at:string|null;claimed_at:string|null}[]};
@@ -64,8 +65,7 @@
 					{#each rewardProgram as reward (reward.id)}
 						{@const reached = pointBalance(fan.id) >= reward.points}
 						<div class="card stack" class:reward-reached={reached}>
-							<p class="eyebrow">{reward.points.toLocaleString('en-PH')} points</p>
-							<h3>{reward.name}</h3>
+							<RewardHeading name={reward.name} points={reward.points} />
 							{#if reward.scope}<p class="muted">{reward.scope}</p>{/if}
 							<progress max={reward.points} value={Math.min(pointBalance(fan.id), reward.points)} aria-label={reward.name + ' ' + (reward.scope ?? '') + ' progress'}></progress>
 							<p class="small" class:muted={!reached}>{reached ? 'Points target reached' : (reward.points - pointBalance(fan.id)).toLocaleString('en-PH') + ' more points to reach this reward'}</p>
@@ -119,7 +119,7 @@
 			<h2 id="reward-preview-title">Rewards to work toward</h2>
 			<ul>
 				{#each rewardProgram.toSorted((a, b) => a.points - b.points) as reward (reward.id)}
-					<li><span>{reward.name}{#if reward.scope} · {reward.scope}{/if}</span><strong>{reward.points.toLocaleString('en-PH')} pts</strong></li>
+					<li><RewardHeading name={reward.name} points={reward.points} tag="span" />{#if reward.scope}<span class="small muted">{reward.scope}</span>{/if}</li>
 				{:else}
 					<li class="muted">Rewards will appear here once the shop publishes them.</li>
 				{/each}
@@ -146,8 +146,7 @@
 	.points-welcome p { max-width: 42ch; }
 	.reward-preview { padding: clamp(16px, 3vw, 26px); border-top: 4px solid var(--accent); }
 	.reward-preview ul { list-style: none; margin: 0; padding: 0; }
-	.reward-preview li { display: flex; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding-block: 12px; border-top: 1px solid var(--line); }
-	.reward-preview li strong { color: var(--accent); white-space: nowrap; }
+	.reward-preview li { display: grid; gap: 4px; padding-block: 12px; border-top: 1px solid var(--line); }
 	@media (min-width: 760px) {
 		.points-intro { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
 	}

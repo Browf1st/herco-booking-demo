@@ -3,6 +3,8 @@
 import ActionIcon from '../shared/ActionIcon.svelte';
 import ServerAdminCalendar from './ServerAdminCalendar.svelte';
 import ServerStaffBookingCard from './ServerStaffBookingCard.svelte';
+import ServerBookingDetails from './ServerBookingDetails.svelte';
+import DetailsSheet from '../shared/DetailsSheet.svelte';
 import type { StaffBooking } from './server-booking-types';
 	import { resolve } from '$app/paths';
 	import { addDays, fmtDate, fmtSlot, today } from '#lib/shared/dates.ts';
@@ -30,7 +32,6 @@ import type { StaffBooking } from './server-booking-types';
 	type ScheduleAction = DateAction | 'block_slot' | 'unblock_slot';
 	type Action = { action: 'confirm'; bookingId: string; note: string } |
 		{ action: ScheduleAction; date: string; hour?: number };
-	const labels = { pending: 'Pending', confirmed: 'Booked', done: 'Completed' };
 	const slotLabels = { past: 'Past slot', open: 'Open', closed: 'Closed', blocked: 'Blocked', booked: 'Booked' };
 	const hourLabel = (hour: number) => fmtSlot(hour + ':00');
 
@@ -51,6 +52,7 @@ import type { StaffBooking } from './server-booking-types';
   {id:'confirmed',label:'Booked',count:dayCount('confirmed')},{id:'done',label:'Completed',count:dayCount('done')},
   {id:'open',label:'Open',count:day?.slots.filter(slot=>slot.status==='open').length??0}]);
 	
+	let detail = $state<Booking>();
 	let access = $state<'loading' | 'ready' | 'signedOut' | 'denied' | 'unavailable'>('loading');
 	let directChange = $state<{ id: string; kind: 'cancel' | 'reschedule' }>();
 	let busy = $state(false);
@@ -148,12 +150,13 @@ import type { StaffBooking } from './server-booking-types';
 		<div class="booking-layout"><div class="stack booking-column"><ServerAdminCalendar value={date} onpick={pickDate} /></div><section class="stack booking-column" aria-labelledby="time-slots-heading">
 			<div class="card row between schedule-heading"><div><h3 id="time-slots-heading">Time slots</h3><p class="small muted">Philippine time</p></div><details class="slot-filter" bind:this={filterMenu}><summary><ActionIcon name="adjust" />{filters.find(item => item.id === filter)?.label}<span class="slot-filter-count">{filters.find(item => item.id === filter)?.count}</span><span aria-hidden="true">▾</span></summary><div class="filter-options">{#each filters as item}<button type="button" aria-pressed={filter === item.id} onclick={() => { filter = item.id; if (filterMenu) filterMenu.open = false; }}>{item.label}<span>{item.count}</span></button>{/each}</div></details></div>
 			<label>Booking source<select bind:value={source}><option value="all">All sources</option><option value="online">Online</option><option value="walk-in">Walk-in</option></select></label>
-			{#if source !== 'online'}{#each day.bookings.filter(booking => booking.visit_hour === null && (filter === 'all' || booking.status === filter)) as booking (booking.id)}<article class="card slot-card"><p class="small muted">Walk-in</p><ServerStaffBookingCard {booking} permissions={{ ...day, canComplete, canRequestIntake, canAdjustPrices }} onSaved={load} /></article>{/each}{/if}
+			{#if source !== 'online'}{#each day.bookings.filter(booking => booking.visit_hour === null && (filter === 'all' || booking.status === filter)) as booking (booking.id)}<article class="card slot-card"><ServerStaffBookingCard {booking} permissions={{ ...day, canComplete, canRequestIntake, canAdjustPrices }} onSaved={load} onDetails={() => detail = booking} /></article>{/each}{/if}
 			<ol class="stack slot-list">{#each slots as slot (date + slot.hour)}{@const booking = day.bookings.find(item => item.visit_hour === slot.hour)}<li class="card slot-card" data-slot-status={booking?.status ?? slot.status}>
-				{#if booking}<ServerStaffBookingCard {booking} permissions={{ ...day, canComplete, canRequestIntake, canAdjustPrices }} onSaved={load}>{#snippet heading()}<div class="slot-summary"><time>{hourLabel(slot.hour)}</time><div><strong>{booking.customer_name}</strong><p class="small muted">{booking.services.join(' · ')} · {booking.bike}</p><span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{labels[booking.status as keyof typeof labels]}</span></div></div>{/snippet}</ServerStaffBookingCard>
+				{#if booking}<ServerStaffBookingCard {booking} permissions={{ ...day, canComplete, canRequestIntake, canAdjustPrices }} onSaved={load} onDetails={() => detail = booking} />
 				{:else}<div class="slot-summary"><time>{hourLabel(slot.hour)}</time><strong>{slotLabels[slot.status]}</strong></div>{/if}
 			</li>{:else}<li class="card">No time slots match these filters.</li>{/each}</ol>
 		</section></div>
+		<DetailsSheet title={detail ? 'Details for ' + detail.customer_name : 'Booking details'} open={Boolean(detail)} onclose={() => detail = undefined}>{#if detail}<ServerBookingDetails booking={detail} />{/if}</DetailsSheet>
 		{#if day.can_manage_schedule}<dialog class="availability-dialog" bind:this={availabilityDialog} aria-labelledby="availability-title"><header class="availability-header"><span class="availability-icon"><ActionIcon name="calendar" /></span><div><h3 id="availability-title">Manage availability</h3><p class="small muted">{fmtDate(date)} · Philippine time</p></div><button class="availability-button" onclick={() => availabilityDialog?.close()}>Close</button></header><div class="stack availability-body"><p class="small muted">Changes apply to new bookings. Existing appointments stay scheduled.</p><section class="stack availability-day"><div class="row between"><h4>Date availability</h4><span class="badge">{closed ? 'Closed' : 'Available'}</span></div><div class="row availability-actions"><button class="availability-button" disabled={busy || day.past_date} onclick={() => changeSchedule(closed ? 'open_date' : 'close_date')}><ActionIcon name={closed ? 'check' : 'block'} />{closed ? 'Open this date' : 'Close this date'}</button>{#if day.override !== null}<button class="availability-button" disabled={busy || day.past_date} onclick={() => changeSchedule('restore_date')}><ActionIcon name="reset" />Restore regular hours</button>{/if}</div></section><section class="stack availability-times"><h4>Time slot restrictions</h4><ul>{#each day.slots as slot}<li class="row between"><div><strong>{hourLabel(slot.hour)}</strong><p class="small slot-restriction" class:restricted={slot.blocked}>{slot.status === 'past' ? 'Past slot' : slot.blocked ? 'Blocked for new bookings' : 'No slot restriction'}</p></div>{#if !day.past_date && (slot.status !== 'past' || slot.blocked)}<button class="availability-button slot-button" disabled={busy} onclick={() => changeSchedule(slot.blocked ? 'unblock_slot' : 'block_slot', slot.hour)}><ActionIcon name={slot.blocked ? 'check' : 'block'} />{slot.blocked ? 'Unblock' : 'Block slot'}</button>{/if}</li>{/each}</ul></section>{#if message}<p role="alert">{message}</p>{/if}{#if notice}<p role="status">{notice}</p>{/if}</div></dialog>{/if}
 	{/if}
 	{#if message && access !== 'unavailable'}<p role="alert">{message}</p>{/if}{#if notice}<p role="status">{notice}</p>{/if}
@@ -169,7 +172,7 @@ import type { StaffBooking } from './server-booking-types';
 	:global(.staff-parity .manual-options a:hover) { background: var(--panel-2); }
 	:global(.staff-parity .admin-content) { grid-template-columns: minmax(0, 1fr); }
 	:global(.staff-parity .booking-workspace) { max-width: 1420px; }
-	:global(.staff-parity .booking-workspace :is(.booking-sections, .day-controls, .schedule-heading, .slot-detail-body) :global(.btn)) {
+	:global(.staff-parity .booking-workspace :is(.booking-sections, .day-controls, .schedule-heading) :global(.btn)) {
 		clip-path: none;
 		border-radius: 6px;
 		font-style: normal;
@@ -246,12 +249,6 @@ import type { StaffBooking } from './server-booking-types';
 	:global(.staff-parity .slot-card[data-slot-status='blocked']) { background: var(--panel-2); }
 	:global(.staff-parity .slot-card[data-slot-status='open']) { border-style: dashed; border-inline-start: 4px solid var(--ok-line); }
 	:global(.staff-parity .slot-summary) { display: grid; grid-template-columns: minmax(4rem, max-content) minmax(0, 1fr); gap: .7rem; align-items: start; flex: 1 1 14rem; min-width: 0; }
-	:global(.staff-parity .slot-identity) { overflow-wrap: anywhere; padding-inline-start: .7rem; border-inline-start: 1px solid var(--line); }
-	:global(.staff-parity .slot-identity .badge) { display: inline-block; margin-block-start: .25rem; }
-	:global(.staff-parity .slot-details) { border-top: 1px solid var(--line); margin-top: .55rem; }
-	:global(.staff-parity .slot-details summary) { width: fit-content; padding: .35rem .35rem 0 0; color: var(--muted); font-size: .8rem; font-weight: 700; cursor: pointer; }
-	:global(.staff-parity .slot-details:not([open]) .open-label), :global(.staff-parity .slot-details[open] .closed-label) { display: none; }
-	:global(.staff-parity .slot-detail-body) { padding-block: .6rem .25rem; overflow-wrap: anywhere; }
 	:global(.staff-parity .time) {
 		color: var(--accent);
 		font-size: 1.2rem;

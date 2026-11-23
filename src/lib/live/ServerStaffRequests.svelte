@@ -4,6 +4,8 @@
 	import { fmtDate, fmtSlot } from '#lib/shared/dates.ts';
 	import ActionIcon from '../shared/ActionIcon.svelte';
 	import ServerStaffBookingCard from './ServerStaffBookingCard.svelte';
+	import ServerBookingDetails from './ServerBookingDetails.svelte';
+	import DetailsSheet from '../shared/DetailsSheet.svelte';
 	import type { StaffBooking } from './server-booking-types';
 
 	type Request = {
@@ -28,6 +30,7 @@
 	let error = $state('');
 	let notice = $state('');
 	let selected = $state<Request>();
+	let detail = $state<StaffBooking>();
 	let reviewDialog = $state<HTMLDialogElement>();
 
 	async function load(nextPage = page) {
@@ -103,7 +106,7 @@
 					<p>Requested visit · {appointment(request.target_date, request.target_hour)}</p>
 				{/if}
 				{#if request.reason}<p>Customer reason · {request.reason}</p>{/if}
-				{#if request.booking}<ServerStaffBookingCard booking={request.booking} />{/if}
+				{#if request.booking}{@const booking = request.booking}<ServerStaffBookingCard {booking} when={fmtDate(booking.visit_date)} onDetails={() => detail = booking} />{/if}
 			</article>
 		{/each}
 		{#if page > 1 || hasMore}
@@ -114,6 +117,7 @@
 			</nav>
 		{/if}
 	{/if}
+	<DetailsSheet title={detail ? 'Details for ' + detail.customer_name : 'Booking details'} open={Boolean(detail)} onclose={() => detail = undefined}>{#if detail}<ServerBookingDetails booking={detail} />{/if}</DetailsSheet>
 	{#if error}<p role="alert">{error}</p>{/if}
 	{#if notice}<p role="status">{notice}</p>{/if}
 </section>

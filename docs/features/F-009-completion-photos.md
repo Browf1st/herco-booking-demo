@@ -1,7 +1,9 @@
 # F-009: Completion with photos and exact prices
 > Documented from existing docs on 2026-11-20 — owner to confirm.
 
-**Status:** Blocked (private photo bucket and retention not set up) · **Milestone:** M2 · **Depends on:** F-003, F-007
+**Status:** Blocked (photo retention and viewer rules not decided, Q-03) · **Milestone:** M2 · **Depends on:** F-003, F-007
+
+> 2026-11-20: the private `herco-completion` bucket exists on the dev Supabase project and was checked: not public, 4 MB limit, JPEG/PNG/WebP only.
 
 ## In one sentence
 Staff mark a job complete only after attaching one to three private photos and confirming an exact price for every line, so every finished job has proof and a final amount.

@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
@@ -23,23 +23,24 @@ const photoLimits = {
 	'herco-red-wheels-480.webp': 150,
 	'wheel-set-480.webp': 140,
 	'wheel-set-720.webp': 280,
-	// Showcase powder coating gallery (2026-11-20): phone-size tiles and the concept poster.
-	'powder/luminous-blue-two-tone-480.webp': 90,
-	'powder/fire-blue-cvt-cover-480.webp': 90,
-	'powder/high-gloss-black-topcoat-480.webp': 90,
-	'powder/red-black-two-tone-wheels-480.webp': 90,
-	'powder/gloss-black-wheels-480.webp': 90,
-	'powder/black-cvt-covers-480.webp': 90,
-	'powder/red-brackets-480.webp': 90,
-	'powder/purple-spring-480.webp': 90,
-	'powder/red-wheels-scooter-480.webp': 90,
-	'powder/blue-violet-scooter-480.webp': 90,
-	'powder/herco-concept-480.webp': 60,
-	'powder/herco-concept-800.webp': 120
+	// Home page photos from the owner's colour folder (2026-11-23): powder service card and wheel colours.
+	'powder/fire-red-scooter-wheels-480.webp': 60,
+	'colours/fire-red-480.webp': 70,
+	'colours/fire-pink-480.webp': 70,
+	'colours/fire-violet-480.webp': 70,
+	'colours/fire-aqua-teal-480.webp': 70,
+	'colours/fire-gold-480.webp': 70,
+	'colours/chrome-black-480.webp': 70,
+	'colours/high-gloss-white-480.webp': 70,
+	'colours/miko-silver-480.webp': 70
 };
+// Showcase gallery (2026-11-23): every file in photos/showcase must stay under these limits (KiB).
+// The grid loads the 480 files lazily; the photo viewer loads one 960 file at a time.
+const folderPhotoLimits = { showcase: { '-480.webp': 110, '-960.webp': 320 } };
 const responsivePhotos = {
-	index: ['herco-cruiser-480.webp', 'herco-red-wheels-480.webp'],
-	preview: ['powder/herco-concept-480.webp', 'powder/herco-concept-800.webp']
+	// Showcase file names are built from slugs (`photos/showcase/<slug>-480.webp`), so check the folder path.
+	index: ['herco-cruiser-480.webp', 'powder/fire-red-scooter-wheels-480.webp', 'photos/showcase/'],
+	preview: ['photos/showcase/', 'black-and-red-two-tone-wheel']
 };
 
 const mode = process.argv[2];
@@ -102,6 +103,26 @@ for (const [name, limit] of Object.entries(photoLimits)) {
 		if (size > limit * 1024) failures.push(`${name} exceeds ${limit} KiB.`);
 	} catch (error) {
 		failures.push(`${name}: ${error.message}`);
+	}
+}
+
+for (const [folder, limits] of Object.entries(folderPhotoLimits)) {
+	try {
+		const names = await readdir(join(budget.directory, 'photos', folder));
+		let checked = 0;
+		let largest = { name: '', size: 0 };
+		for (const name of names) {
+			const suffix = Object.keys(limits).find((ending) => name.endsWith(ending));
+			if (!suffix) { failures.push(`photos/${folder}/${name} has no size limit; use a ${Object.keys(limits).join(' or ')} file.`); continue; }
+			const size = (await stat(join(budget.directory, 'photos', folder, name))).size;
+			checked++;
+			if (size > largest.size) largest = { name, size };
+			if (size > limits[suffix] * 1024) failures.push(`photos/${folder}/${name} exceeds ${limits[suffix]} KiB.`);
+		}
+		if (!checked) failures.push(`photos/${folder} has no photos.`);
+		console.log(`photos/${folder}: ${checked} files, largest ${largest.name} ${kib(largest.size)} KiB`);
+	} catch (error) {
+		failures.push(`photos/${folder}: ${error.message}`);
 	}
 }
 

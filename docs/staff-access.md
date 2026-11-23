@@ -37,7 +37,7 @@ The insert requires a verified account with no existing staff membership. If it 
 
 1. Have the Owner sign in to the Worker app with their verified email and password.
 2. On **Account**, open the staff workspace, then **Staff access**.
-3. Grant access to staff, admins, and restricted admins using the exact email from each existing verified HERCO account. Select the pages and actions they need. Disable access when access should end.
+3. Grant access to staff and admins using the exact email from each existing verified HERCO account. Select the pages and actions they need. Disable access when access should end.
 4. Verify with separate staging accounts that the Owner can delegate only their own permissions and a lower role cannot access the management page or API.
 
 Staff access updates record the actor, target, timestamp, and before and after permissions in `herco_private.staff_access_audit`. Assignments for privileged Owner and Superadmin identities require a separately authorized project administrator. For privileged account recovery, use the Supabase account recovery process for the verified identity and record the change in the handoff.

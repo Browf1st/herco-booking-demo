@@ -1,12 +1,13 @@
 <script lang="ts">
  import ActionIcon from '#lib/shared/ActionIcon.svelte';
- import type { Snippet } from 'svelte';
+ import BookingCard from '../shared/BookingCard.svelte';
+ import { servicesLine } from '../shared/records-ui';
  import VisitPicker from './VisitPicker.svelte';
  import EditCoating from './EditCoating.svelte';
  import { fmtDate, fmtSlot } from '../shared/dates';
  import { canPerform } from './staffAccess.svelte.ts';
  import { approveBooking, completeBooking, hasUnfinalizedServicePrices, MAX_COMPLETION_PHOTOS, reschedule, reviewChange, setStatus, type Booking, type ChangeRequest } from './store.svelte';
- let { booking, heading, children }: { booking: Booking; heading: Snippet; children?: Snippet } = $props();
+ let { booking, when, onDetails }: { booking: Booking; when: string; onDetails: () => void } = $props();
  let moveDialog = $state<HTMLDialogElement>();
  let moveDate = $state('');
  let moveSlot = $state('');
@@ -36,7 +37,7 @@
  const canCancel = $derived(active && !pending && canPerform('cancelBooking'));
  const needsPrices = $derived(hasUnfinalizedServicePrices(booking));
  const showPriceWarning = $derived(booking.status === 'confirmed' && !pending && needsPrices && canPerform('completeBooking'));
- const priceWarningId = $props.id();
+ const priceWarningId = $derived('price-warning-' + booking.id);
  function openCancellation(request?: ChangeRequest) {
   cancellationRequest = request;
   cancelNote = cancelError = '';
@@ -92,10 +93,9 @@
   }
  }
 </script>
-<div class="booking-header">
- <div class="booking-heading">{@render heading()}</div>
- {#if active && !completing && (pending || canEdit || canMove || canCancel || canPerform('confirmBooking') || canPerform('completeBooking'))}
-  <div class="row booking-actions">
+<BookingCard {when} status={booking.status} name={booking.name || 'Unnamed test booking'} meta={servicesLine(booking.bike, booking.estimate?.lines?.length ?? 1)} {onDetails}>
+ {#snippet actions()}
+  {#if active && !completing && (pending || canEdit || canMove || canCancel || canPerform('confirmBooking') || canPerform('completeBooking'))}
    {#if pending}
     {#if canReview}
      <button type="button" class="btn sm" onclick={() => { error = ''; reviewDialog?.showModal(); }}><ActionIcon name="check" />Review {pending.kind === 'Cancel' ? 'cancellation' : 'reschedule'}</button>
@@ -109,23 +109,22 @@
    {/if}
    {#if canEdit || canMove || canCancel}
     <details class="more" bind:this={more}>
-     <summary class="btn sm ghost">More actions <span aria-hidden="true">▾</span></summary>
+     <summary class="btn sm ghost" aria-label="More actions"><span aria-hidden="true">⋯</span></summary>
      <div class="more-options">
       {#if canEdit}<EditCoating {booking} staff />{/if}
       {#if canMove}<button type="button" class="btn sm ghost" onclick={() => { if (more) more.open = false; moveDate = moveSlot = moveError = ''; moveDialog?.showModal(); }}><ActionIcon name="calendar" />Reschedule booking</button>{/if}
-      {#if canCancel}<button type="button" class="btn sm danger" onclick={() => { if (more) more.open = false; openCancellation(); }}><ActionIcon name="block" />Cancel booking</button>{/if}
+      {#if canCancel}<button type="button" class="btn sm danger cancel-option" onclick={() => { if (more) more.open = false; openCancellation(); }}><ActionIcon name="block" />Cancel booking</button>{/if}
      </div>
     </details>
    {/if}
-  </div>
- {/if}
-</div>
+  {/if}
+ {/snippet}
+</BookingCard>
  {#if showPriceWarning}
   <p id={priceWarningId} class="price-warning small" role="status">
    {canPerform('adjustPrices') ? 'Set an exact price for every range or shop quote under More actions before completing this booking.' : 'Ask someone with price adjustment access to finalize the service prices before completing this booking.'}
   </p>
  {/if}
- {@render children?.()}
  {#if booking.status === 'confirmed' && !pending && canPerform('completeBooking') && completing}
    <form class="card stack" onsubmit={(event) => { event.preventDefault(); run(() => { completeBooking(booking, note.trim(), [...photos], finalPrice); completing = false; }); }}>
     <label>Final service price (₱)<input type="number" min="0" step="0.01" required bind:value={finalPrice} /></label>
@@ -192,9 +191,7 @@
 </dialog>
 {/if}
 <style>dialog { width: min(520px, calc(100% - 24px)); max-height: 90dvh; padding: 1rem; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); } dialog::backdrop { background: #0009; } img { max-height: 160px; object-fit: contain; }
- .booking-header { display: flex; flex-wrap: wrap; gap: .55rem 1rem; align-items: flex-start; }
- .booking-heading { flex: 1 1 14rem; min-width: 0; }
- .booking-actions { flex: none; max-width: 100%; gap: .4rem; }
+ .cancel-option { margin-top: .5rem; }
  .price-warning { margin-block-start: .5rem; color: var(--warn); }
  .more { position: relative; }
  .more summary { list-style: none; cursor: pointer; }
@@ -203,8 +200,5 @@
  .more-options :global(.btn) { justify-content: flex-start; width: 100%; border-radius: 4px; clip-path: none; font-style: normal; }
  @media (max-width: 520px) {
   .more-options { position: static; margin-top: .25rem; }
-  .booking-header { flex-direction: column; }
-  .booking-heading { flex: none; max-width: 100%; }
-  .booking-actions { align-items: flex-start; }
  }
 </style>

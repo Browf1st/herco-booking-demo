@@ -1,140 +1,160 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import ActionIcon from '#lib/shared/ActionIcon.svelte';
 	import { asset, resolve } from '$app/paths';
 
 	import CompareSlider from '#lib/shared/CompareSlider.svelte';
+	import ShowcaseLightbox from '#lib/shared/ShowcaseLightbox.svelte';
 	import { photos } from '#lib/shared/config.ts';
-	import { powderConcept, powderShowcase } from '#lib/shared/powder-showcase.ts';
+	import { powderShowcase, showcaseCategories } from '#lib/shared/powder-showcase.ts';
+	import { countByCategory, filterPhotos, shownCount } from '#lib/shared/showcase-gallery.ts';
 	import { features } from '#lib/demo/store.svelte.ts';
+
+	const counts = countByCategory(powderShowcase);
+	const filters = [{ id: 'all', label: 'All' }, ...showcaseCategories];
+	let filter = $state('all');
+	let pages = $state(1);
+	let open = $state(-1);
+	const matching = $derived(filterPhotos(powderShowcase, filter));
+	const shown = $derived(shownCount(matching.length, pages));
+	const src = (slug: string, width: 480 | 960) => asset(`photos/showcase/${slug}-${width}.webp` as Parameters<typeof asset>[0]);
+
+	function choose(id: string) { filter = id; pages = 1; }
+
+	// Keyboard and screen-reader users continue from the first new photo (the button may disappear).
+	async function showMore() {
+		const first = shown;
+		pages++;
+		await tick();
+		document.querySelectorAll<HTMLButtonElement>('.masonry .tile')[first]?.focus();
+	}
 </script>
 
-<section class="section wrap stack">
-	<p class="eyebrow">Showcase / Finished work</p>
-	<h2>Coating results</h2>
+<svelte:head><title>Showcase | HERCO</title></svelte:head>
+
+<section class="section wrap stack showcase">
+	<div class="intro">
+		<div class="stack">
+			<p class="eyebrow">Showcase</p>
+			<h1>Real work from the HERCO shop</h1>
+			<p class="muted">{powderShowcase.length} photos of wheels, bikes and parts coated in the shop. Tap any photo to see it full size.</p>
+		</div>
+		<div><a class="btn" href={resolve('/book?service=wheel-colour')}><ActionIcon name="calendar" />Book powder coating</a></div>
+	</div>
+
 	{#if import.meta.env.MODE === 'worker' || features().preview}
-		<div class="layout">
+		<div class="card ceramic">
 			<CompareSlider before={photos.before} after={photos.after} alt="Scooter coated by the shop" loading="eager" />
 			<div class="stack">
-				<h3>Ceramic coating</h3>
-				<p class="muted">Drag the slider to explore the before-and-after photos of a glossy black finish.</p>
-				<p class="eyebrow">Finish shown</p>
-				<h3>Glossy black</h3>
-				<div><a class="btn ghost" href={resolve('/book?service=ceramic')}><ActionIcon name="calendar" />Book ceramic coating</a></div>
+				<p class="eyebrow">Ceramic coating</p>
+				<h2>Before and after</h2>
+				<p class="muted">Drag the slider to compare a glossy black ceramic finish.</p>
+				<div><a class="btn sm ghost" href={resolve('/book?service=ceramic')}><ActionIcon name="calendar" />Book ceramic coating</a></div>
 			</div>
 		</div>
 
-		<div class="powder stack">
-			<div class="powder-intro">
-				<div class="stack">
-					<h3>Powder coating results</h3>
-					<p class="muted">Wheels, CVT covers, brackets and springs finished in the shop. Tap a finish to book it.</p>
-				</div>
-				<div><a class="btn ghost" href={resolve('/book?service=wheel-colour')}><ActionIcon name="calendar" />Book powder coating</a></div>
-			</div>
-			<ul class="gallery">
-				{#each powderShowcase as item, index (item.slug)}
-					<li>
-						<figure>
-							<img src={asset(`photos/powder/${item.slug}-480.webp` as Parameters<typeof asset>[0])}
-								srcset={`${asset(`photos/powder/${item.slug}-480.webp` as Parameters<typeof asset>[0])} 480w, ${asset(`photos/powder/${item.slug}-800.webp` as Parameters<typeof asset>[0])} 800w`}
-								sizes="(min-width: 1100px) 340px, (min-width: 700px) 31vw, 46vw"
-								alt={item.alt} width="480" height="640" loading={index < 2 ? 'eager' : 'lazy'} decoding="async" />
-							<figcaption>
-								{#if item.finish}<a href={resolve(`/book?service=wheel-colour&finish=${encodeURIComponent(item.finish)}`)}>{item.title}</a>{:else}{item.title}{/if}
-							</figcaption>
-						</figure>
-					</li>
-				{/each}
-			</ul>
-			<img class="photo" src={asset(powderConcept.photo)} srcset={`${asset(powderConcept.small)} 480w, ${asset(powderConcept.photo)} 800w`}
-				sizes="(min-width: 1100px) 1060px, calc(100vw - 32px)" alt={powderConcept.alt} width="800" height="671" loading="lazy" decoding="async" />
-			<p class="muted small">Real photos from the shop.</p>
+		<div class="chips" role="group" aria-label="Filter photos">
+			{#each filters as option (option.id)}
+				<button type="button" class="chip" aria-pressed={filter === option.id} onclick={() => choose(option.id)}>
+					{option.label}<span class="count">{counts[option.id] ?? 0}</span>
+				</button>
+			{/each}
 		</div>
+
+		<ul class="masonry" aria-label="Powder coating photos">
+			{#each matching.slice(0, shown) as photo, index (photo.slug)}
+				<li>
+					<button type="button" class="tile" onclick={() => (open = index)} aria-label={`View larger: ${photo.title}`}>
+						<img src={src(photo.slug, 480)} srcset={`${src(photo.slug, 480)} 480w, ${src(photo.slug, 960)} 960w`}
+							sizes="(min-width: 1100px) 260px, (min-width: 900px) 24vw, (min-width: 600px) 32vw, 48vw"
+							alt={photo.alt} width={photo.w} height={photo.h} loading={index < 4 ? 'eager' : 'lazy'} decoding="async" />
+						{#if photo.finish}<span class="label">{photo.finish}</span>{/if}
+					</button>
+				</li>
+			{/each}
+		</ul>
+
+		<div class="more">
+			<p class="muted small" aria-live="polite">Showing {shown} of {matching.length} photos</p>
+			{#if shown < matching.length}
+				<button type="button" class="btn ghost" onclick={showMore}><ActionIcon name="add" />Show {Math.min(24, matching.length - shown)} more</button>
+			{/if}
+		</div>
+
+		<ShowcaseLightbox photos={matching} bind:index={open} />
 	{:else}
-		<p class="muted">The preview is part of the Pro package. Switch the demo to Pro in the footer to see it.</p>
+		<p class="muted">The showcase is part of the Pro package. Switch the demo to Pro in the footer to see it.</p>
 	{/if}
 </section>
 
-
 <style>
-	.layout {
-		display: grid;
-		gap: 24px;
-		padding-top: 24px;
-		border-top: 1px solid var(--line);
+	.showcase h1 { font-size: clamp(2rem, 7vw, 3.2rem); }
+	.intro { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
+	.intro p { margin: 0; }
+
+	/* Compact card so the photo wall starts near the top, even on phones. */
+	.ceramic { display: grid; grid-template-columns: minmax(0, 42%) 1fr; gap: 12px; padding: 10px; align-items: center; }
+	.ceramic h2 { font-size: clamp(1.2rem, 4vw, 1.8rem); }
+	.ceramic p { margin: 0; }
+	.ceramic .muted { font-size: .9rem; }
+	@media (min-width: 760px) {
+		.ceramic { grid-template-columns: minmax(0, 220px) 1fr; padding: 16px; gap: 24px; }
 	}
 
-	.photo {
-		width: 100%;
-		height: auto;
+	.chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		flex: none;
+		min-height: 40px;
+		padding: 6px 14px;
 		border: 1px solid var(--line);
-		border-radius: 6px;
+		border-radius: 999px;
+		background: var(--panel);
+		color: var(--text);
+		font: inherit;
+		font-weight: 650;
+		cursor: pointer;
 	}
+	.chip[aria-pressed='true'] { border-color: var(--accent-fill); background: var(--accent-fill); color: var(--accent-ink); }
+	.count { font-size: .8rem; opacity: .8; font-variant-numeric: tabular-nums; }
 
-	.powder {
-		padding-top: 24px;
-		border-top: 1px solid var(--line);
-	}
+	/* Masonry with CSS columns: whole photos, no JavaScript. */
+	.masonry { columns: 2; column-gap: 8px; margin: 0; padding: 0; list-style: none; }
+	.masonry li { break-inside: avoid; margin-bottom: 8px; }
+	@media (min-width: 600px) { .masonry { columns: 3; column-gap: 12px; } .masonry li { margin-bottom: 12px; } }
+	@media (min-width: 900px) { .masonry { columns: 4; } }
 
-	.powder-intro {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: end;
-		justify-content: space-between;
-		gap: 12px;
-	}
-
-	.gallery {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 12px;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	figure {
-		margin: 0;
-	}
-
-	.gallery img {
+	.tile {
+		position: relative;
 		display: block;
 		width: 100%;
-		height: auto;
-		aspect-ratio: 3 / 4;
-		object-fit: cover;
-		border: 1px solid var(--line);
+		padding: 0;
+		border: 0;
 		border-radius: 6px;
-		background: var(--panel);
+		overflow: hidden;
+		background: var(--panel-2);
+		cursor: zoom-in;
+	}
+	.tile img { display: block; width: 100%; height: auto; transition: transform .25s ease; }
+	.tile:hover img, .tile:focus-visible img { transform: scale(1.03); }
+	.tile:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+	.label {
+		position: absolute;
+		left: 6px;
+		bottom: 6px;
+		max-width: calc(100% - 12px);
+		padding: 3px 8px;
+		border-radius: 4px;
+		background: #000b;
+		color: #fff;
+		font-size: .78rem;
+		font-weight: 700;
+		text-align: start;
+		overflow-wrap: anywhere;
 	}
 
-	figcaption {
-		margin-top: 6px;
-		font-size: .9rem;
-		font-weight: 650;
-	}
-
-	figcaption a {
-		color: inherit;
-		text-decoration-color: var(--accent);
-		text-underline-offset: 3px;
-	}
-
-	@media (min-width: 700px) {
-		.gallery {
-			grid-template-columns: repeat(3, minmax(0, 1fr));
-			gap: 16px;
-		}
-	}
-
-
-
-
-
-	@media (min-width: 800px) {
-		.layout {
-			grid-template-columns: 1fr 1fr;
-			align-items: start;
-		}
-	}
+	.more { display: grid; justify-items: center; gap: 8px; }
+	.more p { margin: 0; }
 </style>

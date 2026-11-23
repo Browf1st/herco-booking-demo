@@ -3,8 +3,8 @@
 	import { onMount } from 'svelte';
 	import { asset, resolve } from '$app/paths';
 	import AvailabilityCalendar from '#lib/shared/AvailabilityCalendar.svelte';
-	import CompareSlider from '#lib/shared/CompareSlider.svelte';
-	import { photos, shop, wheelColours } from '#lib/shared/config.ts';
+	import { photos, shop } from '#lib/shared/config.ts';
+	import { showcaseHome, showcaseTotal } from '#lib/shared/showcase-home.ts';
 	import { addDays, fmtDate, fmtSlot, today, upcoming } from '#lib/shared/dates.ts';
 	import { dayStatus, features } from '#lib/demo/store.svelte.ts';
 
@@ -102,9 +102,9 @@
 			<div><a class="btn sm ghost" href={resolve('/book?service=ceramic')}><ActionIcon name="calendar" />Book ceramic coating</a></div>
 		</article>
 		<article class="work-photo card stack">
-			<img src={asset(photos.powder)} srcset={`${asset('photos/herco-red-wheels-480.webp')} 480w, ${asset(photos.powder)} 720w`}
+			<img src={asset(photos.powder)} srcset={`${asset(photos.powderSmall)} 480w, ${asset(photos.powder)} 960w`}
 				sizes="(min-width: 1100px) 490px, (min-width: 800px) calc(50vw - 60px), calc(100vw - 64px)"
-				alt="Motorcycle fitted with red coated wheels" width="720" height="960" loading="lazy" decoding="async" />
+				alt="Scooter with Fire Red powder-coated wheels" width="960" height="540" loading="lazy" decoding="async" />
 			<h3>Powder coating</h3>
 			<p class="muted">For wheels and other suitable metal components. Tell the garage which parts you want coated and your preferred colour or finish.</p>
 			<div><a class="btn sm ghost" href={resolve('/book?service=wheel-colour')}><ActionIcon name="calendar" />Book powder coating</a></div>
@@ -174,32 +174,26 @@
 	</div>
 </section>
 
-{#if import.meta.env.MODE === 'worker' || features().preview}
-	<section class="section wrap teaser">
-		<div class="stack">
-			<p class="eyebrow">Showcase</p>
-			<h2>See the finish before you book</h2>
-			<p class="muted">Drag to compare a real bike before and after, then browse wheel colours coated by the shop.</p>
-			<div><a class="btn" href={resolve('/preview')}><ActionIcon name="view" />Open showcase</a></div>
-		</div>
-		<CompareSlider before={photos.before} after={photos.after} alt="Scooter coated by the shop" />
-	</section>
-{/if}
-
 <section class="section wrap stack" id="inventory">
-	<h2>Wheel coating colours</h2>
-	<p class="muted">Browse sample finishes from the gallery. Ask the garage about current stock and whether a finish suits your parts.</p>
-	<div class="finish-grid">
-		{#each wheelColours as colour (colour.id)}
-			<figure class="card stack">
-				<img src={asset(colour.photo as Parameters<typeof asset>[0])} alt={`${colour.name} coated wheel`} width="720" height="720" loading="lazy" decoding="async" />
-				<figcaption><h3>{colour.name}</h3><p class="small muted">Check availability with the shop</p></figcaption>
-			</figure>
+	<p class="eyebrow">Showcase</p>
+	<h2>Finished in our shop</h2>
+	<p class="muted">A few recent jobs. Ask the garage about current colours and whether a finish suits your parts.</p>
+	<ul class="finish-grid">
+		{#each showcaseHome as item (item.slug)}
+			<li>
+				<figure class="stack">
+					<img src={asset(`photos/showcase/${item.slug}-480.webp` as Parameters<typeof asset>[0])}
+						alt={item.alt} width="480" height="480" loading="lazy" decoding="async" />
+					<figcaption class="small">
+						{#if import.meta.env.MODE === 'worker' || features().preview}<a href={resolve('/preview')}>{item.title}</a>{:else}{item.title}{/if}
+					</figcaption>
+				</figure>
+			</li>
 		{/each}
-	</div>
-	<div class="row">
-		{#if import.meta.env.MODE === 'worker' || features().preview}<a class="btn ghost" href={resolve('/preview')}><ActionIcon name="view" />Open preview</a>{/if}
-	</div>
+	</ul>
+	{#if import.meta.env.MODE === 'worker' || features().preview}
+		<div><a class="btn" href={resolve('/preview')}><ActionIcon name="view" />See all {showcaseTotal} in Showcase</a></div>
+	{/if}
 </section>
 
 
@@ -374,8 +368,22 @@
 
 	.finish-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
-		gap: 16px;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 12px;
+	}
+
+	/* Four Showcase photos: two columns on phones, one row on desktop. */
+	.finish-grid { margin: 0; padding: 0; list-style: none; }
+	.finish-grid figure { gap: 6px; }
+	.finish-grid figcaption { font-weight: 650; overflow-wrap: anywhere; }
+	/* The whole tile opens the Showcase: the caption link covers the photo too. */
+	.finish-grid figure { position: relative; }
+	.finish-grid figcaption a { color: inherit; text-decoration: none; }
+	.finish-grid figcaption a::after { content: ''; position: absolute; inset: 0; }
+	.finish-grid figcaption a:hover { text-decoration: underline; }
+
+	@media (min-width: 800px) {
+		.finish-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 	}
 
 	.finish-grid img,
