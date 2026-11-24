@@ -263,7 +263,7 @@ begin
   res := public.herco_set_schedule_settings(9::smallint, 17::smallint, array[0,4,5,6]::smallint[], true, null, 2);
   if (res->>'saved')::boolean or res->>'code' <> 'bookings_outside_hours' or (res->>'outsideCount')::int <> 3 then
     raise exception 'A stale Save anyway was not refused: %', res; end if;
-  if (select open_weekdays from herco_private.schedule_settings) <> '{0,3,4,5,6}'::smallint[] then raise exception 'Refused Save anyway changed the weekdays'; end if;
+  if (public.herco_staff_schedule_settings()->'openWeekdays') <> '[0,3,4,5,6]'::jsonb then raise exception 'Refused Save anyway changed the weekdays'; end if;
   -- confirmed count equal to (or above) the real count saves; null means no count check
   res := public.herco_set_schedule_settings(9::smallint, 17::smallint, array[0,4,5,6]::smallint[], true, null, 3);
   if not (res->>'saved')::boolean then raise exception 'Save anyway with the right count failed: %', res; end if;
