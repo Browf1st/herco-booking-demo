@@ -137,16 +137,18 @@ do $$ begin
   if (select current_total_centavos from public.herco_bookings where id='00000000-0000-4000-8000-0000000006a1') <> 309900 then raise exception 'A refused change moved the total'; end if;
 end $$;
 
--- 4. A second staff member (no viewIncome) edits another line; limits 0 and 1,000,000 pesos are allowed.
+-- 4. A staff member without viewIncome cannot change prices (the price check would let them guess amounts).
+--    Limits 0 and 1,000,000 pesos are allowed.
 set local role authenticated;
 select set_config('test.uid','00000000-0000-4000-8000-000000000602',true);
+select public.herco_test_refused($s$select public.herco_staff_set_line_price('00000000-0000-4000-8000-0000000006a1','00000000-0000-4000-8000-0000000006c2','wash',50000,0,'Waived after inspection')$s$,'42501');
+select set_config('test.uid','00000000-0000-4000-8000-000000000601',true);
 do $$
 declare r jsonb;
 begin
   r := public.herco_staff_set_line_price('00000000-0000-4000-8000-0000000006a1','00000000-0000-4000-8000-0000000006c2','wash',50000,0,'Waived after inspection');
   if (r->>'totalCentavos')::bigint <> 230000+0+29900 or (r->>'revision')::int <> 3 then raise exception 'Free price failed: %', r; end if;
 end $$;
-select set_config('test.uid','00000000-0000-4000-8000-000000000601',true);
 do $$
 declare r jsonb;
 begin
@@ -209,7 +211,7 @@ begin
   first_entry := h->'entries'->0; added := h->'entries'->3;
   if first_entry->>'actor' <> 'Admin Elijah' or first_entry->>'service_code' <> 'wash' or (first_entry->>'from_centavos')::bigint <> 0
     or (first_entry->>'to_centavos')::bigint <> 100000000 or length(first_entry->>'reason') <> 200 then raise exception 'Newest entry wrong: %', first_entry; end if;
-  if h->'entries'->1->>'actor' <> 'Mia' or h->'entries'->1->>'reason' <> 'Waived after inspection' then raise exception 'Second entry wrong: %', h->'entries'->1; end if;
+  if h->'entries'->1->>'actor' <> 'Admin Elijah' or h->'entries'->1->>'reason' <> 'Waived after inspection' then raise exception 'Second entry wrong: %', h->'entries'->1; end if;
   if h->'entries'->2->>'service_label' <> 'Ceramic coating' or (h->'entries'->2->>'from_centavos')::bigint <> 179900
     or (h->'entries'->2->>'to_centavos')::bigint <> 230000 then raise exception 'Ceramic entry wrong: %', h->'entries'->2; end if;
   if added->>'service_label' <> 'Helmet coating' or (added->>'to_centavos')::bigint <> 29900 or added->>'actor' <> 'Admin Elijah' then raise exception 'Added entry wrong: %', added; end if;
