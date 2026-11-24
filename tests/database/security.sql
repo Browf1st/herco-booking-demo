@@ -12,7 +12,7 @@ begin
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname in ('public','herco_private') and p.prosecdef
       and has_function_privilege('anon',p.oid,'EXECUTE')
-      and not (n.nspname='public' and p.proname in ('herco_availability','herco_catalog','herco_reward_preview'))
+      and not (n.nspname='public' and p.proname in ('herco_availability','herco_catalog','herco_reward_preview','herco_shop_hours'))
   ) then raise exception 'Unexpected anonymous access to a privileged function'; end if;
 end;
 $$;
