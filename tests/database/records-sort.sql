@@ -29,8 +29,8 @@ insert into public.herco_bookings(id,customer_id,request_id,request_payload,visi
   ('00000000-0000-4000-8000-0000000004a5','00000000-0000-4000-8000-000000000403',gen_random_uuid(),'{}',current_date+60,10,'RSORT cancelled','{}','cancelled','[{"code":"a","label":"Wash","price_centavos":200000}]',200000,now()-interval '1 hours'),
   ('00000000-0000-4000-8000-0000000004a6','00000000-0000-4000-8000-000000000403',gen_random_uuid(),'{}',current_date+60,10,'RSORT done no final','{}','done','[{"code":"b","label":"Ceramic","price_centavos":990000}]',990000,now());
 insert into herco_private.booking_completion(booking_id,actor_id,final_price_centavos,photo_paths,note) values
-  ('00000000-0000-4000-8000-0000000004a3','00000000-0000-4000-8000-000000000401',700000,array['fixture/a.jpg'],'Fixture note'),
-  ('00000000-0000-4000-8000-0000000004a4','00000000-0000-4000-8000-000000000401',300000,array['fixture/b.jpg'],'Fixture note');
+  ('00000000-0000-4000-8000-0000000004a3','00000000-0000-4000-8000-000000000401',700000,array['00000000-0000-4000-8000-0000000004a3/fixture/a.jpg'],'Fixture note'),
+  ('00000000-0000-4000-8000-0000000004a4','00000000-0000-4000-8000-000000000401',300000,array['00000000-0000-4000-8000-0000000004a4/fixture/b.jpg'],'Fixture note');
 
 -- Helper: ordered fixture ids (last hex digit) from a result, as text like "1,2,3".
 create function public.herco_test_order(result jsonb) returns text language sql immutable as $$
