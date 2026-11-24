@@ -301,8 +301,9 @@ end $$;
 select set_config('test.uid','00000000-0000-4000-8000-000000000502',true);
 do $$
 begin
-  if public.herco_set_maintenance_reminders(true) is not true or public.herco_get_maintenance_reminders() is not true then
-    raise exception 'Turning reminders back on failed'; end if;
+  -- two statements: a read in the same statement as the change would still see the old snapshot
+  if public.herco_set_maintenance_reminders(true) is not true then raise exception 'Turning reminders back on failed'; end if;
+  if public.herco_get_maintenance_reminders() is not true then raise exception 'Reminders still off after turning them on'; end if;
 end $$;
 
 -- Not signed in: refused.
