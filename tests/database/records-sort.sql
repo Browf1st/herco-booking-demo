@@ -114,7 +114,8 @@ declare
 begin
   if (result->>'canViewIncome')::boolean then raise exception 'canViewIncome should be false'; end if;
   if result->>'sort' <> 'date' or public.herco_test_order(result) <> '6,5,4,3,2,1' then raise exception 'Price sort revealed order: %', public.herco_test_order(result); end if;
-  if text_result ~ '(price_centavos|max_centavos|promotion)' then raise exception 'A service amount leaked'; end if;
+  -- exact keys only: "final_price_centavos" is present on purpose with a null value
+  if text_result ~ '"(price_centavos|max_centavos|promotion)"' then raise exception 'A service amount leaked'; end if;
   if exists (select 1 from jsonb_array_elements(result->'records') r where r->>'final_price_centavos' is not null
     or r->>'original_total_centavos' is not null or r->>'total_centavos' is not null) then raise exception 'A booking total leaked'; end if;
   if not exists (select 1 from jsonb_array_elements(result->'records') r where r->'original_services'->0->>'label' = 'Wash') then
