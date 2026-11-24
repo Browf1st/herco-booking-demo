@@ -266,7 +266,6 @@
 			<a class="link" href={resolve('/preview')} aria-current={page.route.id === '/preview' ? 'page' : undefined}>Showcase</a>
 			<a class="link" href={resolve('/points')} aria-current={page.route.id === '/points' ? 'page' : undefined}>HERCO Points</a>
 			<a class="link" href={resolve('/my-bookings')} aria-current={page.route.id === '/my-bookings' ? 'page' : undefined}>Bookings</a>
-			{#if !menuUser}<a class="link" href={resolve('/account')} aria-current={page.route.id === '/account' ? 'page' : undefined}>Account</a>{/if}
 			<details class="book-menu" bind:this={bookMenu}>
 				<summary class="btn sm" class:booking-current={page.route.id === '/book'}><ActionIcon name="calendar" />Book <span aria-hidden="true">▾</span></summary>
 				<div class="book-options">
@@ -314,7 +313,6 @@
 			<div>
 				<p class="display name">{shop.name}</p>
 				<p class="muted small">{shop.area}. Open {#if ShopHoursText}<ShopHoursText />{:else}Wed to Sun, 9 AM to 5 PM{/if}.</p>
-				{#if !demo}<a class="small" href={resolve('/privacy-preferences')}>Privacy preferences</a>{/if}
 			</div>
 		</div>
 	</div>
@@ -374,7 +372,8 @@
 		border-bottom-color: var(--accent);
 	}
 
-	.admin-sections.owner-sections { overflow: visible; flex-wrap: wrap; gap: 0 clamp(.75rem, 2vw, 1.5rem); }
+	/* One row always. Overflow stays visible so the dropdown menus are not clipped; narrow screens use the stacked menu below. */
+	.admin-sections.owner-sections { overflow: visible; flex-wrap: nowrap; gap: 0 clamp(.5rem, 1.5vw, 1.5rem); }
 	.owner-header { max-width: 1420px; }
 	.owner-group { position: relative; }
 	.owner-group summary {
@@ -418,7 +417,10 @@
 	.book-options a:hover { background: var(--panel-2); }
 	@media (max-width: 800px) { .book-options { position: static; margin-top: .25rem; } }
 	.menu-trigger { display: none; }
-	.account-slot { display: flex; align-items: center; flex: none; min-height: 44px; margin-inline-start: .5rem; }
+	/* The Account button always has the same room (signed in, signed out, before it loads), so nothing in the header moves. */
+	.account-slot { display: flex; align-items: center; justify-content: flex-end; flex: none; width: 6.5rem; min-height: 44px; margin-inline-start: .5rem; }
+	/* Tabs and the Account button sit together on the right; the logo stays on the left. */
+	.main-nav { margin-inline-start: auto; }
 	/* Staff header reuses the demo admin tabs; dropdowns need visible overflow to open below the bar. */
 	.staff-main-nav { overflow: visible; flex-wrap: wrap; justify-content: flex-end; gap: 0 clamp(.75rem, 2vw, 1.5rem); }
 	.owner-options a { display: flex; align-items: center; gap: .5rem; white-space: nowrap; }
@@ -441,11 +443,13 @@
 	}
 
 	header .wrap {
-		justify-content: space-between;
+		justify-content: flex-start;
 		min-height: 60px;
 	}
 
 	.logo {
+		flex-shrink: 0;
+		white-space: nowrap;
 		display: flex;
 		align-items: center;
 		gap: 10px;
@@ -475,6 +479,8 @@
 	}
 
 	.link {
+		flex-shrink: 0;
+		white-space: nowrap;
 		font: 700 1.05rem var(--display);
 		letter-spacing: 0.1em;
 		text-decoration: none;
@@ -517,11 +523,12 @@
 
 		
 		.logo { order: 1; }
-		.account-slot { order: 2; margin-inline-start: auto; }
+		.account-slot { order: 2; margin-inline-start: auto; width: 5.5rem; }
 
 header .menu-trigger { order: 3; display: grid; place-items: center; width: 44px; height: 44px; flex: none; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); font-size: 1.35rem; cursor: pointer; }
 		.main-nav {
 			display: none;
+			margin-inline-start: 0;
 			position: absolute;
 			top: 100%;
 			inset-inline: 0;

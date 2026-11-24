@@ -21,6 +21,24 @@ Staff see pending bookings and change requests, confirm, cancel or reschedule th
 - Every action records the verified staff member; repeat requests are applied once.
 - Owner lands on Reports; staff without a section grant go to their landing page.
 
+## Price changes and added services after inspection (owner-approved 2026-11-24)
+Owner's words: some services need an estimate and the price may change on inspection at the shop, so staff (admin/owner/staff, not only the customer) can edit the price of individual services and add more services; keep logging what the initial price was and what changed, and show the logs in More details.
+- **Where:** the More details popup (Reports, Bookings and Booking history), section "Services": each service line gets **Edit price**; a button **Add service** opens the catalog list.
+- **When:** only while the booking is Pending or Booked (not Done, not Cancelled). After Done, the existing price correction (`adjustPrices`) stays the way to fix a final price, and it is logged too.
+- **Who:** changing a service's price needs the existing grant **Adjust individual booking prices** (`adjustPrices`); adding or removing services needs **Edit booked services** (`editServices`). The Owner has both. Checked in the database.
+- **Rules:** new price in whole pesos, 0 to ₱1,000,000; a short reason is required (e.g. "Extra corrosion found"); the original booking snapshot never changes; each change is appended to the booking's history with who, when, old price → new price, and reason; the booking total is the sum of the current lines. Adding a service uses today's catalog price (editable straight away with a reason). Same retry key protection as other saves.
+- **Customer edits after a staff price change (owner 2026-11-24):** once staff changed any line price on a booking, the customer can no longer edit its services; My Bookings shows "The shop updated this booking after inspection. Contact the shop to change services." (enforced in the database).
+- **Customer:** My Bookings shows the current services and total, with the original total struck through and "Updated by the shop after inspection". No email for now.
+- **History in More details:** a "Changes" list, newest first: "Nov 24, 3:10 PM · Admin Elijah · Ceramic coating ₱1,799 → ₱2,300 · Extra corrosion found", "… · Added Helmet coating ₱299", plus status changes (booked, approved, completed, cancelled, rescheduled) already in the booking events.
+- **Reports:** completed income still counts only Done bookings (final price); the Price column and the popup show "Price" (not "Estimated service value").
+- **Edge cases:** booking becomes Done or Cancelled while the editor is open → save refused "This booking can no longer be changed." (409); two staff edit at once → the later save is refused if the line changed since it was opened, with Reload; negative, blank, over the limit or non-number → 400; staff without the grant → buttons hidden and the server refuses (403).
+
+## Bookings tab details and day schedule (owner 2026-11-24, second batch)
+- **Where actions live:** the Bookings tab, not Reports. Clicking a booking in the Bookings day schedule opens the same **More details** popup design as Reports, but with the actions this staff member may use: Approve/Confirm, Reschedule, Cancel, Complete, per-service **Edit price** (most important), **Add service**, **Remove**, and the Changes history. Reports Details is read-only.
+- **Add service:** opens the existing booking service picker so staff can add any further services the customer wants (today's catalog prices, then editable with a reason).
+- **Day schedule:** each hour (e.g. 9 AM) lists **all** its bookings (no limit per hour), each one clickable to open More details.
+- **Slot filter:** the "All slots 8 ▾" control shows a broken arrow character and an unclear "8". Fix the arrow and label the number clearly (e.g. "8 slots").
+
 ## Screens
 - Staff calendar/queue, pending counters, request review dialogs.
 - Booking History: summary cards, search/date/status panel, responsive rows, empty state with "View all bookings", invalid-range message.

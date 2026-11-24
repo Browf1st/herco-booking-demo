@@ -21,7 +21,7 @@
   <ServerStaffRequests />
  {:else}
   <ServerStaffBookings canComplete={access?.actions.includes('completeBooking') ?? false}
-   canAdjustPrices={access?.actions.includes('adjustPrices') ?? false}
+   canAdjustPrices={access?.actions.includes('adjustPrices') ?? false} actions={access?.actions} pages={access?.pages}
    canRequestIntake={access?.pages.includes('Bookings') === true && access.actions.includes('createBooking')} />
  {/if}
 {:else}

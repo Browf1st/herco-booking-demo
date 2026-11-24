@@ -5,11 +5,12 @@
 	import ActionIcon from './ActionIcon.svelte';
 	import { activeFilterCount, rangeIssue, statusLabels, type Period, type RecordFilters } from './records-ui';
 
-	let { filters = $bindable(), periods, showStatus = true, onchange, onreset }: {
-		filters: RecordFilters; periods: Period[]; showStatus?: boolean; onchange: () => void; onreset: () => void;
+	// `showSearch` is false on Reports, where the search box sits in the Booking records table header instead.
+	let { filters = $bindable(), periods, showStatus = true, showSearch = true, onchange, onreset }: {
+		filters: RecordFilters; periods: Period[]; showStatus?: boolean; showSearch?: boolean; onchange: () => void; onreset: () => void;
 	} = $props();
 	let timer: ReturnType<typeof setTimeout> | undefined;
-	const count = $derived(activeFilterCount(filters, showStatus));
+	const count = $derived(activeFilterCount(filters, showStatus, showSearch));
 	const issue = $derived(rangeIssue(filters));
 
 	function typed() {
@@ -30,7 +31,7 @@
 		<details class="more">
 			<summary><ActionIcon name="adjust" />Filters ({count})</summary>
 			<div class="fields">
-				<label class="search">Search bookings<input type="search" bind:value={filters.search} oninput={typed} placeholder="Name, reference, mobile, bike or plate" maxlength="254" /></label>
+				{#if showSearch}<label class="search">Search bookings<input type="search" bind:value={filters.search} oninput={typed} placeholder="Name, reference, mobile, bike or plate" maxlength="254" /></label>{/if}
 				{#if showStatus}<label>Status<select bind:value={filters.status}><option value="all">All statuses</option>{#each Object.entries(statusLabels) as [value, label]}<option {value}>{label}</option>{/each}</select></label>{/if}
 				<label>Booking source<select bind:value={filters.source}><option value="all">All sources</option><option value="online">Online</option><option value="walk-in">Walk-in</option></select></label>
 			</div>

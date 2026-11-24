@@ -31,7 +31,12 @@ export const GET: RequestHandler = async (event) => {
 		.select('booking_id,to_status,created_at').in('booking_id', bookings.map(booking => booking.id))
 		.in('to_status', ['confirmed', 'done', 'cancelled']).order('id', { ascending: true }).limit(500);
 	if (eventFailure) error(503, 'Booking history is temporarily unavailable.');
+	// Bookings whose price staff changed: the customer can no longer edit their services.
+	const { data: pricedIds, error: pricedFailure } = await supabase.rpc('herco_shop_priced_bookings', { booking_ids: bookings.map(booking => booking.id) });
+	if (pricedFailure) error(503, 'Your bookings are temporarily unavailable.');
+	const shopPriced = new Set<string>(pricedIds ?? []);
 	return json({ bookings: bookings.map(booking => ({ ...booking,
+		shop_priced: shopPriced.has(booking.id),
 		approved_at: events.find(event => event.booking_id === booking.id && event.to_status === 'confirmed')?.created_at ?? null,
 		completed_at: events.find(event => event.booking_id === booking.id && event.to_status === 'done')?.created_at ?? null,
 		cancelled_at: events.find(event => event.booking_id === booking.id && event.to_status === 'cancelled')?.created_at ?? null

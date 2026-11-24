@@ -38,6 +38,15 @@ Owner's words: follow the mockup's layout "from Booking Reports down", not its t
 - **States:** loading, empty ("No bookings found" + Reset filters), error with Try again, no income permission.
 - Both builds (demo and Worker) get the same layout. Not included: the mockup's top menu, global search, clock, bell, profile, footer and bottom tab bar (the app already has its own).
 
+### Revisions (owner 2026-11-24)
+- Remove the "Workshop view" chip, the "How these numbers are counted" link, the "from N completed services (refs)" line, and every small description under the count cards (refs, "4 pending • 2 booked", tag chips). Cards show only the label and the number.
+- Remove the "N records • Newest first" chip. Add a **search box** in the table header (name, reference, bike, phone, email), applied as you type.
+- Sort menu: **Date (newest)**, **Date (oldest)**, **Price (high to low)**, **Price (low to high)**, **Status**. Price sorts only with `viewIncome`, sorted on the server across all records.
+- Period pills, Filters and Reset filters must fit phones: one row that scrolls sideways, with Filters and Reset on their own row below; nothing cut off or squeezed at 360px.
+- Total income counts only completed services. The popup and the Price column say **Price**, never "Estimated service value". Staff price changes and added services: see F-007 "Price changes and added services after inspection".
+- Activity log: the Apply dates button uses the site's red button style.
+- Second batch (owner 2026-11-24): Reports are only reports. Details in the Reports tab is **read-only**: no Approve, Reschedule, Cancel, price edit or Add service (the Changes history may stay, read-only). All booking actions move to the Bookings tab, which uses the same More details popup design (see F-007).
+
 ## Screens
 - `/reports`: date selector, totals, empty range state.
 - `/activity-log`: filter, search, date range, paginated entries.

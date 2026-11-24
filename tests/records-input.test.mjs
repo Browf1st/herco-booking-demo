@@ -11,7 +11,7 @@ test('records request: sort defaults to date so older screens keep working', () 
 });
 
 test('records request: price, status and date sorts are accepted', () => {
-	for (const sort of ['date', 'price', 'status']) assert.equal(parseRecordsRequest({ ...ok, sort })?.sort, sort);
+	for (const sort of ['date', 'date_asc', 'price', 'price_asc', 'status']) assert.equal(parseRecordsRequest({ ...ok, sort })?.sort, sort);
 });
 
 test('records request: unknown or odd sort values are refused', () => {

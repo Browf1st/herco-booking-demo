@@ -19,6 +19,18 @@ export function shownCount(total: number, pages: number): number {
 	return Math.max(0, Math.min(total, safePages * SHOWCASE_PAGE));
 }
 
+/**
+ * Split photos into fixed columns for the masonry wall. Photo number 0 goes to column 0, number 1 to column 1, and so on,
+ * wrapping around. Each entry keeps its number in the full list (the lightbox uses it). Showing more photos only adds
+ * entries at the bottom of each column, so photos already on screen never move.
+ */
+export function distributeColumns<P>(photos: readonly P[], columnCount: number): { photo: P; index: number }[][] {
+	const count = Number.isInteger(columnCount) && columnCount > 0 ? columnCount : 1;
+	const columns: { photo: P; index: number }[][] = Array.from({ length: count }, () => []);
+	photos.forEach((photo, index) => columns[index % count].push({ photo, index }));
+	return columns;
+}
+
 /** Next/previous photo in the lightbox, wrapping around at both ends. */
 export function stepIndex(index: number, delta: number, total: number): number {
 	if (total <= 0) return -1;

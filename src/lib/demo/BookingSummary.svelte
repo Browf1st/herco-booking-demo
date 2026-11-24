@@ -1,11 +1,13 @@
 <script lang="ts">
+ import type { Snippet } from 'svelte';
  import { canPerform } from './staffAccess.svelte.ts';
  import ActionIcon from '../shared/ActionIcon.svelte';
  import { fmtDate, fmtSlot } from '../shared/dates';
  import { serviceOf } from '../shared/config';
  import { defaultPricing, estimatePrice, linePrice, money, quote, serviceLabel, type Selection } from '../shared/coating';
  import { db, type Booking } from './store.svelte';
- let { booking, staff = false, overviewShown = false }: { booking: Booking; staff?: boolean; overviewShown?: boolean } = $props();
+ // linesEditor (optional) replaces the plain price list with one staff can edit.
+ let { booking, staff = false, overviewShown = false, linesEditor }: { booking: Booking; staff?: boolean; overviewShown?: boolean; linesEditor?: Snippet } = $props();
  const events = $derived(db.events.filter(e => e.bookingId === booking.id && (staff || e.actor === 'Customer' || !e.action.startsWith('Recorded walk-in'))));
  const stamp = (at?: string) => at ? new Date(at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short', hour12: true }) : 'Not recorded';
  const labels = (selection: Selection, estimate?: ReturnType<typeof quote>) =>
@@ -29,11 +31,13 @@
  {#if !booking.selection.catalog && booking.selection.powderParts.includes('Wheels / mags')}<p>Mag diameter · Front: {booking.selection.front || '—'} · Rear: {booking.selection.rear || '—'} (inches)</p>{/if}
 {/if}
 {#if booking.estimate}
- {#if !overviewShown}<p>Estimated service value <strong>{estimatePrice(booking.estimate)}</strong>{#if booking.estimate.discount} · {money(booking.estimate.discount)} promo discount{/if}</p>
+ {#if !overviewShown}<p>{staff ? 'Price' : 'Estimated service value'} <strong>{estimatePrice(booking.estimate)}</strong>{#if booking.estimate.discount} · {money(booking.estimate.discount)} promo discount{/if}</p>
  {:else if booking.estimate.discount}<p>Promo discount <strong>{money(booking.estimate.discount)}</strong></p>{/if}
 {/if}
 {#if booking.estimate?.lines?.length}
+ {#if linesEditor}{@render linesEditor()}{:else}
  <ul aria-label="Current service prices">{#each booking.estimate.lines as line (line.label)}<li>{line.label} · {linePrice(line)}</li>{/each}</ul>
+ {/if}
 {/if}
 {#if booking.originalServices || booking.serviceChanges?.length}
  <section class="card stack" aria-label="Service history">

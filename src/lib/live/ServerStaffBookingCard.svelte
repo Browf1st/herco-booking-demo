@@ -3,9 +3,7 @@
 	import ActionIcon from '../shared/ActionIcon.svelte';
 	import BookingCard from '../shared/BookingCard.svelte';
 	import { servicesLine } from '../shared/records-ui';
-	import BookingServiceEditor from './BookingServiceEditor.svelte';
 	import ServerCustomerChangeForm from './ServerCustomerChangeForm.svelte';
-	import ServerCompletionForm from './ServerCompletionForm.svelte';
 	import type { StaffBooking, StaffBookingPermissions } from './server-booking-types';
 	import { fmtSlot, today } from '../shared/dates';
 	let { booking, permissions = {}, when, onDetails, onSaved = () => {} }: { booking: StaffBooking; permissions?: StaffBookingPermissions; when?: string; onDetails: () => void; onSaved?: () => void } = $props();
@@ -58,8 +56,9 @@
 			{#if issue}<p role="alert">{issue}</p>{/if}<div class="row"><button class="btn sm" disabled={busy}>{busy ? 'Saving…' : action === 'share' ? 'Save sharing choices' : 'Confirm booking'}</button><button type="button" class="btn sm ghost" disabled={busy} onclick={() => dialog?.close()}>Go back</button></div>
 		</form>
 	{:else if action === 'cancel' || action === 'reschedule'}<ServerCustomerChangeForm bookingId={booking.id} kind={action} staffVisit={{ date: booking.visit_date, hour: booking.visit_hour }} onSaved={saved} onClose={() => dialog?.close()} />
-	{:else if action === 'complete'}{#key booking.id}<ServerCompletionForm bookingId={booking.id} initialPrice={(booking.total_centavos ?? 0) / 100} onSaved={saved} onClose={() => dialog?.close()} />{/key}
-	{:else if action === 'services'}<BookingServiceEditor bookingId={booking.id} fromStaff={true} />{/if}
+	<!-- These two forms load only when their dialog opens (keeps the staff page's first download small). -->
+	{:else if action === 'complete'}{#key booking.id}{#await import('./ServerCompletionForm.svelte') then { default: ServerCompletionForm }}<ServerCompletionForm bookingId={booking.id} initialPrice={(booking.total_centavos ?? 0) / 100} onSaved={saved} onClose={() => dialog?.close()} />{/await}{/key}
+	{:else if action === 'services'}{#await import('./BookingServiceEditor.svelte') then { default: BookingServiceEditor }}<BookingServiceEditor bookingId={booking.id} fromStaff={true} />{/await}{/if}
 </dialog>
 <style>
 .more{position:relative}.more summary{list-style:none;cursor:pointer}.more summary::-webkit-details-marker{display:none}.more-options{position:absolute;z-index:4;inset:calc(100% + .25rem) 0 auto auto;width:max-content;max-width:min(18rem,calc(100vw - 3rem));display:grid;gap:.25rem;padding:.35rem;border:1px solid var(--line);border-radius:8px;background:var(--panel);box-shadow:0 4px 12px var(--card-shadow)}.more-options :global(.btn){justify-content:flex-start;width:100%;border-radius:4px;clip-path:none;font-style:normal}.cancel-option{margin-top:.5rem}.booking-dialog{width:min(650px,calc(100% - 24px));max-height:90dvh;padding:1rem;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text)}.booking-dialog::backdrop{background:#0009}.check{display:flex;gap:.5rem;align-items:start}.check input{width:auto}@media(max-width:520px){.more-options{position:static;margin-top:.25rem}}

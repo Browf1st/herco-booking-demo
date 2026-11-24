@@ -33,6 +33,8 @@ Customers and staff create a verified account and sign in so bookings, points an
 - The theme switch is removed from the footer. Signed-out visitors get a small theme button (sun/moon) in the header instead.
 - Closes on Esc, outside click or choosing an item; works with the keyboard; on phones it opens full width under the header. Light and dark themes both blended.
 - Both builds get it.
+- Revision (owner 2026-11-24): customers and signed-out visitors use the same menu structure as staff, at the right of the header. Signed out, the button reads **SIGN IN** with a chevron; its menu has Sign in, Create account and Theme (no separate theme button taking space on the left). Signed in, it reads **ACCOUNT**. Navigation tabs keep their positions and never wrap onto two lines (e.g. "HERCO Points" stays on one line).
+- Second batch (owner 2026-11-24): the SIGN IN button uses the site's font style (same display font, weight and capitals as ACCOUNT and the nav tabs).
 
 ## Screens
 - `/account`: sign up, verify code, sign in, reset password, social buttons, saved contact details, staff workspace link, sign out.

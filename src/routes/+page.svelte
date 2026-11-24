@@ -166,8 +166,8 @@
 
 <section class="section band">
 	<div class="wrap stack">
-		<p class="eyebrow">02 / How booking works</p>
-		<h2>No chat. No waiting.</h2>
+		<p class="eyebrow">02 / Simple steps</p>
+		<h2>How booking works</h2>
 		<ol class="cols">
 			{#each steps as [title, text], i}
 				<li class="stack">

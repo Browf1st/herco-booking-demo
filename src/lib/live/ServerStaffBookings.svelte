@@ -3,8 +3,6 @@
 import ActionIcon from '../shared/ActionIcon.svelte';
 import ServerAdminCalendar from './ServerAdminCalendar.svelte';
 import ServerStaffBookingCard from './ServerStaffBookingCard.svelte';
-import ServerBookingDetails from './ServerBookingDetails.svelte';
-import DetailsSheet from '../shared/DetailsSheet.svelte';
 import type { StaffBooking } from './server-booking-types';
 import { ScheduleChanged } from '../shared/schedule-changed';
 import type { DateAction, DayHourRow, DayInfo, Needs, ScheduleSettings } from '../shared/schedule-hours';
@@ -13,8 +11,8 @@ import type { DateAction, DayHourRow, DayInfo, Needs, ScheduleSettings } from '.
 	import ServerCustomerChangeForm from '#lib/live/ServerCustomerChangeForm.svelte';
 	import CoatingOptionSummary from './CoatingOptionSummary.svelte';
 	import type { CoatingOptions } from './booking-coating';
-	let { canComplete = false, canRequestIntake = false, canAdjustPrices = false }: {
-		canComplete?: boolean; canRequestIntake?: boolean; canAdjustPrices?: boolean;
+	let { canComplete = false, canRequestIntake = false, canAdjustPrices = false, actions, pages }: {
+		canComplete?: boolean; canRequestIntake?: boolean; canAdjustPrices?: boolean; actions?: string[]; pages?: string[];
 	} = $props();
 
 	type Booking = StaffBooking;
@@ -100,6 +98,13 @@ import type { DateAction, DayHourRow, DayInfo, Needs, ScheduleSettings } from '.
 		}
 	}
 
+	// "Reload" in the details popup: load the day again and show the fresh copy of the open booking.
+	async function reloadDetail() {
+		const id = detail?.id;
+		await load(true);
+		if (id) detail = day?.bookings.find((item) => item.id === id) ?? detail;
+	}
+
 	async function changeSaved(kind: 'cancel' | 'reschedule') {
 		await load();
 		if (access === 'ready') notice = kind === 'cancel' ? 'Booking cancelled.' : 'Booking rescheduled.';
@@ -171,7 +176,7 @@ import type { DateAction, DayHourRow, DayInfo, Needs, ScheduleSettings } from '.
 
 <svelte:head><title>Shop admin | HERCO Detailing Garage</title></svelte:head>
 <section class="section wrap stack booking-workspace staff-parity">
-	{#if access === 'loading'}<p role="status">Loading the booking scheduleâ€¦</p>
+	{#if access === 'loading'}<p role="status">Loading the booking schedule…</p>
 	{:else if access === 'signedOut'}<p>Sign in with your staff account.</p><a class="btn" href={resolve('/account')}>Sign in</a>
 	{:else if access === 'denied'}<p role="alert">Your account does not have access to this booking workspace.</p>
 	{:else if access === 'unavailable'}<p role="alert">{message}</p><button class="btn sm ghost" onclick={() => load()}>Try again</button>
@@ -180,17 +185,21 @@ import type { DateAction, DayHourRow, DayInfo, Needs, ScheduleSettings } from '.
 			<div class="row day-controls"><button class="btn sm ghost" onclick={openAvailability}><ActionIcon name="calendar" />Manage availability</button><div class="row" role="group" aria-label="Select booking day"><button class="btn sm ghost" aria-label="Previous day" disabled={busy} onclick={() => pickDate(addDays(date, -1))}><ActionIcon name="left" /></button><button class="btn sm ghost" aria-label="Next day" disabled={busy} onclick={() => pickDate(addDays(date, 1))}><ActionIcon name="right" /></button></div></div></div>
 		<div class="tiles"><div class="card pending-tile"><b class="display">{dayCount('pending')}</b><span class="small">Pending</span></div><div class="card booked-tile"><b class="display">{dayCount('confirmed')}</b><span class="small">Booked</span></div><div class="card completed-tile"><b class="display">{dayCount('done')}</b><span class="small">Completed</span></div></div>
 		<div class="booking-layout"><div class="stack booking-column"><ServerAdminCalendar value={date} onpick={pickDate} /></div><section class="stack booking-column" aria-labelledby="time-slots-heading">
-			<div class="card row between schedule-heading"><div><h3 id="time-slots-heading">Time slots</h3><p class="small muted">Philippine time</p></div><details class="slot-filter" bind:this={filterMenu}><summary><ActionIcon name="adjust" />{filters.find(item => item.id === filter)?.label}<span class="slot-filter-count">{filters.find(item => item.id === filter)?.count}</span><span aria-hidden="true">â–¾</span></summary><div class="filter-options">{#each filters as item}<button type="button" aria-pressed={filter === item.id} onclick={() => { filter = item.id; if (filterMenu) filterMenu.open = false; }}>{item.label}<span>{item.count}</span></button>{/each}</div></details></div>
+			<div class="card row between schedule-heading"><div><h3 id="time-slots-heading">Time slots</h3><p class="small muted">Philippine time</p></div><details class="slot-filter" bind:this={filterMenu}><summary><ActionIcon name="adjust" />{filters.find(item => item.id === filter)?.label}<span aria-hidden="true">▾</span></summary><div class="filter-options">{#each filters as item}<button type="button" aria-pressed={filter === item.id} onclick={() => { filter = item.id; if (filterMenu) filterMenu.open = false; }}>{item.label}<span>{item.count}</span></button>{/each}</div></details></div>
 			<label>Booking source<select bind:value={source}><option value="all">All sources</option><option value="online">Online</option><option value="walk-in">Walk-in</option></select></label>
 			{#if source !== 'online'}{#each day.bookings.filter(booking => booking.visit_hour === null && (filter === 'all' || booking.status === filter)) as booking (booking.id)}<article class="card slot-card"><ServerStaffBookingCard {booking} permissions={{ ...day, canComplete, canRequestIntake, canAdjustPrices }} onSaved={() => load()} onDetails={() => detail = booking} /></article>{/each}{/if}
 			{#each outsideHours as booking (booking.id)}<article class="card slot-card stack" data-slot-status={booking.status}><span class="badge">Outside hours</span><ServerStaffBookingCard {booking} permissions={{ ...day, canComplete, canRequestIntake, canAdjustPrices }} onSaved={() => load()} onDetails={() => detail = booking} /></article>{/each}
 			<ol class="stack slot-list">{#each slots as slot (date + slot.hour)}{@const list = bookingsAt(slot.hour)}<li class="card slot-card stack" data-slot-status={list[0]?.status ?? slot.status}>
-				{#each list as booking (booking.id)}<ServerStaffBookingCard {booking} when={hourLabel(slot.hour) + (list.length > 1 ? ' Â· ' + list.length + ' booked' : '')} permissions={{ ...day, canComplete, canRequestIntake, canAdjustPrices }} onSaved={() => load()} onDetails={() => detail = booking} />
+				{#each list as booking (booking.id)}<ServerStaffBookingCard {booking} when={hourLabel(slot.hour) + (list.length > 1 ? ' · ' + list.length + ' booked' : '')} permissions={{ ...day, canComplete, canRequestIntake, canAdjustPrices }} onSaved={() => load()} onDetails={() => detail = booking} />
 				{:else}<div class="slot-summary"><time>{hourLabel(slot.hour)}</time><strong>{slotLabels[slot.status]}</strong></div>{/each}
 			</li>{:else}<li class="card">No time slots match these filters.</li>{/each}</ol>
 		</section></div>
-		<DetailsSheet title={detail ? 'Details for ' + detail.customer_name : 'Booking details'} open={Boolean(detail)} onclose={() => detail = undefined}>{#if detail}<ServerBookingDetails booking={detail} />{/if}</DetailsSheet>
-		<dialog class="availability-dialog" bind:this={availabilityDialog} aria-labelledby="availability-title"><header class="availability-header"><span class="availability-icon"><ActionIcon name="calendar" /></span><div><h3 id="availability-title">Manage availability</h3><p class="small muted">{fmtDate(date)} Â· Philippine time</p></div><button class="availability-button" onclick={() => availabilityDialog?.close()}>Close</button></header><div class="availability-body">{#if Panel && dayInfo}<Panel {date} day={dayInfo} {loadSettings} {saveSettings} act={changeDate} />{/if}</div></dialog>
+		{#if detail}
+			<!-- Same "More details" design as Reports, with the booking actions (loaded only when opened).
+			     Without loaded grants it shows the details with no action buttons; the server checks every action anyway. -->
+			{#await import('./ServerBookingPopup.svelte') then { default: Popup }}<Popup booking={detail} grants={actions ?? []} pages={pages ?? []} {canComplete} onclose={() => detail = undefined} onsaved={() => load(true)} onreload={reloadDetail} />{/await}
+		{/if}
+		<dialog class="availability-dialog" bind:this={availabilityDialog} aria-labelledby="availability-title"><header class="availability-header"><span class="availability-icon"><ActionIcon name="calendar" /></span><div><h3 id="availability-title">Manage availability</h3><p class="small muted">{fmtDate(date)} · Philippine time</p></div><button class="availability-button" onclick={() => availabilityDialog?.close()}>Close</button></header><div class="availability-body">{#if Panel && dayInfo}<Panel {date} day={dayInfo} {loadSettings} {saveSettings} act={changeDate} />{/if}</div></dialog>
 	{/if}
 	{#if message && access !== 'unavailable'}<p role="alert">{message}</p>{/if}{#if notice}<p role="status">{notice}</p>{/if}
 </section>
@@ -248,7 +257,6 @@ import type { DateAction, DayHourRow, DayInfo, Needs, ScheduleSettings } from '.
 	:global(.staff-parity .slot-filter summary::-webkit-details-marker) { display: none; }
 	:global(.staff-parity .slot-filter[open] summary), :global(.staff-parity .slot-filter summary:hover) { border-color: var(--accent); }
 	:global(.staff-parity .slot-filter-chevron) { width: .44rem; height: .44rem; margin-inline: .1rem; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: translateY(-2px) rotate(45deg); }
-	:global(.staff-parity .slot-filter summary .slot-filter-count) { margin-inline-start: auto; }
 	:global(.staff-parity .slot-filter[open] .slot-filter-chevron) { transform: translateY(2px) rotate(225deg); }
 	:global(.staff-parity .slot-filter-options) { display: grid; position: absolute; inset: calc(100% + .3rem) auto auto 0; z-index: 2; min-width: max(100%, 9rem); gap: .15rem; padding: .25rem; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); box-shadow: 0 4px 14px var(--card-shadow); }
 	:global(.staff-parity .slot-filter-options button) { display: grid; grid-template-columns: 1em minmax(0, 1fr) auto; align-items: center; gap: .4rem; border: 0; border-radius: 4px; background: transparent; padding: .35rem .45rem; color: var(--text); font: inherit; text-align: start; cursor: pointer; }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { visibleActions } from '../src/lib/live/staff-access-actions.ts';
+import { groupGrantedActions, visibleActions } from '../src/lib/live/staff-access-actions.ts';
 import { rankMap, sortMembers } from '../src/lib/live/points-ranking.ts';
 import { pageCount } from '../src/lib/shared/paging.ts';
 
@@ -35,6 +35,23 @@ test('actions follow the ticked pages', () => {
 	assert.deepEqual(visibleActions(catalog, []), []);
 	assert.deepEqual(visibleActions([], ['Bookings']), []);
 	assert.deepEqual(visibleActions(catalog, ['Unknown page']), []);
+});
+
+// Owner 2026-11-24: the Access preview groups actions by page.
+test('preview actions are grouped by page, each action once, unknown keys under Other', () => {
+	assert.deepEqual(groupGrantedActions(catalog, ['completeBooking', 'viewIncome', 'confirmBooking']), [
+		{ page: 'Booking history', labels: ['Complete bookings and attach photos'] },
+		{ page: 'Bookings', labels: ['Confirm bookings'] },
+		{ page: 'Reports', labels: ['View completed service value and final prices'] }
+	]);
+	assert.deepEqual(groupGrantedActions(catalog, ['mystery']), [{ page: 'Other', labels: ['mystery'] }]);
+	assert.deepEqual(groupGrantedActions(catalog, []), []);
+});
+
+test('the access preview card is used by the Staff Access page', async () => {
+	const { readFile } = await import('node:fs/promises');
+	const page = await readFile(new URL('../src/routes/staff-access/+page.svelte', import.meta.url), 'utf8');
+	assert.match(page, /<StaffAccessPreview /);
 });
 
 // Owner item 11 (2026-11-23): the # number is the real points rank in every sort and search.

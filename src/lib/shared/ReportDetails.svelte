@@ -18,7 +18,8 @@
 	import MoreIcons from './MoreIcons.svelte';
 	import StatusBadge from './StatusBadge.svelte';
 
-	let { detail, onclose, actions }: { detail: Detail; onclose: () => void; actions?: Snippet } = $props();
+	// `services` (optional) replaces the plain service list with one staff can edit; `changes` adds the Changes list.
+	let { detail, onclose, actions, services, changes }: { detail: Detail; onclose: () => void; actions?: Snippet; services?: Snippet; changes?: Snippet } = $props();
 	let dialog = $state<HTMLDialogElement>();
 	$effect(() => { if (dialog && !dialog.open) dialog.showModal(); });
 	const tel = (phone: string) => 'tel:' + phone.replace(/[^\d+]/g, '');
@@ -34,14 +35,16 @@
 
 		<section aria-label="Services ordered">
 			<h4>Services ordered{#if detail.total}<span class="total">Total: {detail.total}</span>{/if}</h4>
-			{#if detail.lines.length}
+			{#if services}{@render services()}
+			{:else if detail.lines.length}
 				<ul>{#each detail.lines as line}
 					<li><span class="line"><span>{line.label}</span>{#if line.price}<b>{line.price}</b>{/if}</span>
 						{#if line.parts?.length}<ul class="parts">{#each line.parts as part}<li class="line"><span>{part.label}</span>{#if part.price}<span>{part.price}</span>{/if}</li>{/each}</ul>{/if}</li>
 				{/each}</ul>
 			{:else}<p class="muted small">No services listed.</p>{/if}
-			{#if detail.total}<p class="value"><span>Estimated service value</span><b>{detail.total}</b></p>{/if}
+			{#if detail.total}<p class="value"><span>Price</span><b>{detail.total}</b></p>{/if}
 		</section>
+		{#if changes}{@render changes()}{/if}
 
 		<section aria-label="Customer and motorcycle">
 			<h4>Customer &amp; motorcycle</h4>

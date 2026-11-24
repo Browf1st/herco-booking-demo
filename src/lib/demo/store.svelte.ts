@@ -17,7 +17,7 @@ export const MAX_COMPLETION_PHOTOS = 3;
 export type ChangeRequest = { kind: 'Cancel' | 'Reschedule'; reason: string; date?: string; slot?: string; state: 'Pending' | 'Approved' | 'Declined'; at: string; reviewedAt?: string };
 type DemoData = { bookings: Booking[]; blocked: string[]; opened?: string[]; blockedSlots?: Record<string, string[]>; hours?: ScheduleSettings; dateHours?: Record<string, { openHour: number; closeHour: number }>; scenarioVersion: number; pricing?: Pricing; events?: ActivityEvent[] };
 type ServiceSnapshot = { selection: Selection; estimate?: ReturnType<typeof quote> };
-type ServiceChange = { id: string; at: string; actor: string; before: ServiceSnapshot; after: ServiceSnapshot };
+export type ServiceChange = { id: string; at: string; actor: string; before: ServiceSnapshot; after: ServiceSnapshot; reason?: string };
 export type Booking = {
  originalServices?: ServiceSnapshot;
  serviceChanges?: ServiceChange[];
@@ -235,7 +235,7 @@ function active(booking: Booking) {
  if (booking.status !== 'pending' && booking.status !== 'confirmed') throw Error('This booking is already closed.');
 }
 
-export function editCoating(booking: Booking, input: Selection, actor: 'Customer' | 'Demo admin', adjustments: Record<string, number | undefined> = {}) {
+export function editCoating(booking: Booking, input: Selection, actor: 'Customer' | 'Demo admin', adjustments: Record<string, number | undefined> = {}, reason = '') {
  active(booking);
  if (actor === 'Customer' && (booking.status !== 'pending' || booking.requests?.some(r => r.state === 'Pending'))) throw Error('Services can only be edited while the booking is pending and has no request awaiting review.');
  const before = { selection: coatingOf(booking), estimate: $state.snapshot(booking.estimate) };
@@ -252,12 +252,13 @@ export function editCoating(booking: Booking, input: Selection, actor: 'Customer
  }
  const after = { selection: input, estimate };
  const changedBy = actor === 'Customer' ? actor : staffActor();
- booking.serviceChanges = [...(booking.serviceChanges ?? []), { id: crypto.randomUUID(), at: new Date().toISOString(), actor: changedBy, before, after }];
+ booking.serviceChanges = [...(booking.serviceChanges ?? []), { id: crypto.randomUUID(), at: new Date().toISOString(), actor: changedBy, before, after, ...(reason.trim() && { reason: reason.trim() }) }];
  booking.selection = input;
  booking.serviceId = input.ceramic ? 'ceramic' : 'wheel-colour';
  booking.estimate = estimate;
  const priceDetail = adjustedLines.map(line => line.label + ' · ₱' + adjustments[line.label]!.toFixed(2)).join(' · ');
- audit('Updated services' + (before.estimate ? ' · ₱' + before.estimate.total + ' → ₱' + estimate.total : ''), booking.id, changedBy, 'Booking', priceDetail || undefined);
+ const detail = [priceDetail, reason.trim() && 'Reason: ' + reason.trim()].filter(Boolean).join(' · ');
+ audit('Updated services' + (before.estimate ? ' · ₱' + before.estimate.total + ' → ₱' + estimate.total : ''), booking.id, changedBy, 'Booking', detail || undefined);
 }
 
 export function estimateServiceEdit(booking: Booking, input: Selection) {

@@ -7,13 +7,15 @@
  import PageHeader from '../shared/PageHeader.svelte';
  import { pageCount } from '../shared/paging';
  import RecordFilterBar from '../shared/RecordFilterBar.svelte';
- import RecordsEmpty from '../shared/RecordsEmpty.svelte';
  import ReportDetails, { type Detail } from '../shared/ReportDetails.svelte';
  import ReportSummary from '../shared/ReportSummary.svelte';
  import ReportTable from '../shared/ReportTable.svelte';
  import { rangeIssue, servicesLine, type RecordFilters } from '../shared/records-ui';
  import { manilaStamp, reportPrice, sortReportRows, type ReportRow, type ReportSort } from '../shared/report-ui';
+ import DemoBookingChanges from './DemoBookingChanges.svelte';
  import DemoReportActions from './DemoReportActions.svelte';
+ import DemoServiceEdits, { editGrants } from './DemoServiceEdits.svelte';
+ import { editRights } from '../shared/booking-changes';
  import { canPerform } from './staffAccess.svelte.ts';
  import { db, type Booking } from './store.svelte';
  let { showIncome = false }: { showIncome?: boolean } = $props();
@@ -72,11 +74,7 @@
  const cancelled = $derived(scheduled.filter(({ booking }) => booking.status === 'cancelled'));
  const pending = $derived(scheduled.filter(({ booking }) => booking.status === 'pending').length);
  const booked = $derived(scheduled.filter(({ booking }) => booking.status === 'confirmed').length);
- const missingFinalPrices = $derived(completed.filter(({ booking }) => booking.finalPrice === undefined).length);
  const income = $derived(completed.reduce((cents, { booking }) => cents + Math.round((booking.finalPrice ?? 0) * 100), 0) / 100);
- const notes = $derived(['Booking counts use the scheduled date. Completed totals use the completion date, or the scheduled date when an older record has no completion timestamp.',
-  ...(showIncome && missingFinalPrices ? [`Completed bookings missing a final price are excluded from income (${missingFinalPrices}).`] : [])]);
- const refs = (list: { booking: Booking }[]) => list.map(({ booking }) => booking.id);
  const bookLinks = [{ label: 'Walk-in', href: resolve('/book?manual=1&walk-in=1') }, { label: 'Online', href: resolve('/book?manual=1') }];
 
  const opened = $derived(db.bookings.find(item => item.id === detailId));
@@ -89,32 +87,31 @@
   visit: fmtDate(opened.date) + ' · ' + fmtSlot(opened.slot), booked: manilaStamp(opened.createdAt ?? opened.walkIn?.at),
   approved: manilaStamp(opened.approvedAt), completed: manilaStamp(opened.status === 'done' ? opened.completedAt : undefined)
  });
+ const canEditLines = $derived(Boolean(opened?.estimate?.lines?.length && (editRights(opened.status, editGrants()).price || editRights(opened.status, editGrants()).services)));
  function resetFilters() {
   recordPage = 1;
   filters = defaults();
  }
 </script>
 
-<PageHeader title="Booking reports" badge="Workshop view" subtitle="Review booking records and completed service value." timezone>
+<PageHeader title="Booking reports" subtitle="Review booking records and completed service value." timezone>
  {#if canPerform('createBooking')}<BookMenu links={bookLinks} />{/if}
 </PageHeader>
 <div class="stack">
- <div class="card"><RecordFilterBar bind:filters {periods} onchange={() => recordPage = 1} onreset={resetFilters} /></div>
+ <div class="card"><RecordFilterBar bind:filters {periods} showSearch={false} onchange={() => recordPage = 1} onreset={resetFilters} /></div>
 
 {#if validRange}
- <ReportSummary income={showIncome ? money(income) : null} {notes} counts={{ total: scheduled.length, completed: completed.length, pending, booked, walkIns: walkIns.length, cancelled: cancelled.length }}
-  refs={{ completed: refs(completed), walkIns: refs(walkIns), cancelled: refs(cancelled) }} />
-
- {#if rows.length}
-  <ReportTable rows={listRows} total={rows.length} page={currentPage} {pages} showPrice={showIncome} selectedId={detailId} bind:sort sortAll onDetails={(id) => detailId = id} onpage={(next) => recordPage = next} />
- {:else}
-  <RecordsEmpty title="No bookings found" text="Try another date, status or search to find your bookings." action="Reset filters" onaction={resetFilters} />
- {/if}
+ <ReportSummary income={showIncome ? money(income) : null} counts={{ total: scheduled.length, completed: completed.length, pending, booked, walkIns: walkIns.length, cancelled: cancelled.length }} />
+ <ReportTable rows={listRows} total={rows.length} page={currentPage} {pages} showPrice={showIncome} selectedId={detailId} bind:sort bind:search={filters.search} sortAll
+  onsearch={() => recordPage = 1} onreset={resetFilters} onDetails={(id) => detailId = id} onpage={(next) => recordPage = next} />
 {/if}
 </div>
 
 {#if detail && opened}
- <ReportDetails {detail} onclose={() => detailId = ''}>
+ <ReportDetails {detail} onclose={() => detailId = ''} services={canEditLines ? lineEditor : undefined} changes={changeList}>
   {#snippet actions()}<DemoReportActions booking={opened} ondone={() => detailId = ''} />{/snippet}
  </ReportDetails>
 {/if}
+
+{#snippet lineEditor()}{#if opened}<DemoServiceEdits booking={opened} showMoney={showIncome} />{/if}{/snippet}
+{#snippet changeList()}{#if opened}<DemoBookingChanges booking={opened} showMoney={showIncome} />{/if}{/snippet}

@@ -12,6 +12,7 @@
  import type { CoatingOptions } from './booking-coating';
 
  import { displayEstimate, displayServicePrice, type PricedService } from './service-estimate';
+ import { bookingWasUpdated } from '../shared/booking-changes';
  import { bookingGroupEmpty, bookingGroupLabels, bookingGroupOrder, groupBookings, initialGroup, type BookingGroup } from './booking-groups';
  type Service = PricedService & { code: string; label: string;
   promotion?: { label: string; base_price_centavos: number } | null };
@@ -27,6 +28,7 @@
   original_total_centavos: number;
   current_services: Service[] | null;
   current_total_centavos: number | null;
+  shop_priced?: boolean;
   coating_options?: CoatingOptions;
   created_at: string;
  };
@@ -208,6 +210,7 @@
    {@const requests = changes.filter(change => change.booking_id === booking.id)}
    {@const pending = requests.find(change => change.state === 'pending')}
    {@const services = booking.current_services ?? booking.original_services}
+   {@const updated = bookingWasUpdated({ originalTotal: booking.original_total_centavos, currentTotal: booking.current_total_centavos, originalCodes: booking.original_services.map(service => service.code), currentCodes: booking.current_services?.map(service => service.code) })}
    <article class="card stack booking-card" data-status={booking.status} class:just-submitted={booking.id === submittedId}>
     <div class="card-top">
      <div class="when">
@@ -217,7 +220,8 @@
      <span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{labels[booking.status]}</span>
     </div>
     <p class="what"><strong>{services.map(service => service.label).join(' · ')}</strong> · {booking.bike}</p>
-    <p class="small muted">{booking.reference_no ? 'HG-' + booking.reference_no + ' · ' : ''}Estimated <strong>{displayEstimate(services, booking.current_total_centavos ?? booking.original_total_centavos)}</strong></p>
+    <p class="small muted">{booking.reference_no ? 'HG-' + booking.reference_no + ' · ' : ''}Estimated {#if updated}<s><span class="sr-only">Original total </span>{displayEstimate(booking.original_services, booking.original_total_centavos)}</s> {/if}<strong>{displayEstimate(services, booking.current_total_centavos ?? booking.original_total_centavos)}</strong></p>
+    {#if updated}<p class="small updated-note">Updated by the shop after inspection</p>{/if}
     {#if booking.visit_hour === null && (booking.status === 'pending' || booking.status === 'confirmed')}<p class="small muted">Ask the shop if you need to change or cancel this walk-in.</p>{/if}
     {#if pending}
      <div class="request-note">
@@ -232,7 +236,7 @@
      </div>
     {/if}
     <details ontoggle={event=>{if(event.currentTarget.open)opened=new Set([...opened,booking.id]);}}>
-     <summary>{booking.status === 'pending' && upcoming(booking) ? 'View details or edit services' : 'View details'}</summary>
+     <summary>{booking.status === 'pending' && upcoming(booking) && !booking.shop_priced ? 'View details or edit services' : 'View details'}</summary>
      <div class="stack">
       <p>Reference <strong>{booking.id}</strong></p>
       <div class="cols" aria-label="Booking dates in Philippine time"><p><ActionIcon name="clock"/> <strong>Booked on</strong><br/>{stamp.format(new Date(booking.created_at))}</p><p><ActionIcon name="check"/> <strong>Approved</strong><br/>{booking.approved_at?stamp.format(new Date(booking.approved_at)):'Awaiting approval'}</p><p><ActionIcon name="finish"/> <strong>Completed</strong><br/>{booking.completed_at?stamp.format(new Date(booking.completed_at)):'Not completed'}</p></div>
@@ -247,7 +251,7 @@
         </li>
        {/each}
       </ul>
-      {#if opened.has(booking.id)}<BookingServiceEditor bookingId={booking.id} fromStaff={false} embedded/><ServerSharedBookingDetails bookingId={booking.id}/>{/if}
+      {#if opened.has(booking.id)}<BookingServiceEditor bookingId={booking.id} fromStaff={false} shopPriced={booking.shop_priced && (booking.status === 'pending' || booking.status === 'confirmed')} embedded/><ServerSharedBookingDetails bookingId={booking.id}/>{/if}
       <ServerBookingActivity bookingId={booking.id} />
       {#if requests.length}
        <h3>Change requests</h3>
@@ -300,6 +304,8 @@
  .request-note p { margin: 0; }
  .actions { flex-wrap: wrap; }
  .request-warning { padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); }
+ .updated-note { margin: 0; padding: 6px 10px; border: 1px solid var(--info-line); border-radius: 8px; background: var(--panel-2); color: var(--text); font-weight: 650; }
+ .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
  summary { cursor: pointer; font-weight: 650; }
  .submitted-notice { padding: .75rem 1rem; border: 1px solid var(--accent); border-radius: 8px; }
  .just-submitted { outline: 2px solid var(--accent); outline-offset: 2px; }

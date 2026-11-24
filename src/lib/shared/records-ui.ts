@@ -12,8 +12,8 @@ export type Period = { value: string; label: string };
 export type RecordFilters = { preset: string; from: string; through: string; exact: string; search: string; status: string; source: string };
 
 /** How many of the filters hidden behind "Filters (n)" are changed. The period chips are always visible, so they are not counted. */
-export function activeFilterCount(filters: Pick<RecordFilters, 'search' | 'status' | 'source'>, includeStatus = true): number {
-	return (filters.search.trim() ? 1 : 0) + (includeStatus && filters.status !== 'all' ? 1 : 0) + (filters.source !== 'all' ? 1 : 0);
+export function activeFilterCount(filters: Pick<RecordFilters, 'search' | 'status' | 'source'>, includeStatus = true, includeSearch = true): number {
+	return (includeSearch && filters.search.trim() ? 1 : 0) + (includeStatus && filters.status !== 'all' ? 1 : 0) + (filters.source !== 'all' ? 1 : 0);
 }
 
 /** Plain-words problem with the chosen dates, or '' when the dates are fine. */

@@ -1,5 +1,5 @@
 // Checks the JSON body of POST /api/staff/records. Returns the database arguments, or null when the body is not valid.
-export const recordSorts = ['date', 'price', 'status'] as const;
+export const recordSorts = ['date', 'date_asc', 'price', 'price_asc', 'status'] as const;
 export type RecordSort = (typeof recordSorts)[number];
 
 const dateText = /^\d{4}-\d{2}-\d{2}$/;

@@ -14,7 +14,11 @@
 	type Change = { revision: number; recorded_at: string; before_services: Line[]; after_services: Line[] };
 	type Services = { original: Line[]; current: Line[]; totalCentavos: number; revision: number;
 		date: string; canEdit: boolean; changes: Change[];bike:string;options:CoatingOptions };
-	let { bookingId, fromStaff,embedded=false }: { bookingId: string; fromStaff: boolean;embedded?:boolean } = $props();
+	let { bookingId, fromStaff,embedded=false,shopPriced=false }: { bookingId: string; fromStaff: boolean;embedded?:boolean;shopPriced?:boolean } = $props();
+	// Once staff changed a price, the customer can no longer edit services (the server enforces it too).
+	const shopMessage = 'The shop updated this booking after inspection. Contact the shop to change services.';
+	let shopLocked = $state(false);
+	const customerLocked = $derived(!fromStaff && (shopPriced || shopLocked));
 	const stamp = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' });
 	let details = $state<Services>();
 	let catalog = $state<CatalogItem[]>([]);
@@ -79,7 +83,11 @@
 				method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
 				body: JSON.stringify({ ...payload, requestId: retry.id })
 			});
-			if (!response.ok) throw Error(await errorMessage(response));
+			if (!response.ok) {
+				const failure = await response.json().catch(() => null);
+				if (response.status === 409 && failure?.code === 'shop_priced') { shopLocked = true; return; }
+				throw Error(typeof failure?.message === 'string' ? failure.message : 'Could not load booking services.');
+			}
 			show(await response.json());
 			retry = undefined;
 			notice = 'Booking services saved.';
@@ -101,7 +109,8 @@
 	{:else if details}
 		<p>Visit · {fmtDate(details.date)}</p>
 		<p>Current estimate <strong>{displayEstimate(details.current, details.totalCentavos)}</strong></p>
-		{#if details.canEdit}
+		{#if customerLocked}<p role="status">{shopMessage}</p>{/if}
+		{#if details.canEdit && !customerLocked}
 			<form class="card stack" onsubmit={save}>
 				<fieldset class="stack" disabled={busy}>
 					<legend>Choose services</legend>

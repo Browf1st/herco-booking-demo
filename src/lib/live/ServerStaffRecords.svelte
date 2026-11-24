@@ -8,7 +8,8 @@
 	import Pager from '../shared/Pager.svelte';
 	import RecordFilterBar from '../shared/RecordFilterBar.svelte';
 	import RecordsEmpty from '../shared/RecordsEmpty.svelte';
-	import ReportDetails, { type Detail } from '../shared/ReportDetails.svelte';
+	import ReportDetails from '../shared/ReportDetails.svelte';
+	import { detailOf } from './booking-detail';
 	import ReportSummary from '../shared/ReportSummary.svelte';
 	import ReportTable from '../shared/ReportTable.svelte';
 	import StatusTiles from '../shared/StatusTiles.svelte';
@@ -16,7 +17,6 @@
 	import { manilaStamp, reportPrice, type ReportRow, type ReportSort } from '../shared/report-ui';
 	import { parseWorkspaceAccess, type WorkspaceAccess } from '../shared/workspace-navigation';
 	import ServerBookingDetails from './ServerBookingDetails.svelte';
-	import ServerReportActions from './ServerReportActions.svelte';
 	import ServerStaffBookingCard from './ServerStaffBookingCard.svelte';
 	import type { StaffBooking } from './server-booking-types';
 	let { report = false }: { report?: boolean } = $props();
@@ -35,7 +35,7 @@
 	const refOf = (booking: StaffBooking) => booking.reference ?? booking.id;
 	function toRow(booking: StaffBooking, showMoney: boolean): ReportRow {
 		// The booking-time estimate comes from the server. It is null when unknown or without the income permission.
-		const estimate = booking.original_total_centavos ?? undefined;
+		const estimate = booking.total_centavos ?? undefined; // current total: edits show here and in price sorting
 		const price = reportPrice(booking.status, booking.final_price_centavos == null ? null : money(booking.final_price_centavos), estimate === undefined ? null : money(estimate));
 		return {
 			id: booking.id, ref: refOf(booking), name: booking.customer_name, bike: booking.bike, walkIn: isWalkIn(booking), phone: booking.customer_phone,
@@ -46,29 +46,8 @@
 		};
 	}
 	const rows = $derived<ReportRow[]>((result?.records ?? []).map((booking) => toRow(booking, Boolean(result?.canViewIncome))));
-	const notes = $derived(['Booking counts use the scheduled date. Completed service value uses the Philippine completion date.',
-		...(result?.metrics.completedWithoutValue ? [`${result.metrics.completedWithoutValue} completed services have no final price and are excluded from income.`] : [])]);
-	// Booking references are listed only when the whole period fits on this page and the list matches the count.
-	const refsFor = (list: StaffBooking[], count: number) => result && result.pages === 1 && list.length === count ? list.map(refOf) : undefined;
-	const refs = $derived({
-		completed: refsFor((result?.records ?? []).filter((booking) => booking.status === 'done'), result?.metrics.completed ?? -1),
-		walkIns: refsFor((result?.records ?? []).filter(isWalkIn), result?.metrics.walkIns ?? -1),
-		cancelled: refsFor((result?.records ?? []).filter((booking) => booking.status === 'cancelled'), result?.metrics.cancelled ?? -1)
-	});
 	const canBook = $derived(Boolean(access?.pages.includes('Bookings') && access.actions.includes('createBooking')));
 	const bookLinks = [{ label: 'Walk-in', href: resolve('/manual-booking?walk-in=1') }, { label: 'Online', href: resolve('/manual-booking') }];
-	function detailOf(booking: StaffBooking, showMoney: boolean): Detail {
-	return {
-		name: booking.customer_name, ref: refOf(booking), status: booking.status, walkIn: isWalkIn(booking), bike: booking.plate ? booking.bike + ' · Plate ' + booking.plate : booking.bike,
-		lines: booking.current_services?.length
-			? booking.current_services.map((line) => ({ label: line.label, price: showMoney ? money(line.price_centavos) : undefined, parts: line.details?.map((part) => ({ label: part.label, price: showMoney ? money(part.price_centavos) : undefined })) }))
-			: booking.services.map((label) => ({ label })),
-		total: showMoney && booking.total_centavos != null ? money(booking.total_centavos) : undefined,
-		phone: booking.customer_phone || undefined, email: booking.customer_email,
-		visit: fmtDate(booking.visit_date) + ' · ' + visitTime(booking), booked: manilaStamp(booking.created_at),
-		approved: manilaStamp(booking.approved_at), completed: manilaStamp(booking.completed_at)
-	};
-	}
 	const popup = $derived(detail ? detailOf(detail, Boolean(result?.canViewIncome)) : undefined);
 	function range() {
 		const { preset, from, through, exact } = filters;
@@ -95,26 +74,32 @@
 		} catch { access = null; }
 	}
 	function reset() { filters = defaults(); void load(); }
-	function savedAction() { detail = undefined; void load(page); }
-	onMount(() => { void load(); if (report) void loadAccess(); });
+	let changeVersion = $state(0);
+	async function reloadDetail() {
+		const id = detail?.id;
+		await load(page);
+		if (id) detail = result?.records.find((item) => item.id === id) ?? detail;
+		changeVersion++;
+	}
+	onMount(() => { void load(); void loadAccess(); });
 </script>
 <div class="stack records">
 	{#if report}
-		<PageHeader title="Booking reports" badge="Workshop view" subtitle="Review booking records and completed service value." timezone>{#if canBook}<BookMenu links={bookLinks} />{/if}</PageHeader>
+		<PageHeader title="Booking reports" subtitle="Review booking records and completed service value." timezone>{#if canBook}<BookMenu links={bookLinks} />{/if}</PageHeader>
 	{:else}
 		<PageHeader title="Booking history" subtitle="Track bookings by appointment date." timezone />
 	{/if}
 	{#if !report && result && !issue && !rangeIssue(filters)}<StatusTiles selected={filters.status} onpick={(value) => { filters.status = value; void load(); }} tiles={[{ value: 'all', label: 'All bookings', count: result.metrics.total }, { value: 'pending', label: statusLabels.pending, count: result.metrics.pending }, { value: 'confirmed', label: statusLabels.confirmed, count: result.metrics.booked }, { value: 'done', label: statusLabels.done, count: result.metrics.completed }, { value: 'cancelled', label: statusLabels.cancelled, count: result.metrics.cancelled }]} />{/if}
-	<div class="card"><RecordFilterBar bind:filters periods={report ? periods.filter((item) => item.value !== 'date') : periods} showStatus={report} onchange={() => load()} onreset={reset} /></div>
+	<div class="card"><RecordFilterBar bind:filters periods={report ? periods.filter((item) => item.value !== 'date') : periods} showStatus={report} showSearch={!report} onchange={() => load()} onreset={reset} /></div>
 	{#if loading && !result}<p role="status">Loading booking records…</p>{/if}
 	{#if issue}<div role="alert" class="stack"><p class="error">{issue}</p><div><button class="btn sm ghost" onclick={() => load(page)}>Try again</button></div></div>{/if}
 	<!-- Never show the previous period's numbers next to filters they don't match (invalid dates or a failed load). -->
 	{#if result && !issue && !rangeIssue(filters)}
 		<div class="stack results" aria-busy={loading}>
-			{#if report}<ReportSummary income={result.canViewIncome ? money(result.metrics.completedValueCentavos) : null} {notes} {refs}
+			{#if report}<ReportSummary income={result.canViewIncome ? money(result.metrics.completedValueCentavos) : null}
 				counts={{ total: result.metrics.total, completed: result.metrics.completed, pending: result.metrics.pending, booked: result.metrics.booked, walkIns: result.metrics.walkIns, cancelled: result.metrics.cancelled }} />{/if}
-			{#if !result.records.length}<RecordsEmpty title="No bookings found" text="Try another date, status or search to find your bookings." action="Reset filters" onaction={reset} />
-			{:else if report}<ReportTable {rows} total={result.total} {page} pages={result.pages} showPrice={result.canViewIncome} selectedId={detail?.id ?? ''} busy={loading} sort={result.sort ?? sort} sortAll onsort={(next) => { sort = next; void load(); }} onDetails={(id) => detail = result?.records.find((item) => item.id === id)} onpage={(next) => load(next)} />
+			{#if report}<ReportTable {rows} total={result.total} {page} pages={result.pages} showPrice={result.canViewIncome} selectedId={detail?.id ?? ''} busy={loading} sort={result.sort ?? sort} sortAll bind:search={filters.search} onsort={(next) => { sort = next; void load(); }} onsearch={() => load()} onreset={reset} onDetails={(id) => detail = result?.records.find((item) => item.id === id)} onpage={(next) => load(next)} />
+			{:else if !result.records.length}<RecordsEmpty title="No bookings found" text="Try another date, status or search to find your bookings." action="Reset filters" onaction={reset} />
 			{:else}
 				<section class="stack" aria-labelledby="records-heading">
 					<div class="row between"><h2 id="records-heading">Bookings</h2><p class="small muted" role="status">{result.total} {result.total === 1 ? 'record' : 'records'} · Newest first</p></div>
@@ -125,11 +110,14 @@
 		</div>
 	{/if}
 	{#if report}
-		{#if popup && detail}<ReportDetails detail={popup} onclose={() => detail = undefined}>{#snippet actions()}{#if access}<ServerReportActions booking={detail!} actions={access.actions} onsaved={savedAction} />{/if}{/snippet}</ReportDetails>{/if}
+		<!-- Reports are read-only: booking actions and price/service edits live in the Bookings tab. -->
+		{#if popup && detail}<ReportDetails detail={popup} onclose={() => detail = undefined} changes={access ? changeList : undefined} />{/if}
 	{:else}
-		<DetailsSheet title={detail ? 'Details for ' + detail.customer_name : 'Booking details'} open={Boolean(detail)} onclose={() => detail = undefined}>{#if detail}<ServerBookingDetails booking={detail} />{/if}</DetailsSheet>
+		<DetailsSheet title={detail ? 'Details for ' + detail.customer_name : 'Booking details'} open={Boolean(detail)} onclose={() => detail = undefined}>{#if detail}<ServerBookingDetails booking={detail} actions={access?.actions} pages={access?.pages} onchanged={() => void load(page)} onreload={reloadDetail} />{/if}</DetailsSheet>
 	{/if}
 </div>
+
+{#snippet changeList()}{#if detail}{#await import('./ServerBookingChanges.svelte') then { default: Changes }}<Changes bookingId={detail.id} version={changeVersion} />{/await}{/if}{/snippet}
 
 <style>
 	.records { min-width: 0; }

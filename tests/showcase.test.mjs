@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import test from 'node:test';
 import { powderShowcase, showcaseCategories } from '../src/lib/shared/powder-showcase.ts';
-import { SHOWCASE_PAGE, countByCategory, filterPhotos, shownCount, stepIndex, swipeDelta } from '../src/lib/shared/showcase-gallery.ts';
+import { SHOWCASE_PAGE, countByCategory, distributeColumns, filterPhotos, shownCount, stepIndex, swipeDelta } from '../src/lib/shared/showcase-gallery.ts';
 import { showcaseHome, showcaseTotal } from '../src/lib/shared/showcase-home.ts';
 
 const staticFile = (path) => new URL('../static/' + path, import.meta.url);
@@ -89,4 +89,36 @@ test('the Home strip shows 4 real Showcase photos and the right total', () => {
 		assert.equal(item.title, photo.title);
 		assert.equal(item.alt, photo.alt);
 	}
+});
+
+// Fixed columns (owner 2026-11-24): "Show more" must not move photos already on screen.
+
+test('photos are dealt into fixed columns in reading order, each keeping its list number', () => {
+	const columns = distributeColumns(['a', 'b', 'c', 'd', 'e'], 3);
+	assert.deepEqual(columns.map((column) => column.map((entry) => entry.photo)), [['a', 'd'], ['b', 'e'], ['c']]);
+	assert.deepEqual(columns.map((column) => column.map((entry) => entry.index)), [[0, 3], [1, 4], [2]]);
+});
+
+test('showing more photos keeps every earlier photo in place and only adds at the bottom of each column', () => {
+	const all = powderShowcase.map((photo) => photo.slug);
+	for (const count of [2, 3, 4]) {
+		const before = distributeColumns(all.slice(0, SHOWCASE_PAGE), count);
+		const after = distributeColumns(all.slice(0, SHOWCASE_PAGE * 2), count);
+		before.forEach((column, i) => assert.deepEqual(after[i].slice(0, column.length), column, count + ' columns'));
+	}
+});
+
+test('a bad column count falls back to one column and an empty list gives empty columns', () => {
+	assert.equal(distributeColumns(['a', 'b'], 0).length, 1);
+	assert.equal(distributeColumns(['a', 'b'], Number.NaN).length, 1);
+	assert.deepEqual(distributeColumns([], 3), [[], [], []]);
+});
+
+// Owner 2026-11-24: every photo shows its name on the image (colour name when it has one), no caption under it.
+test('every showcase photo has a name label on the image and no caption underneath', async () => {
+	const { readFile } = await import('node:fs/promises');
+	const page = await readFile(new URL('../src/routes/preview/+page.svelte', import.meta.url), 'utf8');
+	assert.match(page, /<span class="label">\{photo\.finish \?\? photo\.title\}<\/span>/);
+	assert.doesNotMatch(page, /figcaption/);
+	assert.ok(powderShowcase.every((photo) => (photo.finish ?? photo.title).trim().length > 0));
 });

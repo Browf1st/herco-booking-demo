@@ -23,6 +23,7 @@ test('a search of only spaces does not count', () => {
 
 test('the status filter is left out when the screen has no status field', () => {
 	assert.equal(activeFilterCount({ ...none, status: 'done' }, false), 0);
+	assert.equal(activeFilterCount({ search: 'a', status: 'all', source: 'all' }, true, false), 0, 'search is not counted when it is not in the Filters menu');
 	assert.equal(activeFilterCount({ search: 'a', status: 'done', source: 'online' }, false), 2);
 });
 

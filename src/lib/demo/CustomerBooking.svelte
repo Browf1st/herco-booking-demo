@@ -6,6 +6,7 @@
  import { fmtDate, fmtSlot } from '../shared/dates';
  import { serviceOf } from '../shared/config';
  import { estimatePrice, serviceLabel } from '../shared/coating';
+ import { bookingWasUpdated } from '../shared/booking-changes';
  import { bookingStatusLabels, requestChange, type Booking, type ChangeRequest } from './store.svelte';
  let { booking }: { booking: Booking } = $props();
  let kind = $state<ChangeRequest['kind']>();
@@ -16,6 +17,14 @@
  let dialog: HTMLDialogElement;
  const active = $derived(['pending', 'confirmed'].includes(booking.status));
  const pending = $derived(booking.requests?.some(r => r.state === 'Pending'));
+ // The shop changed a price or the services after booking: show the old total struck through.
+ const original = $derived(booking.originalServices?.estimate);
+ const updated = $derived(Boolean(original) && bookingWasUpdated({ originalTotal: original?.total, currentTotal: booking.estimate?.total, originalCodes: original?.lines?.map(line => line.label) ?? [], currentCodes: booking.estimate?.lines?.map(line => line.label) }));
+ // Once staff changed a line price, the customer can no longer edit services (same rule as the live app).
+ const shopPriced = $derived((booking.serviceChanges ?? []).some(change => change.actor !== 'Customer' && (change.after.estimate?.lines ?? []).some(line => {
+  const old = change.before.estimate?.lines?.find(item => item.label === line.label);
+  return old !== undefined && old.subtotal !== line.subtotal;
+ })));
  async function openRequest(value: ChangeRequest['kind']) {
   kind = value;
   date = slot = reason = error = '';
@@ -43,8 +52,9 @@
  <p><ActionIcon name="box" /> <strong>{booking.selection ? serviceLabel(booking.selection) : serviceOf(booking.serviceId).name}</strong> · {booking.bike}</p>
  <div class="row">
   <p><ActionIcon name="calendar" /> <strong>Visit</strong> · {fmtDate(booking.date)} at {fmtSlot(booking.slot)}</p>
-  {#if booking.estimate}<p>Estimated service value <strong>{estimatePrice(booking.estimate)}</strong></p>{/if}
+  {#if booking.estimate}<p>Estimated service value {#if updated && original}<s><span class="sr-only">Original total </span>{estimatePrice(original)}</s> {/if}<strong>{estimatePrice(booking.estimate)}</strong></p>{/if}
  </div>
+ {#if updated}<p class="small updated-note">Updated by the shop after inspection</p>{/if}
  {#if active && pending}
   <p class="small muted">Your original visit stays reserved while the shop reviews your request.</p>
  {/if}
@@ -56,7 +66,8 @@
     <p>{request.kind}{request.date && request.slot ? ' · ' + fmtDate(request.date) + ' at ' + fmtSlot(request.slot) : ''} <span class="badge" data-status={request.state.toLowerCase()}>{request.state === 'Pending' ? 'Awaiting shop approval' : request.state}</span></p>
     {#if request.reason}<p class="small muted">Your note: {request.reason}</p>{/if}
    {/each}
-   {#if booking.status === 'pending' && !pending}{#await import('./EditCoating.svelte') then { default: EditCoating }}<EditCoating {booking} />{/await}{/if}
+   {#if booking.status === 'pending' && shopPriced}<p class="small muted" role="status">The shop updated this booking after inspection. Contact the shop to change services.</p>
+   {:else if booking.status === 'pending' && !pending}{#await import('./EditCoating.svelte') then { default: EditCoating }}<EditCoating {booking} />{/await}{/if}
   </div>
  </details>
  <dialog bind:this={dialog} aria-label="Request a booking change">
@@ -76,6 +87,8 @@
  h2 { font-size: 1.8rem; }
  .booking-header { justify-content: space-between; }
  .booking-details { margin-top: .75rem; }
+ .updated-note { margin: 0; padding: 6px 10px; border: 1px solid var(--info-line); border-radius: 8px; background: var(--panel-2); color: var(--text); font-weight: 650; }
+ .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
  dialog { width: min(570px, calc(100% - 24px)); max-height: 90dvh; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); }
  dialog::backdrop { background: #0009; }
 </style>

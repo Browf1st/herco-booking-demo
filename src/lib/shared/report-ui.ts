@@ -21,12 +21,19 @@ export function reportPrice(status: RecordStatus, final?: string | null, estimat
 	return { text: '—', kind: 'none' };
 }
 
-export type ReportSort = 'date' | 'price' | 'status';
-export const sortOptions: { value: ReportSort; label: string }[] = [{ value: 'date', label: 'Date (newest)' }, { value: 'price', label: 'Price (high to low)' }, { value: 'status', label: 'Status' }];
+export type ReportSort = 'date' | 'date_asc' | 'price' | 'price_asc' | 'status';
+export const sortOptions: { value: ReportSort; label: string }[] = [
+	{ value: 'date', label: 'Date (newest)' }, { value: 'date_asc', label: 'Date (oldest)' },
+	{ value: 'price', label: 'Price (high to low)' }, { value: 'price_asc', label: 'Price (low to high)' }, { value: 'status', label: 'Status' }
+];
+/** Price orders would reveal amounts, so they are only offered with the income permission. */
+export const isPriceSort = (sort: ReportSort) => sort === 'price' || sort === 'price_asc';
 const statusOrder: RecordStatus[] = ['pending', 'confirmed', 'done', 'cancelled'];
 
 /** A sorted copy. "date" keeps the order the list already has (newest first). Rows without a price go last. */
 export function sortReportRows(rows: ReportRow[], sort: ReportSort): ReportRow[] {
+	if (sort === 'date_asc') return rows.toReversed();
+	if (sort === 'price_asc') return rows.toSorted((a, b) => (a.priceValue ?? Infinity) - (b.priceValue ?? Infinity));
 	if (sort === 'price') return rows.toSorted((a, b) => (b.priceValue ?? -1) - (a.priceValue ?? -1));
 	if (sort === 'status') return rows.toSorted((a, b) => statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status));
 	return rows.slice();
@@ -46,7 +53,9 @@ export function entryRange(page: number, pages: number, total: number, count: nu
 	return { from, to: from + count - 1 };
 }
 
-/** "HG-11, HG-15" when there are only a few references, otherwise nothing (the list would be too long to be useful). */
-export function refsText(refs: string[] | undefined, limit = 3): string {
-	return refs && refs.length > 0 && refs.length <= limit ? refs.join(', ') : '';
+// The price shown in a booking's "More details" popup, in centavos: completed work shows its final price
+// (what completed income counts); open bookings show the current total. undefined = nothing to show.
+export function popupTotalCentavos(status: string, finalCentavos?: number | null, totalCentavos?: number | null): number | undefined {
+	if (status === 'done' && finalCentavos != null) return finalCentavos;
+	return totalCentavos ?? undefined;
 }

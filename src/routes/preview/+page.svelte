@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import ActionIcon from '#lib/shared/ActionIcon.svelte';
 	import { asset, resolve } from '$app/paths';
 
@@ -7,7 +7,7 @@
 	import ShowcaseLightbox from '#lib/shared/ShowcaseLightbox.svelte';
 	import { photos } from '#lib/shared/config.ts';
 	import { powderShowcase, showcaseCategories } from '#lib/shared/powder-showcase.ts';
-	import { countByCategory, filterPhotos, shownCount } from '#lib/shared/showcase-gallery.ts';
+	import { countByCategory, distributeColumns, filterPhotos, shownCount } from '#lib/shared/showcase-gallery.ts';
 	import { features } from '#lib/demo/store.svelte.ts';
 
 	const counts = countByCategory(powderShowcase);
@@ -19,14 +19,31 @@
 	const shown = $derived(shownCount(matching.length, pages));
 	const src = (slug: string, width: 480 | 960) => asset(`photos/showcase/${slug}-${width}.webp` as Parameters<typeof asset>[0]);
 
+	// Fixed columns (2, 3 or 4 by screen width) so "Show more" only adds photos at the bottom and nothing moves.
+	// The wall is drawn only after the real column count is known (the page is built without a screen), so it never re-flows on load.
+	let columnCount = $state(2);
+	let ready = $state(false);
+	const columns = $derived(distributeColumns(matching.slice(0, shown), columnCount));
+	onMount(() => {
+		const wide = matchMedia('(min-width: 900px)');
+		const medium = matchMedia('(min-width: 600px)');
+		const update = () => { columnCount = wide.matches ? 4 : medium.matches ? 3 : 2; };
+		update();
+		ready = true;
+		wide.addEventListener('change', update);
+		medium.addEventListener('change', update);
+		return () => { wide.removeEventListener('change', update); medium.removeEventListener('change', update); };
+	});
+
 	function choose(id: string) { filter = id; pages = 1; }
 
 	// Keyboard and screen-reader users continue from the first new photo (the button may disappear).
+	// The page stays where it is: the new photos are below the "Show more" button.
 	async function showMore() {
 		const first = shown;
 		pages++;
 		await tick();
-		document.querySelectorAll<HTMLButtonElement>('.masonry .tile')[first]?.focus();
+		document.querySelector<HTMLButtonElement>(`.masonry .tile[data-index="${first}"]`)?.focus({ preventScroll: true });
 	}
 </script>
 
@@ -61,18 +78,22 @@
 			{/each}
 		</div>
 
-		<ul class="masonry" aria-label="Powder coating photos">
-			{#each matching.slice(0, shown) as photo, index (photo.slug)}
-				<li>
-					<button type="button" class="tile" onclick={() => (open = index)} aria-label={`View larger: ${photo.title}`}>
-						<img src={src(photo.slug, 480)} srcset={`${src(photo.slug, 480)} 480w, ${src(photo.slug, 960)} 960w`}
-							sizes="(min-width: 1100px) 260px, (min-width: 900px) 24vw, (min-width: 600px) 32vw, 48vw"
-							alt={photo.alt} width={photo.w} height={photo.h} loading={index < 4 ? 'eager' : 'lazy'} decoding="async" />
-						{#if photo.finish}<span class="label">{photo.finish}</span>{/if}
-					</button>
-				</li>
-			{/each}
-		</ul>
+		<div class="masonry" role="list" aria-label="Powder coating photos" aria-busy={!ready}>
+			{#if ready}{#each columns as column, columnIndex (columnIndex)}
+				<div class="column" role="presentation">
+					{#each column as { photo, index } (photo.slug)}
+						<figure role="listitem">
+							<button type="button" class="tile" data-index={index} onclick={() => (open = index)} aria-label={`View larger: ${photo.title}`}>
+								<img src={src(photo.slug, 480)} srcset={`${src(photo.slug, 480)} 480w, ${src(photo.slug, 960)} 960w`}
+									sizes="(min-width: 1100px) 260px, (min-width: 900px) 24vw, (min-width: 600px) 32vw, 48vw"
+									alt={photo.alt} width={photo.w} height={photo.h} loading={index < 4 ? 'eager' : 'lazy'} decoding="async" />
+								<span class="label">{photo.finish ?? photo.title}</span>
+							</button>
+						</figure>
+					{/each}
+				</div>
+			{/each}{/if}
+		</div>
 
 		<div class="more">
 			<p class="muted small" aria-live="polite">Showing {shown} of {matching.length} photos</p>
@@ -120,11 +141,12 @@
 	.chip[aria-pressed='true'] { border-color: var(--accent-fill); background: var(--accent-fill); color: var(--accent-ink); }
 	.count { font-size: .8rem; opacity: .8; font-variant-numeric: tabular-nums; }
 
-	/* Masonry with CSS columns: whole photos, no JavaScript. */
-	.masonry { columns: 2; column-gap: 8px; margin: 0; padding: 0; list-style: none; }
-	.masonry li { break-inside: avoid; margin-bottom: 8px; }
-	@media (min-width: 600px) { .masonry { columns: 3; column-gap: 12px; } .masonry li { margin-bottom: 12px; } }
-	@media (min-width: 900px) { .masonry { columns: 4; } }
+	/* Masonry with fixed columns (the page code splits the photos), so adding photos never moves the ones already shown. */
+	.masonry { display: flex; align-items: flex-start; gap: 8px; }
+	.masonry[aria-busy='true'] { min-height: 80vh; }
+	.column { display: grid; flex: 1 1 0; min-width: 0; gap: 8px; }
+	@media (min-width: 600px) { .masonry, .column { gap: 12px; } }
+	figure { margin: 0; }
 
 	.tile {
 		position: relative;

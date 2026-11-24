@@ -150,7 +150,7 @@ Six months after staff mark a booking Done, the customer gets one email at 9 AM 
 ### `GET /api/bookings`
 - **Who:** signed-in. Returns only the caller's own bookings (filtered by their user id).
 - **Input (query):** `page` integer 1-500, default 1 (page size 20).
-- **Success:** `200` `{ bookings: Booking[], hasMore: boolean }`. Each booking adds `approved_at`, `completed_at`, `cancelled_at` (ISO timestamps or `null`). Newest first.
+- **Success:** `200` `{ bookings: Booking[], hasMore: boolean }`. Each booking adds `approved_at`, `completed_at`, `cancelled_at` (ISO timestamps or `null`). Newest first. Each booking also carries `original_services` and `original_total_centavos` (fixed at booking time) and `current_services` and `current_total_centavos` (both `null` until the booking is edited; then use them as the shown services and total, with the original total struck through when different). Staff price changes appear here. Each booking also has `shop_priced: boolean` (new): `true` once staff changed any line price. When `true`, hide **Edit services** and show "The shop updated this booking after inspection. Contact the shop to change services."
 - **Errors:** `400` bad page; `401`; `503`.
 
 ### `POST /api/bookings`
@@ -174,14 +174,33 @@ Six months after staff mark a booking Done, the customer gets one email at 9 AM 
 ### `GET /api/booking-services`
 - **Who:** signed-in. Booking must be visible to the caller (database).
 - **Input (query):** `booking` uuid, required.
-- **Success:** `200` booked services for the booking (shape unclear from code).
+- **Success:** `200` booked services for the booking (`original`, `current`, `totalCentavos`, `revision`, `date`, `canEdit`, `changes`, `bike`, `options`, and new `shop_priced: boolean`). When `shop_priced` is true, `canEdit` is `false` for the booking's customer (staff keep their own `canEdit`). When the caller is staff without `viewIncome`, `totalCentavos` is `null` and the lines in `original`, `current` and `changes` have no `price_centavos`, `max_centavos` or `promotion`; customers always see their own prices.
 - **Errors:** `400`; `401`; `404` "Could not find a booking you can access."; `503`.
 
 ### `POST /api/booking-services`
 - **Who:** signed-in; booking must belong to or be accessible by the caller (database). Same-origin required.
 - **Input (JSON):** `bookingId` uuid; `requestId` uuid; `revision` integer 0-2147483647; `services` array of 1-20 strings (each 1-64); `coating` optional object (under 3000 chars); `priceFingerprint` optional (only used when `coating` is sent; its type is not validated in the route).
 - **Success:** `200` saved services data (shape unclear from code).
-- **Errors:** `400`; `401`; `404` no booking you can access (also used for permission failures); `409` stale revision (message passed through); `503`.
+- **Errors:** `400`; `401`; `404` no booking you can access (also used for permission failures, so staff without `editServices` see `404` here, not `403`); `409` `{ code, message }` where `code` is `"booking_locked"` ("This booking can no longer be changed.": the booking is no longer open to edits, for staff Pending or Booked from today on) or `"line_changed"` (the revision is stale: reload) or `"shop_priced"` (new: staff changed a price on this booking, so the customer can no longer edit its services; `message` is "The shop updated this booking after inspection. Contact the shop to change services."; the same `code` is returned to staff who send `coating` on a shop-priced booking, with a message to add or remove services one by one so prices are kept); `503`. The `code` field is new; `message` is unchanged in shape.
+- **Staff "Add service" / remove:** this is the existing staff path (grant `editServices`, checked in the database). Send the full list of service codes wanted: the current codes from `GET /api/booking-services` (`current[].code`) plus the new one, with the `revision` from that GET. A new service is added at today's catalog price; each add/remove is logged and shows in `GET /api/staff/booking-history` as `service_added` / `service_removed`. To then set a different price for the new line, call `POST /api/staff/line-price`.
+
+### `POST /api/staff/line-price`
+- **Who:** staff with grants `adjustPrices` **and `viewIncome`** (database-enforced; page Bookings or Booking history). Without `viewIncome` the server refuses with `403` (the screen already hides Edit price then), so no amounts are ever returned to a caller without it. Signed-in check in the route (`401`). Same-origin required.
+- **When:** only while the booking is Pending or Booked. After Done use `POST /api/booking-prices`.
+- **Input (JSON, all required):** `booking` uuid; `requestId` uuid (retry key: the same staff member re-sending the same request with the same values gets the saved result, even after the booking moved on); `service` string 1-100 (the line's `code`); `expectedCentavos` integer >= 0 or `null`: the line's current `price_centavos` exactly as read (a quote-only line is stored with 0 or no price: send `0` or `null`, both match); `pesos` integer 0 to 1,000,000 (whole pesos; the server stores centavos); `reason` string, 1-200 after trim. A new price equal to the current one is `400` "That is already the price." (a quote-only line may be priced at 0).
+- **Success:** `200` `{ revision: integer, status: "pending"|"confirmed", lines: ServiceLine[], totalCentavos: integer }`. `lines` are the booking's current lines (`current_services`), `totalCentavos` the new total (sum of the priced lines). The original snapshot (`original_services`, `original_total_centavos`) never changes. On the changed line `max_centavos`, `quote_required`, `details` and `promotion` are removed (they no longer add up); the full old line is kept in the private change log. The booking's `service_revision` goes up by one, so a stale `revision` on `POST /api/booking-services` is refused with `line_changed`.
+- **Errors:** `400` invalid input; `401`; `403` no `adjustPrices` grant; `404` booking not found; `409` `{ code: "booking_locked", message: "This booking can no longer be changed." }` (Done or Cancelled) or `{ code: "line_changed", message }` (the line's price is no longer `expectedCentavos`, or the service is no longer on the booking: reload); `503`.
+
+### `GET /api/staff/booking-history`
+- **Who:** verified staff with page Bookings, Booking history or Reports (database-enforced). Signed-in check in the route (`401`). Response is `private, no-store`.
+- **Input (query):** `booking` uuid, required.
+- **Success:** `200` `{ booking_id, canViewIncome, entries }`. `entries` is newest first, at most 200. Every entry has `at` (ISO timestamp), `kind` and `actor` (the staff member's display name, `"HERCO staff"` if none is set, or `"Customer"` when the actor is not staff). Never contains emails, phone numbers or private notes.
+  - `kind: "price_changed"`: a pre-Done price change from `POST /api/staff/line-price`. Adds `service_code`, `service_label`, `reason` and (only with `viewIncome`) `from_centavos` (absent when the line had no exact price) and `to_centavos`.
+  - `kind: "price_corrected"`: a price correction from `POST /api/booking-prices` (used after Done). Same fields as `price_changed`.
+  - `kind: "service_added"`: adds `service_code`, `service_label` and (only with `viewIncome`) `to_centavos` (the price when added). `kind: "service_removed"`: same, with `from_centavos`.
+  - `kind: "booked" | "approved" | "completed" | "cancelled" | "rescheduled"`: booking status events; no extra fields.
+  - Without `viewIncome` every `*_centavos` field is left out.
+- **Errors:** `400` bad id; `401`; `403`; `404` booking not found; `503`.
 
 ### `GET /api/bookings/requests`
 - **Who:** signed-in (the database returns the caller's own change requests).
@@ -290,12 +309,14 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
 
 ### `POST /api/staff/records`
 - **Who:** staff with booking-records access (database; route has no sign-in check). Same-origin required.
-- **Input (JSON, all required):** `from` and `through` (both dates, or both empty strings for no date filter); `search` string up to 254; `status` one of `all`, `pending`, `confirmed`, `done`, `cancelled`; `source` one of `all`, `online`, `walk-in`; `page` integer 1-500; `report` boolean. Optional `sort`: `"date"` (default, newest visit first), `"price"` (high to low: final price for done bookings, original estimate for the others; bookings with no price last) or `"status"` (pending, booked, done, cancelled). Sorting covers all matching records, not just the page; ties break by newest created, then id, so pages never repeat or skip a row. Any other `sort` value is `400`.
+- **Input (JSON, all required):** `from` and `through` (both dates, or both empty strings for no date filter); `search` string up to 254; `status` one of `all`, `pending`, `confirmed`, `done`, `cancelled`; `source` one of `all`, `online`, `walk-in`; `page` integer 1-500; `report` boolean. Optional `sort`: `"date"` (default, newest visit first), `"date_asc"` (oldest visit first), `"price"` (high to low) or `"price_asc"` (low to high); for both price sorts a done booking uses its final price and the others use their current total (original estimate until staff change a price), and bookings with no price are last; or `"status"` (pending, booked, done, cancelled). `date_asc` and `price_asc` are new. Sorting covers all matching records, not just the page; ties break by newest created, then id, so pages never repeat or skip a row. Any other `sort` value is `400`.
 - **Success:** `200` `{ records, metrics, total, page, pages, canViewIncome, sort }`.
-  - `sort`: the sort actually applied. Without the `viewIncome` grant `"price"` is applied as `"date"` (the order must not reveal amounts).
+  - `sort`: the sort actually applied. Without the `viewIncome` grant `"price"` and `"price_asc"` are applied as `"date"` (the order must not reveal amounts).
+  - `search` matches booking id, reference (`HG-n`), bike, customer name, phone, email, plate and the original service labels. Amounts are not searchable without `viewIncome`.
   - `metrics`: `{ total, pending, booked, completed, cancelled, walkIns }`; with `report: true` also `completedValueCentavos` (null without `viewIncome`) and `completedWithoutValue`.
   - `records`: up to 20 rows: `id`, `reference` (`HG-n`), `visit_date`, `visit_hour`, `bike`, `customer_id`, `customer_name`, `customer_phone`, `customer_email`, `plate`, `status` (`pending|confirmed|done|cancelled`), `created_at`, `source` (`online|walk-in`), `services` (labels), `original_services` and `current_services` (arrays of `{ code, label, price_centavos, max_centavos?, quote_required?, promotion?, details? }`), `coating_options`, `approved_at`, `completed_at`, `private_completion_note`, `approval_note`, `shared_note`, `shared_photos`, `photo_count`, `request_pending`, plus the money fields below.
-  - Money fields: `final_price_centavos` (done bookings, after any price correction; null if not completed), `original_total_centavos` (the booking-time estimate, use it for the Price column of Pending/Booked), `total_centavos` (current total).
+  - Money fields: `final_price_centavos` (done bookings, after any price correction; null if not completed), `original_total_centavos` (the booking-time estimate; stays fixed), `total_centavos` (current total: the sum of the current lines, changes when staff edit prices or services; use it for the Price column of Pending/Booked rows; Done rows use `final_price_centavos`).
+  - Search (`search`) matches booking id, reference, bike, customer name, phone (also ignoring spaces and dashes), email, plate and the service labels (current and original), never prices or field names.
   - **Without `viewIncome`:** `final_price_centavos`, `original_total_centavos` and `total_centavos` are `null`, and service lines in `original_services`/`current_services` (and their `details`) have `price_centavos`, `max_centavos` and `promotion` removed (labels and codes remain). `original_total_centavos` is new; all other fields are unchanged apart from the money hiding above.
 - **Errors:** `400` invalid filters, sort or range over 366 days; `403`; `503`.
 
@@ -304,7 +325,7 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
 - **Input (JSON):** `operation` `"directory"` or `"visits"`.
   - `directory`: `term` string, trimmed, either empty or 2-254 chars; `cursor` optional uuid (last customer id from the previous page).
   - `visits`: `customer` uuid; `page` integer 1-50.
-- **Success:** `200` directory page or customer details with visits (shape unclear from code).
+- **Success:** `200` directory page or customer details with visits (shape unclear from code). Directory: `{ customers, nextCursor, total }`, 20 per page ordered by id. `total` and `customers` cover all confirmed customer accounts, staff accounts excluded; a customer with no bookings is included with `name`, `phone` and `bike` null and `booking_count` 0 (before, only customers with a booking were listed and counted).
 - **Errors:** `400`; `403`; `404` customer not found; `503`.
 
 ### `GET /api/staff/activity`
@@ -539,7 +560,7 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
 - **`requestId` / `submissionId`:** client-generated UUID reused on retry.
 - **`PriceFingerprint`:** 32-character lowercase hex string from the price estimate; sent back on booking calls to detect price changes.
 - **`Coating`:** a free-form JSON object (not an array), under 3000 characters when serialised. Its inner fields are defined by the database (unclear from code).
-- **`Booking` (from `GET /api/bookings`):** `{ id, reference_no, visit_date, visit_hour, bike, status, original_services, original_total_centavos, current_services, current_total_centavos, coating_options, current_coating_options, created_at, approved_at, completed_at, cancelled_at }`. Statuses seen in code: `pending`, `confirmed`, `done`, `cancelled`. Service entries can include `quote_required` and `max_centavos`.
+- **`Booking` (from `GET /api/bookings`):** `{ id, reference_no, visit_date, visit_hour, bike, status, original_services, original_total_centavos, current_services, current_total_centavos, coating_options, current_coating_options, created_at, approved_at, completed_at, cancelled_at, shop_priced }`. Statuses seen in code: `pending`, `confirmed`, `done`, `cancelled`. Service entries can include `quote_required` and `max_centavos`.
 - **`Availability`:** array from `GET /api/availability`, one row per open hour: `{ visit_date: "YYYY-MM-DD", visit_hour: 0-23, status: "open", openHour, closeHour, closed: false }`. `openHour`/`closeHour` are that date's first slot hour and closing hour (last slot starts at `closeHour - 1`). Only bookable hours are listed (past, blocked and out-of-hours hours are not). A date with no bookable hour returns one row `{ visit_date, visit_hour: null, status: "closed", openHour, closeHour, closed }`: `closed: true` (and `openHour`/`closeHour` null) when the shop is closed that date, `closed: false` when the date has hours but none left (all past or blocked). `booked` is never returned; any number of customers may share an hour.
 - **Staff day view (`GET /api/staff/bookings?date=`) additions:** `slots` now holds only the date's real hours: `[{ hour, status: "open"|"past"|"blocked", blocked: boolean, booked: number }]` (`booked` counts non-cancelled bookings in that hour). New keys: `closed` boolean, `open_hour`, `close_hour` (null when closed), `own_open_hour`, `own_close_hour` (the date's own hours, else null). `override` is unchanged (`true`/`false`/`null`). Each booking has `outside_hours: boolean`.
 - **Staff calendar (`GET /api/staff/calendar`) additions per date:** `closed` (follows the date's real hours), `open_hour`, `close_hour`, `outside_hours` (count of non-cancelled bookings outside the hours), `hours: [{ hour, booked }]` (non-cancelled bookings per hour). Existing keys `pending`, `booked` (confirmed only), `completed` are unchanged.

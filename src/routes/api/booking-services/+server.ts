@@ -1,6 +1,7 @@
 import { readJsonBody } from '#lib/server/request-body.ts';
 import { error, json, type RequestEvent } from '@sveltejs/kit';
 import { requestSupabase, requireSameOrigin } from '#lib/server/supabase.ts';
+import { serviceConflict } from '#lib/server/line-price-input.ts';
 import type { RequestHandler } from './$types';
 
 export const prerender = false;
@@ -47,6 +48,15 @@ export const POST: RequestHandler = async (event) => {
 		expected_revision: body.revision, service_codes: body.services,
 		...(body.coating ? { options: body.coating, expected_price_fingerprint: body.priceFingerprint ?? null } : {})
 	});
+	if (failure?.code === 'P0423') {
+		// Staff changed a price: the customer can no longer edit services. The message is written by our own database function.
+		return json({ code: 'shop_priced', message: failure.message }, { status: 409 });
+	}
+	if (failure?.code === '40001') {
+		// Say which kind of conflict it is: the booking is closed to edits, or it changed since the caller loaded it.
+		const { data: current } = await client.rpc('herco_booked_services', { booking_id: body.bookingId });
+		return json(serviceConflict(current?.canEdit), { status: 409 });
+	}
 	if (failure) reportFailure(failure.code, failure.message);
 	return json(data);
 };

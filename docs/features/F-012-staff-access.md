@@ -23,6 +23,9 @@ The Owner gives each staff member exactly the pages and actions they need, and c
 - Every change is audited in `herco_private.staff_access_audit` (actor, target, time, before/after).
 - Role-by-role permission matrix and who is Superadmin: TBD — ask owner (Q-11).
 
+## Access preview layout (owner 2026-11-24)
+The "Access preview" shown after **Preview access** on a staff account is plain text and bullets today. Make it presentable: a card with the person's initials avatar, name and role chip, the read-only note as a small info banner, then two sections — **Pages** as a grid of chips with a page icon, and **Actions** grouped by their page (Bookings, Reports, HERCO Points, Inventory, Pricing…) as tick rows — in both light and dark themes, single column on phones. Same data, no new permissions.
+
 ## Screens
 - `/staff-access`: staff list, grant editor, disable toggle, errors for unknown or unverified email.
 - Staff navigation shows only permitted sections.

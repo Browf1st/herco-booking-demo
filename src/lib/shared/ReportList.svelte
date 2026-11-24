@@ -82,7 +82,9 @@
 		tr.selected { background: var(--bad-bg); }
 		tr.selected td:first-child { box-shadow: none; }
 		td { padding: 0; border: 0; }
-		.who { grid-column: 1; min-width: 0; }
+		.who { grid-column: 1; grid-template-columns: auto minmax(0, 1fr); min-width: 0; }
+		.avatar { grid-row: span 3; }
+		.ref { grid-column: 2; justify-self: start; }
 		.status { grid-column: 2; grid-row: 1; justify-self: end; }
 		.date { grid-column: 1; }
 		.time { display: inline; margin-inline-start: .35rem; }

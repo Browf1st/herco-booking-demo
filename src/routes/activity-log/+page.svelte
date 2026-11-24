@@ -71,7 +71,7 @@
 			<form class="cols activity-dates" onsubmit={load}>
 				<label>From<input type="date" bind:value={from} max={through || undefined} required /></label>
 				<label>Through<input type="date" bind:value={through} min={from || undefined} required /></label>
-				<div class="apply"><button class="btn sm ghost" disabled={loading}><ActionIcon name="calendar" />{loading ? 'Loading…' : 'Apply dates'}</button></div>
+				<div class="apply"><button class="btn sm" disabled={loading}><ActionIcon name="calendar" />{loading ? 'Loading…' : 'Apply dates'}</button></div>
 			</form>
 			<div class="cols">
 				<label>Module<select bind:value={selectedModule} onchange={() => (logPage = 1)}>

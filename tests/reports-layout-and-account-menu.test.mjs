@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { oppositeTheme } from '../src/lib/shared/account-menu.ts';
-import { entryRange, initials, manilaStamp, refsText, reportPrice, sortReportRows } from '../src/lib/shared/report-ui.ts';
+import { entryRange, initials, isPriceSort, manilaStamp, reportPrice, sortOptions, sortReportRows } from '../src/lib/shared/report-ui.ts';
 
 const row = (id, status, priceValue) => ({ id, ref: id, name: id, bike: '', walkIn: false, date: '', time: '', services: '', status, priceValue });
 
@@ -68,13 +69,22 @@ test('an empty page has no range', () => {
 	assert.deepEqual(entryRange(1, 1, 0, 0), { from: 0, to: 0 });
 });
 
-// References in the count cards
+// New sort choices (owner 2026-11-24)
 
-test('references are listed only when there are a few', () => {
-	assert.equal(refsText(['HG-11', 'HG-15']), 'HG-11, HG-15');
-	assert.equal(refsText(['a', 'b', 'c', 'd']), '');
-	assert.equal(refsText([]), '');
-	assert.equal(refsText(undefined), '');
+test('the sort menu offers date and price both ways, and status', () => {
+	assert.deepEqual(sortOptions.map((option) => option.value), ['date', 'date_asc', 'price', 'price_asc', 'status']);
+	assert.deepEqual(sortOptions.filter((option) => isPriceSort(option.value)).map((option) => option.label), ['Price (high to low)', 'Price (low to high)']);
+});
+
+test('sort by oldest date reverses the newest-first list without changing the original', () => {
+	const rows = [row('a', 'done'), row('b', 'pending'), row('c', 'done')];
+	assert.deepEqual(sortReportRows(rows, 'date_asc').map((item) => item.id), ['c', 'b', 'a']);
+	assert.deepEqual(rows.map((item) => item.id), ['a', 'b', 'c']);
+});
+
+test('sort by lowest price puts the cheapest first and rows without a price last', () => {
+	const sorted = sortReportRows([row('a', 'pending', 500), row('b', 'cancelled'), row('c', 'done', 100)], 'price_asc');
+	assert.deepEqual(sorted.map((item) => item.id), ['c', 'a', 'b']);
 });
 
 // Philippine time stamps
@@ -97,4 +107,24 @@ test('the theme button switches to the opposite of what is on screen', () => {
 	assert.equal(oppositeTheme('dark', false), 'light');
 	assert.equal(oppositeTheme('system', true), 'light');
 	assert.equal(oppositeTheme('system', false), 'dark');
+});
+
+// Header (owner 2026-11-24): stable right-side Account menu, no wrapping tabs.
+
+test('header tabs and logo never wrap or shrink, and the Account slot has a fixed width', async () => {
+	const layout = await readFile(new URL('../src/routes/+layout.svelte', import.meta.url), 'utf8');
+	assert.match(layout, /\.logo \{\s*flex-shrink: 0;\s*white-space: nowrap;/);
+	assert.match(layout, /\.link \{\s*flex-shrink: 0;\s*white-space: nowrap;/);
+	assert.match(layout, /\.account-slot \{[^}]*width: 6\.5rem/);
+	assert.doesNotMatch(layout, />Account<\/a>/, 'no separate Account tab: the menu button is the only entry');
+});
+
+test('the Account menu reads SIGN IN when signed out, with Sign in, Create account and Theme, and no separate theme button', async () => {
+	const menu = await readFile(new URL('../src/lib/shared/AccountMenu.svelte', import.meta.url), 'utf8');
+	assert.match(menu, /<span class="label">Sign in<\/span>/);
+	assert.match(menu, /Sign in<ActionIcon/);
+	assert.match(menu, /Create account<ActionIcon/);
+	assert.match(menu, /id="theme-label">Theme/);
+	assert.doesNotMatch(menu, /theme-button|Switch to/);
+	assert.doesNotMatch(menu, /<span class="who"><b>/, 'name and email live inside the dropdown, not on the button');
 });
