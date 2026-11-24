@@ -119,7 +119,7 @@ select public.herco_test_refused($s$select public.herco_staff_set_line_price('00
 select public.herco_test_refused($s$select public.herco_staff_set_line_price('00000000-0000-4000-8000-0000000006a1',gen_random_uuid(),'wash',50000,-100,'Negative')$s$,'22023');
 select public.herco_test_refused($s$select public.herco_staff_set_line_price('00000000-0000-4000-8000-0000000006a1',gen_random_uuid(),'wash',50000,150050,'Centavos')$s$,'22023');
 select public.herco_test_refused($s$select public.herco_staff_set_line_price('00000000-0000-4000-8000-0000000006a1',gen_random_uuid(),'wash',50000,100000100,'Too high')$s$,'22023');
-select public.herco_test_refused($s$select public.herco_staff_set_line_price('00000000-0000-4000-8000-0000000006a1',gen_random_uuid(),'wash',50000,50000,'Same price')$s$,'22023');
+select public.herco_test_refused($s$select public.herco_staff_set_line_price('00000000-0000-4000-8000-0000000006a1',gen_random_uuid(),'wash',50000,50000,'Same price')$s$,'P0400');
 select public.herco_test_refused($s$select public.herco_staff_set_line_price('00000000-0000-4000-8000-0000000006a1',gen_random_uuid(),'wash',50000,60000,'   ')$s$,'22023');
 select public.herco_test_refused($s$select public.herco_staff_set_line_price('00000000-0000-4000-8000-0000000006a1',gen_random_uuid(),'wash',50000,60000,null)$s$,'22023');
 select public.herco_test_refused($s$select public.herco_staff_set_line_price('00000000-0000-4000-8000-0000000006a1',gen_random_uuid(),'wash',50000,60000,repeat('x',201))$s$,'22023');
