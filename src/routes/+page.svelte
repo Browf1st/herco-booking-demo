@@ -5,16 +5,22 @@
 	import AvailabilityCalendar from '#lib/shared/AvailabilityCalendar.svelte';
 	import { photos, shop } from '#lib/shared/config.ts';
 	import { showcaseHome, showcaseTotal } from '#lib/shared/showcase-home.ts';
-	import { addDays, fmtDate, fmtSlot, today, upcoming } from '#lib/shared/dates.ts';
-	import { dayStatus, features } from '#lib/demo/store.svelte.ts';
+	import { addDays, fmtDate, today, upcoming } from '#lib/shared/dates.ts';
+	import { defaultSettings } from '#lib/shared/schedule-hours.ts';
+	import { formatClosedDays, formatShopHours } from '#lib/shared/shop-hours-text.ts';
+	import { liveShopHours, loadShopHours } from '#lib/live/shop-hours.svelte.ts';
+	import { db, dayStatus, features } from '#lib/demo/store.svelte.ts';
 
-	const hours = `${fmtSlot(String(shop.openHour) + ':00')} – ${fmtSlot(String(shop.closeHour) + ':00')}`;
+	const demo = import.meta.env.MODE !== 'worker';
+	// Until the live hours arrive (or if they fail), show the starting hours.
+	const shopHours = $derived((demo ? db.hours : liveShopHours.value) ?? defaultSettings());
+	const openHours = $derived(formatShopHours(shopHours));
+	const closedDays = $derived(formatClosedDays(shopHours.openWeekdays));
 	const directions = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shop.address)}`;
 	const statusLabels = { open: 'Available', closed: 'Closed', blocked: 'Closed', full: 'Full' };
 	let calendarOpen = $state(false);
-	const demo = import.meta.env.MODE !== 'worker';
 	const days = upcoming().slice(0, 7);
-	type ServerSlot = { visit_date: string; status: 'past' | 'closed' | 'booked' | 'blocked' | 'open' };
+	type ServerSlot = { visit_date: string; status: 'past' | 'closed' | 'blocked' | 'open' };
 	let serverSlots = $state<ServerSlot[]>();
 	let scheduleError = $state(false);
 	let calendarSlots = $state<ServerSlot[]>([]);
@@ -42,11 +48,12 @@
 	function calendarStatus(date: string) {
 		if (demo) return dayStatus(date);
 		const slots = calendarSlots.filter(slot => slot.visit_date === date);
-		return slots.some(slot => slot.status === 'open') ? 'open' : slots.some(slot => slot.status === 'booked') ? 'full' : 'closed';
+		return slots.some(slot => slot.status === 'open') ? 'open' : 'closed';
 	}
 
 	onMount(() => {
 		if (demo) return;
+		void loadShopHours();
 		const controller = new AbortController();
 		const query = new URLSearchParams({ from: days[0], to: days[days.length - 1] });
 		void fetch(resolve('/api/availability') + '?' + query, { signal: controller.signal })
@@ -61,8 +68,7 @@
 	function scheduleStatus(date: string): keyof typeof statusLabels {
 		if (demo) return dayStatus(date);
 		const slots = serverSlots?.filter(slot => slot.visit_date === date) ?? [];
-		if (slots.some(slot => slot.status === 'open')) return 'open';
-		return slots.some(slot => slot.status === 'booked') ? 'full' : 'closed';
+		return slots.some(slot => slot.status === 'open') ? 'open' : 'closed';
 	}
 
 	const steps = [
@@ -76,7 +82,7 @@
 	<div class="wrap hero-content">
 		<div class="stack">
 			<p class="hero-address">4494 G Bamboo Street<br />Valenzuela, 1442</p>
-			<p class="eyebrow">Wed to Sun / {hours}</p>
+			<p class="eyebrow">{openHours.text}</p>
 			<h1>Cleaner bikes.<br /><span class="accent">Bigger dreams.</span></h1>
 			<p class="lead">
 				Motorcycle detailing, ceramic coating and powder coating in Valenzuela. Find a service and choose a drop-off time.
@@ -116,7 +122,7 @@
 	<div class="wrap stack">
 		<div class="schedule-heading">
 			<h2>Shop schedule</h2>
-			<p class="muted">Wednesday to Sunday, {hours} Philippine time. <strong>Closed Monday and Tuesday.</strong></p>
+			<p class="muted">{openHours.text} Philippine time.{#if closedDays} <strong>Closed {closedDays}.</strong>{/if}</p>
 		</div>
 		<div class="schedule card stack">
 			<div class="schedule-heading">

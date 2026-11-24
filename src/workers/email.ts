@@ -1,6 +1,10 @@
 import { sendBrevoEmail, type BrevoConfig, type BrevoSendResult, type TransactionalEmail } from '../lib/server/brevo.ts';
+import { parseMaintenanceCheck, parseSiteUrl, renderMaintenanceEmail } from '../lib/server/maintenance-reminder.ts';
+import { MIN_SECRET_LENGTH, signUnsubscribeToken } from '../lib/server/reminder-token.ts';
 
 type Bindings = {
+	HERCO_REMINDER_TOKEN_SECRET?: string;
+	HERCO_SITE_URL?: string;
 	HERCO_EMAIL_MODE?: string;
 	HERCO_REMINDER_LEAD_HOURS?: string;
 	SUPABASE_URL?: string;
@@ -18,7 +22,7 @@ type Job = {
 	recipient: string;
 	payload: {
 		booking_id?: unknown; visit_date?: unknown; visit_hour?: unknown;
-		request_id?: unknown; target_date?: unknown; target_hour?: unknown;
+		request_id?: unknown; target_date?: unknown; target_hour?: unknown; customer_id?: unknown;
 	};
 };
 
@@ -76,6 +80,7 @@ function outboxClient(env: Bindings, request: typeof fetch) {
 		| 'herco_claim_notification_outbox'
 		| 'herco_check_reminder_outbox'
 		| 'herco_check_staff_change_outbox'
+		| 'herco_check_maintenance_reminder_outbox'
 		| 'herco_settle_notification_outbox';
 	return async (name: Procedure, args: object): Promise<unknown> => {
 		const response = await request(new URL('/rest/v1/rpc/' + name, project), {
@@ -95,6 +100,31 @@ function reminderLeadHours(setting: string | undefined): number {
 	const hours = Number(raw);
 	if (!/^\d{1,3}$/.test(raw) || hours > 168) throw new Error('Invalid appointment reminder lead time.');
 	return hours;
+}
+
+// Maintenance reminders (F-017) need the token secret and the public site address. Without both they are
+// not claimed at all, so other email keeps flowing and the jobs wait in the outbox.
+function maintenanceSettings(env: Bindings) {
+	const secret = env.HERCO_REMINDER_TOKEN_SECRET?.trim();
+	const siteUrl = parseSiteUrl(env.HERCO_SITE_URL);
+	return secret && secret.length >= MIN_SECRET_LENGTH && siteUrl ? { secret, siteUrl } : undefined;
+}
+
+// Re-checks the reminder in the database, then builds the approved email. Returns 'stale' when the
+// database skipped the job (not Done any more, new booking, opted out, account gone, email changed).
+async function maintenanceMessage(
+	job: Job, rpc: (name: 'herco_check_maintenance_reminder_outbox', args: object) => Promise<unknown>,
+	settings: NonNullable<ReturnType<typeof maintenanceSettings>>
+): Promise<TransactionalEmail | 'stale' | undefined> {
+	const customerId = job.payload?.customer_id;
+	if (typeof customerId !== 'string') return;
+	const check = parseMaintenanceCheck(await rpc('herco_check_maintenance_reminder_outbox', { job_id: job.id, claim_token: job.lease_token }));
+	if (check === 'stale') return 'stale';
+	const token = await signUnsubscribeToken(customerId, settings.secret);
+	return renderMaintenanceEmail(job.recipient, check, {
+		bookUrl: settings.siteUrl + '/book',
+		unsubscribeUrl: settings.siteUrl + '/reminders/unsubscribe?token=' + encodeURIComponent(token)
+	});
 }
 
 function visitLabel(date: unknown, hour: unknown, dayOnly = false): string | undefined {
@@ -224,9 +254,21 @@ export async function deliverNotificationBatch(env: Bindings, request: typeof fe
 	const rpc = outboxClient(env, request);
 	const leadHours = reminderLeadHours(env.HERCO_REMINDER_LEAD_HOURS);
 	if (leadHours) await rpc('herco_enqueue_appointment_reminders', { lead_hours: leadHours });
-	const jobs = await rpc('herco_claim_notification_outbox', { batch_size: 5, include_reminders: leadHours > 0 });
+	const maintenance = maintenanceSettings(env);
+	const jobs = await rpc('herco_claim_notification_outbox', {
+		batch_size: 5, include_reminders: leadHours > 0, include_maintenance: Boolean(maintenance)
+	});
 	if (!Array.isArray(jobs) || jobs.length > 5) throw new Error('Invalid email outbox batch.');
 	const results = await Promise.allSettled((jobs as Job[]).map(async job => {
+		if (job.template === 'maintenance_reminder') {
+			if (!maintenance) throw new Error('Maintenance reminder settings are incomplete.');
+			const made = await maintenanceMessage(job, rpc, maintenance);
+			if (made === 'stale') return 'stale';
+			const resolved = made ? settlement(await sendBrevoEmail(config, made, request)) : { outcome: 'invalid-template' };
+			const saved = await rpc('herco_settle_notification_outbox', { job_id: job.id, claim_token: job.lease_token, ...resolved });
+			if (saved !== true) throw new Error('Could not settle the claimed notification.');
+			return resolved.outcome;
+		}
 		const check = job.template === 'appointment_reminder' ? 'herco_check_reminder_outbox'
 			: staffChangeTemplate(job.template) ? 'herco_check_staff_change_outbox' : undefined;
 		if (check) {

@@ -60,3 +60,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f tests/database/security.sql
           psql -v ON_ERROR_STOP=1 -f tests/database/customer-rewards.sql
           psql -v ON_ERROR_STOP=1 -f tests/database/operations-ui.sql
+          psql -v ON_ERROR_STOP=1 -f tests/database/schedule-hours.sql
+          psql -v ON_ERROR_STOP=1 -f tests/database/maintenance-reminder.sql
+          psql -v ON_ERROR_STOP=1 -f tests/database/records-sort.sql
+          psql -v ON_ERROR_STOP=1 -f tests/database/shop-hours-public.sql

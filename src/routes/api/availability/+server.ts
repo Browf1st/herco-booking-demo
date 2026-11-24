@@ -19,5 +19,8 @@ export const GET: RequestHandler = async (event) => {
 		}
 		error(503, 'Availability is temporarily unavailable.');
 	}
-	return json(data);
+	type Row = { visit_date: string; visit_hour: number | null; status: string; open_hour: number | null; close_hour: number | null; closed: boolean };
+	return json((data as Row[]).map(({ open_hour, close_hour, ...row }) => ({
+		...row, openHour: open_hour, closeHour: close_hour
+	})));
 };

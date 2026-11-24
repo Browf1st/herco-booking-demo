@@ -18,7 +18,9 @@
 	let selectedModule = $state('');
 	let search = $state('');
 
+	const scheduleLabels: Record<string, string> = { set_default_hours: 'Changed opening hours and open days', set_date_hours: 'Set own hours for a date' };
 	const label = (action: string) => {
+		if (scheduleLabels[action]) return scheduleLabels[action];
 		const text = action.replaceAll('_', ' ').trim();
 		return text.charAt(0).toUpperCase() + text.slice(1);
 	};

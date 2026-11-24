@@ -1,4 +1,5 @@
 import { readJsonBody } from '#lib/server/request-body.ts';
+import { isVisitHour } from '#lib/server/schedule-input.ts';
 import { error, json, type RequestEvent } from '@sveltejs/kit';
 import { requestSupabase, requireSameOrigin } from '#lib/server/supabase.ts';
 import type { RequestHandler } from './$types';
@@ -47,7 +48,7 @@ export const POST: RequestHandler = async (event) => {
 	}
 	if (body.kind === 'reschedule') {
 		if (typeof body.date !== 'string' || !datePattern.test(body.date) ||
-			!Number.isInteger(body.hour) || body.hour < 9 || body.hour > 16) error(400, 'Choose a valid visit date and time.');
+			!isVisitHour(body.hour)) error(400, 'Choose a valid visit date and time.');
 	} else if (body.date != null || body.hour != null) {
 		error(400, 'Only a reschedule request needs a new visit time.');
 	}

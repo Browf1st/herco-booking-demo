@@ -27,6 +27,13 @@ Customers and staff create a verified account and sign in so bookings, points an
 - `HERCO_AUTH_EMAIL_ENABLED` is on only after staging verification.
 - Sign-in attempt limits and bot protection: TBD — ask owner.
 
+## Account menu (owner-approved 2026-11-23, from the owner's mockup)
+- Everyone signed in (staff and customers) gets an **Account** menu at the right of the site header: initials avatar, name, and their email underneath (cut short if long), then "ACCOUNT" with a chevron.
+- The menu: their role on top (e.g. Owner, Staff; customers "Customer"), **Account settings** (gear, opens the account page), **Theme** with System / Light / Dark buttons (selected one red), and **Sign out**.
+- The theme switch is removed from the footer. Signed-out visitors get a small theme button (sun/moon) in the header instead.
+- Closes on Esc, outside click or choosing an item; works with the keyboard; on phones it opens full width under the header. Light and dark themes both blended.
+- Both builds get it.
+
 ## Screens
 - `/account`: sign up, verify code, sign in, reset password, social buttons, saved contact details, staff workspace link, sign out.
 - Code step (approved 2026-11-20): "Check your email" card with a mail icon, "We sent a 6-digit code to ja***@example.com", one box per digit (count from `HERCO_AUTH_OTP_LENGTH`, must match Supabase Auth "Email OTP length", default 6). Typing moves to the next box, pasting or phone auto-fill fills all boxes, Backspace goes back. The button stays off until every box is filled. Links: "Resend code" and "Use a different email". Same for the password-reset code.

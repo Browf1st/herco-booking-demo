@@ -1,6 +1,6 @@
 <script lang="ts">
  import ActionIcon from '#lib/shared/ActionIcon.svelte';
- import { account, saveProfilePhone, signIn, signOut } from '#lib/demo/account.svelte.ts';
+ import { account, maintenanceRemindersOn, saveProfilePhone, setMaintenanceReminders, signIn, signOut } from '#lib/demo/account.svelte.ts';
  import AuthShell from '#lib/shared/AuthShell.svelte';
  let mode = $state<'Log in' | 'Sign up'>('Log in');
  const socialProviders = ['Facebook', 'Google'] as const;
@@ -8,6 +8,7 @@
  let name = $state('');
  let email = $state('');
  let phone = $state(account.current?.phone ?? '');
+ let reminders = $state(account.current ? maintenanceRemindersOn(account.current.id) : true);
  let profileStatus = $state('');
  let phoneError = $state('');
  function saveProfile(event: SubmitEvent) {
@@ -25,6 +26,7 @@
   event.preventDefault();
   signIn(name, email, provider);
   phone = account.current?.phone ?? '';
+  reminders = account.current ? maintenanceRemindersOn(account.current.id) : true;
   profileStatus = phoneError = '';
   provider = 'Email';
   email = name = '';
@@ -52,6 +54,13 @@
     <div class="row"><button class="btn ghost" type="submit"><ActionIcon name="save" />Save profile</button></div>
     {#if profileStatus}<p role="status">{profileStatus}</p>{/if}
    </form>
+   <div class="reminders stack">
+    <label class="choice">
+     <input type="checkbox" role="switch" bind:checked={reminders} onchange={() => setMaintenanceReminders(reminders)} />
+     Maintenance reminders
+    </label>
+    <p class="small muted" role="status">{reminders ? 'On: the live app emails you 6 months after a finished job. Booking emails are not affected.' : 'Off: no reminder emails. Booking emails keep coming.'}</p>
+   </div>
   </section>
  {:else}
   <AuthShell heading={mode === 'Sign up' ? 'Create your account' : 'Welcome back'}
@@ -89,6 +98,9 @@
  .account-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; }
  #profile-heading { font-size: 1.5rem; }
  .demo-note { margin: 0; }
+ .reminders { border-top: 1px solid var(--line); padding-top: 1rem; }
+ .choice { display: flex; align-items: center; gap: .6rem; min-height: 44px; font-weight: 650; }
+ .choice input { width: auto; margin: 0; }
  .back { display: inline-flex; align-items: center; gap: 6px; justify-self: center; min-height: 44px; }
  .provider { position: relative; min-height: 56px; padding: 10px 42px; border: 1px solid transparent; border-radius: 3px; background: #2465ca; color: #fff; font: 650 1rem var(--body); cursor: pointer; }
  .provider.facebook { background: #395793; }

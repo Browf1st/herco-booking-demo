@@ -30,6 +30,3 @@ export function servicesLine(bike: string | undefined, count: number): string {
 	const services = count > 0 ? count + (count === 1 ? ' service' : ' services') : '';
 	return [bike?.trim(), services].filter(Boolean).join(' · ');
 }
-
-/** One row of the Reports list, already turned into text by the screen. */
-export type ReportRow = { id: string; ref: string; name: string; date: string; time: string; services: string; status: RecordStatus; price?: string };

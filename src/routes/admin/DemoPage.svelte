@@ -13,8 +13,8 @@
 	import OperationsAdmin from '#lib/demo/OperationsAdmin.svelte';
 	import AdminCalendar from '#lib/demo/AdminCalendar.svelte';
 
-		import { addDays, fmtDate, fmtSlot, isOpenDay, nowHour, today, upcoming } from '#lib/shared/dates.ts';
-		import { bookingsOn, db, dayStatus, isSlotBlocked, setDateAvailability, slotsFor, toggleSlotBlock, type Booking } from '#lib/demo/store.svelte.ts';
+		import { addDays, fmtDate, fmtSlot, nowHour, today, upcoming } from '#lib/shared/dates.ts';
+		import { bookingsOn, db, dayHours, dayStatus, isSlotBlocked, slotsFor, type Booking } from '#lib/demo/store.svelte.ts';
 
 	// One page header style on every staff tab, like the Reports tab (owner item 12, 2026-11-23).
 	const tabHeaders: Record<string, string> = {
@@ -23,7 +23,6 @@
 		Customers: 'Find a customer and see their past visits.',
 		'HERCO Points': 'Fan ranking, rewards and redemptions.',
 		Inventory: 'Stock on hand, usage and low-stock alerts.',
-		Reports: 'Review booking records and completed service value.',
 		Pricing: 'Service prices and booking promotions.',
 		'Activity log': 'Who changed what in the staff workspace, newest first.',
 		'Staff Access': 'Choose who can use each staff page and action.'
@@ -33,10 +32,10 @@
 	const pendingRequests = $derived(db.bookings.reduce((total, booking) =>
 		total + (booking.requests?.filter(request => request.state === 'Pending').length ?? 0), 0));
 	const pendingBookings = $derived(db.bookings.filter(booking => booking.status === 'pending').length);
-	let date = $state(upcoming().find(isOpenDay)!);
+	let date = $state(upcoming().find(day => !dayHours(day).closed) ?? today());
 	let availabilityDialog = $state<HTMLDialogElement>();
-	let availabilityError = $state('');
-	let availabilityNotice = $state('');
+	// The opening-hours screens load only when someone opens Manage availability.
+	let manage = $state.raw<{ Panel: typeof import('#lib/shared/AvailabilityPanel.svelte').default; schedule: typeof import('#lib/demo/schedule.ts') }>();
 
 	let detail = $state<Booking>();
 	let source = $state('all');
@@ -52,37 +51,30 @@
 	const override = $derived(db.blocked.includes(date) ? 'Closed by admin' : db.opened.includes(date) ? 'Opened by admin' : 'Regular hours');
 	const availabilityLabel = $derived(pastDate ? 'Past date' : closed ? 'Closed to new bookings' : availability === 'full' ? 'Full' : 'Available');
 	const count = (status: string) => db.bookings.filter(booking => booking.date === date && booking.status === status).length;
+	// Any number of bookings can share an hour. Bookings outside the date's hours stay visible with a label.
 	const daySlots = $derived(slotsFor(date).map(({ time, free }) => ({
-		time, booking: queue.find(booking => booking.slot === time), blocked: isSlotBlocked(date, time),
+		time, bookings: queue.filter(booking => booking.slot === time), blocked: isSlotBlocked(date, time),
 		past: pastDate || (date === today() && Number.parseInt(time, 10) <= nowHour()),
 		open: date >= today() && free && availability === 'open'
 	})));
+	const outsideHours = $derived(queue.filter(booking => !dayHours(date).hours.includes(Number.parseInt(booking.slot, 10)) && matchesSource(booking)));
+	const hasStatus = (slot: { bookings: Booking[] }, status: string) => slot.bookings.some(booking => booking.status === status);
 	const slotFilters = $derived([
 		{ id: 'all', label: 'All slots', count: daySlots.length },
-		{ id: 'pending', label: 'Pending', count: daySlots.filter(slot => slot.booking?.status === 'pending').length },
-		{ id: 'confirmed', label: 'Booked', count: daySlots.filter(slot => slot.booking?.status === 'confirmed').length },
-		{ id: 'done', label: 'Completed', count: daySlots.filter(slot => slot.booking?.status === 'done').length },
+		{ id: 'pending', label: 'Pending', count: daySlots.filter(slot => hasStatus(slot, 'pending')).length },
+		{ id: 'confirmed', label: 'Booked', count: daySlots.filter(slot => hasStatus(slot, 'confirmed')).length },
+		{ id: 'done', label: 'Completed', count: daySlots.filter(slot => hasStatus(slot, 'done')).length },
 		{ id: 'open', label: 'Open', count: daySlots.filter(slot => slot.open).length }
 	] as const);
 	const selectedSlotFilter = $derived(slotFilters.find(filter => filter.id === slotFilter)!);
-	const visibleSlots = $derived(daySlots.filter(slot => (source === 'all' || (slot.booking && matchesSource(slot.booking))) && (slotFilter === 'all' || (slotFilter === 'open' ? slot.open : slot.booking?.status === slotFilter))));
+	const visibleSlots = $derived(daySlots.filter(slot => (source === 'all' || slot.bookings.some(matchesSource)) && (slotFilter === 'all' || (slotFilter === 'open' ? slot.open : hasStatus(slot, slotFilter)))));
 
 	function pickDate(day: string) {
 		date = day;
 	}
 
-	function updateAvailability(update: () => void, notice: string) {
-		availabilityError = availabilityNotice = '';
-		try {
-			update();
-			availabilityNotice = notice;
-		} catch (error) {
-			availabilityError = (error as Error).message;
-		}
-	}
-
-	function openAvailability() {
-		availabilityError = availabilityNotice = '';
+	async function openAvailability() {
+		manage ??= { Panel: (await import('#lib/shared/AvailabilityPanel.svelte')).default, schedule: await import('#lib/demo/schedule.ts') };
 		availabilityDialog?.showModal();
 	}
 </script>
@@ -133,7 +125,7 @@
 			{/if}
 		</nav>
 	{/if}
-	{#if tabHeaders[tab]}<PageHeader title={tab} subtitle={tabHeaders[tab]} timezone={tab === 'Booking history' || tab === 'Activity log' || tab === 'Reports'} />{/if}
+	{#if tabHeaders[tab] && tab !== 'Reports'}<PageHeader title={tab} subtitle={tabHeaders[tab]} timezone={tab === 'Booking history' || tab === 'Activity log'} />{/if}
 	{#if tab === 'Pricing'}
 		<AdminPricing />
 	{:else if tab === 'Change requests'}
@@ -156,9 +148,7 @@
 				<div class="row day-status"><span class="badge" data-status={pastDate ? undefined : closed ? 'cancelled' : availability === 'full' ? 'pending' : 'done'}>{availabilityLabel}</span><span class="small muted">{override}</span></div>
 			</div>
 			<div class="row day-controls">
-				{#if !pastDate && canPerform('manageSchedule')}
-					<button type="button" class="btn sm ghost" onclick={openAvailability}><ActionIcon name="calendar" />Manage availability</button>
-				{/if}
+				<button type="button" class="btn sm ghost" onclick={openAvailability}><ActionIcon name="calendar" />Manage availability</button>
 				<div class="row" role="group" aria-label="Select booking day">
 					<button type="button" class="btn sm ghost" aria-label="Previous day" onclick={() => pickDate(addDays(date, -1))}><ActionIcon name="left" /></button>
 					<button type="button" class="btn sm ghost" aria-label="Next day" onclick={() => pickDate(addDays(date, 1))}><ActionIcon name="right" /></button>
@@ -170,49 +160,19 @@
 			<div class="card booked-tile"><b class="display">{count('confirmed')}</b><span class="small">Booked</span></div>
 			<div class="card completed-tile"><b class="display">{count('done')}</b><span class="small">Completed</span></div>
 		</div>
-		{#if !pastDate && canPerform('manageSchedule')}
-			<dialog class="availability-dialog" bind:this={availabilityDialog} aria-labelledby="availability-title">
-				<header class="availability-header">
-					<span class="availability-icon"><ActionIcon name="calendar" /></span>
-					<div><h3 id="availability-title">Manage availability</h3><p class="small muted">{fmtDate(date)} · Philippine time</p></div>
-					<button type="button" class="availability-button" onclick={() => availabilityDialog?.close()}>Close</button>
-				</header>
-				<div class="stack availability-body">
-					<p class="small muted">Changes apply to new bookings. Existing appointments stay scheduled.</p>
-					<section class="stack availability-day" aria-label="Date availability">
-						<div class="row between"><h4>Date availability</h4><span class="badge" data-status={closed ? 'cancelled' : availability === 'full' ? 'pending' : 'done'}>{availabilityLabel}</span></div>
-						<div class="row between">
-							<p class="small muted">{override}</p>
-							<div class="row availability-actions">
-							{#if closed}
-								<button type="button" class="availability-button" onclick={() => updateAvailability(() => setDateAvailability(date, 'open'), 'Date opened for new bookings.')}><ActionIcon name="check" />Open this date</button>
-							{:else}
-								<button type="button" class="availability-button date-danger" onclick={() => updateAvailability(() => setDateAvailability(date, 'closed'), 'Date closed to new bookings.')}><ActionIcon name="block" />Close this date</button>
-							{/if}
-							{#if override !== 'Regular hours'}
-								<button type="button" class="availability-button" onclick={() => updateAvailability(() => setDateAvailability(date, 'regular'), 'Regular hours restored.')}><ActionIcon name="reset" />Restore regular hours</button>
-							{/if}
-							</div>
-						</div>
-					</section>
-					<section class="stack availability-times" aria-label="Time slot availability">
-						<h4>Time slot restrictions</h4>
-						<ul>
-							{#each daySlots as { time, blocked, past } (time)}
-								<li class="row between">
-									<div><strong>{fmtSlot(time)}</strong><p class="small slot-restriction" class:restricted={blocked}>{past ? 'Past slot' : blocked ? 'Blocked for new bookings' : 'No slot restriction'}</p></div>
-									{#if !past || blocked}
-										<button type="button" class="availability-button slot-button" aria-label={(blocked ? 'Unblock ' : 'Block ') + fmtSlot(time)} onclick={() => updateAvailability(() => toggleSlotBlock(date, time), (blocked ? 'Removed the restriction for ' : 'Blocked new bookings at ') + fmtSlot(time) + '.')}><ActionIcon name={blocked ? 'check' : 'block'} />{blocked ? 'Unblock' : 'Block slot'}</button>
-									{/if}
-								</li>
-							{/each}
-						</ul>
-					</section>
-					{#if availabilityError}<p class="error" role="alert">{availabilityError}</p>{/if}
-					{#if availabilityNotice}<p class="small muted" role="status">{availabilityNotice}</p>{/if}
-				</div>
-			</dialog>
-		{/if}
+		<dialog class="availability-dialog" bind:this={availabilityDialog} aria-labelledby="availability-title">
+			<header class="availability-header">
+				<span class="availability-icon"><ActionIcon name="calendar" /></span>
+				<div><h3 id="availability-title">Manage availability</h3><p class="small muted">{fmtDate(date)} · Philippine time</p></div>
+				<button type="button" class="availability-button" onclick={() => availabilityDialog?.close()}>Close</button>
+			</header>
+			<div class="availability-body">
+				{#if manage}
+					{@const { Panel, schedule } = manage}
+					<Panel {date} day={schedule.dayInfo(date)} loadSettings={schedule.loadSettings} saveSettings={schedule.saveSettings} act={(action, confirmOutside) => schedule.changeDate(date, action, confirmOutside)} />
+				{/if}
+			</div>
+		</dialog>
 
 		<div class="booking-layout">
 		<div class="stack booking-column">
@@ -249,14 +209,20 @@
 				<AdminBooking {booking} when={'Walk-in · ' + fmtSlot(booking.slot)} onDetails={() => detail = booking} />
 			</article>
 		{/each}
+		{#each outsideHours as booking (booking.id)}
+			<article class="card stack" data-slot-status={booking.status}>
+				<span class="badge">Outside hours</span>
+				<AdminBooking {booking} when={fmtSlot(booking.slot)} onDetails={() => detail = booking} />
+			</article>
+		{/each}
 		<ol class="stack">
-			{#each visibleSlots as { time, open, blocked, past, booking: b } (date + time)}
-				<li class="card slot-card" data-slot-status={b?.status ?? (blocked ? 'blocked' : open ? 'open' : 'unavailable')}>
-					{#if b}
-						<AdminBooking booking={b} when={fmtSlot(time)} onDetails={() => detail = b} />
+			{#each visibleSlots as { time, open, blocked, past, bookings } (date + time)}
+				<li class="card slot-card stack" data-slot-status={bookings[0]?.status ?? (blocked ? 'blocked' : open ? 'open' : 'unavailable')}>
+					{#each bookings as b (b.id)}
+						<AdminBooking booking={b} when={fmtSlot(time) + (bookings.length > 1 ? ' · ' + bookings.length + ' booked' : '')} onDetails={() => detail = b} />
 					{:else}
 						<div class="slot-summary"><time class="display time" datetime={time}>{fmtSlot(time)}</time><b>{past ? 'Past slot' : blocked ? 'Blocked' : closed ? 'Closed' : open ? 'Open slot' : 'Unavailable'}</b></div>
-					{/if}
+					{/each}
 				</li>
 			{:else}
 				<li class="card muted">No time slots match this filter.</li>
@@ -312,19 +278,8 @@
 	.availability-header { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .65rem; padding: var(--dialog-gutter); background: var(--panel); border-bottom: 1px solid var(--line); }
 	.availability-icon { display: grid; place-items: center; width: 2.15rem; aspect-ratio: 1; border-radius: 8px; background: var(--panel-2); color: var(--accent); }
 	.availability-body { padding: var(--dialog-gutter); }
-	.availability-day { gap: .45rem; padding: .7rem; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
-	.availability-actions { gap: .4rem; }
 	.availability-button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 36px; padding: .3rem .55rem; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); font: 650 .8rem var(--body); cursor: pointer; }
 	.availability-button:hover { border-color: var(--accent); }
-	.date-danger { color: var(--bad); }
-	.slot-button { min-width: 6.25rem; }
-	.slot-restriction { color: var(--muted); }
-	.slot-restriction.restricted { color: var(--bad); }
-	.availability-dialog h4 { margin: 0; font-size: .95rem; }
-	.availability-times { gap: .5rem; }
-	.availability-times ul { margin: 0; padding: 0 .65rem; list-style: none; border: 1px solid var(--line); border-radius: 8px; }
-	.availability-times li { padding: .45rem 0; }
-	.availability-times li + li { border-top: 1px solid var(--line); }
 	.availability-dialog h3, .schedule-heading h3 { font-size: 1.35rem; }
 	.booking-layout { display: grid; align-items: start; gap: .9rem; }
 	.booking-column { min-width: 0; }

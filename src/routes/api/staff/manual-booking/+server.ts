@@ -1,4 +1,5 @@
 import { readJsonBody } from '#lib/server/request-body.ts';
+import { isVisitHour } from '#lib/server/schedule-input.ts';
 import { error, json } from '@sveltejs/kit';
 import { requestSupabase, requireSameOrigin } from '#lib/server/supabase.ts';
 import type { RequestHandler } from './$types';
@@ -32,7 +33,7 @@ export const POST: RequestHandler = async (event) => {
 	if (body.action !== 'book' || typeof body.customerId !== 'string' || !idPattern.test(body.customerId) ||
 		typeof body.requestId !== 'string' || !idPattern.test(body.requestId) ||
 		typeof body.date !== 'string' || !datePattern.test(body.date) ||
-		(body.walkIn === true ? body.hour !== null : !Number.isInteger(body.hour) || body.hour < 9 || body.hour > 16) ||
+		(body.walkIn === true ? body.hour !== null : !isVisitHour(body.hour)) ||
 		!Array.isArray(body.services) || !body.services.length || body.services.length > 20 ||
 		body.services.some((service: unknown) => typeof service !== 'string' || !service || service.length > 64) ||
 		typeof body.bike !== 'string' || body.bike.length > 120 ||

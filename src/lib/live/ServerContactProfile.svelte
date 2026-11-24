@@ -2,6 +2,9 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import ActionIcon from '../shared/ActionIcon.svelte';
+	import type { Component } from 'svelte';
+	// Loaded after the profile appears, to keep the Account page's first download small.
+	let ReminderSwitch = $state<Component>();
 	const endpoint = resolve('/api/auth/contact');
 	let name = $state('');
 	let mobile = $state('');
@@ -51,7 +54,10 @@
 		} catch (error) { message = error instanceof Error ? error.message : 'Could not save your profile.'; }
 		finally { busy = false; }
 	}
-	onMount(() => { void load(); });
+	onMount(() => {
+		void load();
+		void import('./ServerReminderSwitch.svelte').then((module) => { ReminderSwitch = module.default; });
+	});
 </script>
 
 <section class="card stack" aria-labelledby="profile-heading">
@@ -72,6 +78,7 @@
 			</div></details>
 			<div class="row"><button class="btn ghost" disabled={busy}><ActionIcon name="save" />Save profile</button></div>
 		</form>
+		{#if ReminderSwitch}<ReminderSwitch />{/if}
 	{:else if busy}
 		<p role="status">Loading contact details…</p>
 	{:else}

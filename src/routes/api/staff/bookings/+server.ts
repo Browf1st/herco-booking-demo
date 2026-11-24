@@ -1,4 +1,5 @@
 import { readJsonBody } from '#lib/server/request-body.ts';
+import { isVisitHour, parseDateHours } from '#lib/server/schedule-input.ts';
 import { error, json, type RequestEvent } from '@sveltejs/kit';
 import { requestSupabase, requireSameOrigin } from '#lib/server/supabase.ts';
 import type { RequestHandler } from './$types';
@@ -56,13 +57,13 @@ export const POST: RequestHandler = async (event) => {
 			typeof body.requestId !== 'string' || !idFormat.test(body.requestId) ||
 			!['cancel', 'reschedule'].includes(body.kind) ||
 			typeof body.originalDate !== 'string' || !dateFormat.test(body.originalDate) ||
-			(body.originalHour !== null && (!Number.isInteger(body.originalHour) || body.originalHour < 9 || body.originalHour > 16)) ||
+			(body.originalHour !== null && !isVisitHour(body.originalHour)) ||
 			typeof body.reason !== 'string' || body.reason.length > 500) {
 			error(400, 'Check the booking and the requested change.');
 		}
 		if (body.kind === 'reschedule') {
 			if (body.originalHour === null || typeof body.date !== 'string' || !dateFormat.test(body.date) ||
-				!Number.isInteger(body.hour) || body.hour < 9 || body.hour > 16) error(400, 'Choose a valid new visit.');
+				!isVisitHour(body.hour)) error(400, 'Choose a valid new visit.');
 		} else if (body.date != null || body.hour != null) {
 			error(400, 'Only rescheduling needs a new date and time.');
 		}
@@ -93,8 +94,22 @@ export const POST: RequestHandler = async (event) => {
 		const dateActions = ['open_date', 'close_date', 'restore_date'];
 		const slotActions = ['block_slot', 'unblock_slot'];
 		if (typeof body?.date !== 'string' || !dateFormat.test(body.date)) error(400, 'Choose a valid date.');
+		if (body.action === 'set_date_hours') {
+			const parsed = parseDateHours(body);
+			if ('message' in parsed) error(400, parsed.message);
+			const { data, error: failure } = await client.rpc('herco_set_date_hours', {
+				p_date: body.date, p_open_hour: parsed.value.openHour, p_close_hour: parsed.value.closeHour,
+				p_confirm_outside: parsed.value.confirmOutside, p_confirmed_outside: parsed.value.confirmedOutsideCount
+			});
+			if (failure?.code === '22023' && failure.message === 'That date has passed.') error(400, 'That date has passed.');
+			if (failure) reportFailure(failure.code);
+			if (data?.saved === false) {
+				return json({ code: 'bookings_outside_hours', bookings: data.bookings, outsideCount: data.outsideCount }, { status: 409 });
+			}
+			return json({ outsideCount: data?.outsideCount ?? 0 });
+		}
 		if (slotActions.includes(body.action)) {
-			if (!Number.isInteger(body.hour) || body.hour < 9 || body.hour > 16) error(400, 'Choose a valid time.');
+			if (!isVisitHour(body.hour)) error(400, 'Choose a valid time.');
 		} else if (!dateActions.includes(body.action) || body.hour != null) {
 			error(400, 'Choose a valid scheduling action.');
 		}

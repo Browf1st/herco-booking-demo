@@ -3,7 +3,6 @@
  import { tick } from 'svelte';
  import VisitPicker from './VisitPicker.svelte';
  import BookingSummary from './BookingSummary.svelte';
- import EditCoating from './EditCoating.svelte';
  import { fmtDate, fmtSlot } from '../shared/dates';
  import { serviceOf } from '../shared/config';
  import { estimatePrice, serviceLabel } from '../shared/coating';
@@ -57,7 +56,7 @@
     <p>{request.kind}{request.date && request.slot ? ' · ' + fmtDate(request.date) + ' at ' + fmtSlot(request.slot) : ''} <span class="badge" data-status={request.state.toLowerCase()}>{request.state === 'Pending' ? 'Awaiting shop approval' : request.state}</span></p>
     {#if request.reason}<p class="small muted">Your note: {request.reason}</p>{/if}
    {/each}
-   {#if booking.status === 'pending' && !pending}<EditCoating {booking} />{/if}
+   {#if booking.status === 'pending' && !pending}{#await import('./EditCoating.svelte') then { default: EditCoating }}<EditCoating {booking} />{/await}{/if}
   </div>
  </details>
  <dialog bind:this={dialog} aria-label="Request a booking change">

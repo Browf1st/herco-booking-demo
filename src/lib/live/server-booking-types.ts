@@ -5,9 +5,9 @@ export type StaffBooking = {
 	approved_at?: string | null; completed_at?: string | null; services: string[];
 	original_services?: { code: string; label: string; price_centavos: number; details?: { label: string; price_centavos: number }[] }[];
 	current_services?: { code: string; label: string; price_centavos: number; details?: { label: string; price_centavos: number }[] }[];
-	total_centavos?: number; final_price_centavos?: number | null; coating_options?: Record<string, unknown>;
+	total_centavos?: number; original_total_centavos?: number | null; final_price_centavos?: number | null; coating_options?: Record<string, unknown>;
 	approval_note?: string | null; private_completion_note?: string | null; shared_note?: string;
-	shared_photos?: number; photo_count?: number; request_pending: boolean;
+	shared_photos?: number; photo_count?: number; request_pending: boolean; outside_hours?: boolean;
 };
 export type StaffBookingPermissions = { can_confirm?: boolean; can_cancel?: boolean; can_reschedule?: boolean;
 	can_edit_services?: boolean; canComplete?: boolean; canRequestIntake?: boolean; canAdjustPrices?: boolean; past_date?: boolean };

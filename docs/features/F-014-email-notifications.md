@@ -23,7 +23,12 @@ Customers get emails when they book, when the shop confirms, and when a change r
 - Reminders recheck the appointment just before sending; skipped if passed, cancelled, moved or recipient changed.
 - An email failure never undoes a booking. Exactly-once delivery is not promised.
 - The browser never holds the Brevo key; the worker's secret key stays only in that worker.
-- Templates, events, recipients, reminder timing, shop inbox: TBD — ask owner (Q-13).
+- Owner answers 2026-11-23 (Q-13, partly answered):
+  - Shop inbox: change-request emails go to the owner's own Gmail for now. The address is saved only in hosted Supabase (`staff_notification_settings.change_request_inbox`, set 2026-11-23 via the SQL editor with the owner's OK), never in Git. It is on the local allowlist, so allowlist mode can send to it.
+  - Customer emails wanted: booking received, booking confirmed, change request decided, reminder before the visit.
+  - Reminder timing: 24 hours before the visit (`HERCO_REMINDER_LEAD_HOURS=24` when reminders go on; still 0 locally).
+  - New: a 6-month maintenance reminder after a job is marked Done. Separate feature, see [F-017](F-017-maintenance-reminder.md).
+- Still open (Q-13): approve the email wording (templates).
 
 ## Screens
 - None for customers. Operators check failed/review jobs with a database query (no addresses shown).

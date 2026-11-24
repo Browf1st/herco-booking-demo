@@ -18,6 +18,8 @@ export type TransactionalEmail = {
 	to: Address;
 	subject: string;
 	text: string;
+	/** Extra mail headers, for example List-Unsubscribe. Sent in Brevo's `headers` field. */
+	headers?: Record<string, string>;
 };
 
 export type BrevoSendResult =
@@ -82,7 +84,8 @@ export async function sendBrevoEmail(
 				replyTo: config.replyTo && { ...config.replyTo, email: config.replyTo.email.trim() },
 				to: [{ ...message.to, email: message.to.email.trim() }],
 				subject: message.subject,
-				textContent: message.text
+				textContent: message.text,
+				headers: message.headers
 			})
 		});
 	} catch {

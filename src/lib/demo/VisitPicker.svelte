@@ -2,11 +2,13 @@
  import ActionIcon from '#lib/shared/ActionIcon.svelte';
  import AvailabilityCalendar from '../shared/AvailabilityCalendar.svelte';
  import { fmtDate, fmtSlot, isBookableDate } from '../shared/dates';
- import { dayStatus, slotsFor } from './store.svelte';
+ import { hourText } from '../shared/schedule-hours';
+ import { dayHours, dayStatus, slotsFor } from './store.svelte';
  import { powderDay } from '../shared/bookingCatalog';
  let { date = $bindable(), slot = $bindable(), powder = false }: { date: string; slot: string; powder?: boolean } = $props();
  const allows = (day: string) => !powder || powderDay(day);
  const times = $derived(isBookableDate(date) && allows(date) && dayStatus(date) === 'open' ? slotsFor(date) : []);
+ const hours = $derived(isBookableDate(date) ? dayHours(date) : undefined);
 </script>
 <div class="visit-picker">
  <div class="stack">
@@ -14,7 +16,7 @@
  </div>
  <div class="stack">
  <div><strong class="times-title">Available times</strong>
- <p class="small muted">Philippine time · Appointment hours are 9 AM to 5 PM</p></div>
+ <p class="small muted">Philippine time{#if hours && !hours.closed} · Open {hourText(hours.openHour)} to {hourText(hours.closeHour)}{/if}</p></div>
  {#if times.some(t => t.free)}
   <div class="time-grid" role="group" aria-label={'Available times for ' + fmtDate(date)}>
    {#each times.filter(t => t.free) as time (time.time)}
@@ -22,6 +24,7 @@
    {/each}
   </div>
   {#if slot && !times.some(t => t.free && t.time === slot)}<p class="error">Choose one of the available times shown.</p>{/if}
+ {:else if date && hours?.closed}<p class="error">Closed on this date. Please pick another day.</p>
  {:else if date}<p class="error">No times are available. Choose another date.</p>
  {:else}<p class="small muted">Choose a date to see available times.</p>{/if}
  </div>

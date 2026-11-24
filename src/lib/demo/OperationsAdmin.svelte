@@ -14,7 +14,6 @@
 	import RecordsEmpty from '../shared/RecordsEmpty.svelte';
 	import StatusTiles from '../shared/StatusTiles.svelte';
 	import { rangeIssue, statusLabels, type RecordFilters } from '../shared/records-ui';
-	import AdminReports from './AdminReports.svelte';
 	import { canPerform } from './staffAccess.svelte.ts';
 	import { serviceLabel } from '../shared/coating';
 	import type { StockDetails } from './operations.svelte';
@@ -643,7 +642,13 @@
 			<Pager page={currentHistoryPage} pages={historyPages} label="Stock history" onchange={(next) => historyPage = next} />
 		</details>
 	{:else if tab === 'Reports'}
-			<AdminReports showIncome={canPerform('viewIncome')} onDetails={(booking) => detail = booking} />
+			{#await import('./AdminReports.svelte')}
+					<p role="status">Loading reports…</p>
+				{:then reports}
+					<reports.default showIncome={canPerform('viewIncome')} />
+				{:catch}
+					<p class="error" role="alert">Reports could not be loaded. Reload the page and try again.</p>
+				{/await}
 	{/if}
 	<DemoBookingSheet bind:booking={detail} />
 </div>

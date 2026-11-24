@@ -5,16 +5,17 @@ import { requireStaffAction, staffActor } from './staffAccess.svelte.ts';
 // server, then commit capacity checks, saved prices, history and an email outbox in
 // one database transaction. Never use this store or a URL role as authorization.
 // See docs/production-plan.md for the staged Supabase/Brevo implementation.
-import { demoFans, proFeatures, shop, type Size } from '../shared/config';
+import { demoFans, proFeatures, type Size } from '../shared/config';
 import { applyServicePriceAdjustments, defaultPricing, olderPowderParts, selection, validateSelection, quote, type Selection, type Pricing } from '../shared/coating';
 import { ceramicTierNames, defaultCeramicCatalogPricing, powderDay } from '../shared/bookingCatalog';
 import { addDays, isBookableDate, isOpenDay, nowHour, slots, today, upcoming } from '../shared/dates';
+import { defaultSettings, hoursForDate, type ScheduleSettings } from '../shared/schedule-hours';
 
 export type Status = 'pending' | 'confirmed' | 'done' | 'cancelled';
 export const bookingStatusLabels: Record<Status, string> = { pending: 'Pending', confirmed: 'Booked', done: 'Completed', cancelled: 'Cancelled' };
 export const MAX_COMPLETION_PHOTOS = 3;
 export type ChangeRequest = { kind: 'Cancel' | 'Reschedule'; reason: string; date?: string; slot?: string; state: 'Pending' | 'Approved' | 'Declined'; at: string; reviewedAt?: string };
-type DemoData = { bookings: Booking[]; blocked: string[]; opened?: string[]; blockedSlots?: Record<string, string[]>; scenarioVersion: number; pricing?: Pricing; events?: ActivityEvent[] };
+type DemoData = { bookings: Booking[]; blocked: string[]; opened?: string[]; blockedSlots?: Record<string, string[]>; hours?: ScheduleSettings; dateHours?: Record<string, { openHour: number; closeHour: number }>; scenarioVersion: number; pricing?: Pricing; events?: ActivityEvent[] };
 type ServiceSnapshot = { selection: Selection; estimate?: ReturnType<typeof quote> };
 type ServiceChange = { id: string; at: string; actor: string; before: ServiceSnapshot; after: ServiceSnapshot };
 export type Booking = {
@@ -166,14 +167,15 @@ for (const booking of loaded.bookings) {
 if (repairedSamplePrices && typeof localStorage !== 'undefined' && localStorage.getItem(KEY)) {
  localStorage.setItem(KEY, JSON.stringify(loaded));
 }
-export const db = $state({ ...loaded, opened: loaded.opened ?? [], blockedSlots: loaded.blockedSlots ?? {}, pricing: loaded.pricing ?? structuredClone(defaultPricing), events: loaded.events ?? [] });
+const withHours = (data: DemoData) => ({ opened: data.opened ?? [], blockedSlots: data.blockedSlots ?? {}, hours: data.hours ?? defaultSettings(), dateHours: data.dateHours ?? {} });
+export const db = $state({ ...loaded, ...withHours(loaded), pricing: loaded.pricing ?? structuredClone(defaultPricing), events: loaded.events ?? [] });
 const save = () => localStorage.setItem(KEY, JSON.stringify(db));
 
 export function syncBookings() {
  const sync = (event: StorageEvent) => {
   if (event.key !== KEY || !event.newValue) return;
   const saved: DemoData = JSON.parse(event.newValue);
-  Object.assign(db, { ...saved, opened: saved.opened ?? [], blockedSlots: saved.blockedSlots ?? {}, pricing: saved.pricing ?? structuredClone(defaultPricing), events: saved.events ?? [] });
+  Object.assign(db, { ...saved, ...withHours(saved), pricing: saved.pricing ?? structuredClone(defaultPricing), events: saved.events ?? [] });
  };
  window.addEventListener('storage', sync);
  return () => window.removeEventListener('storage', sync);
@@ -340,32 +342,40 @@ export function isSlotBlocked(date: string, time: string) {
 
 export function toggleSlotBlock(date: string, time: string) {
 	requireStaffAction('manageSchedule');
-	if (date < today() || !slots.includes(time)) throw Error('Choose a valid appointment time on today or a future date.');
+	if (date < today() || !/^([01]\d|2[0-3]):00$/.test(time)) throw Error('Choose a valid appointment time on today or a future date.');
 	const blocked = isSlotBlocked(date, time);
 	const previous = db.blockedSlots[date] ?? [];
 	db.blockedSlots[date] = blocked ? previous.filter(slot => slot !== time) : [...previous, time];
 	audit((blocked ? 'Unblocked ' : 'Blocked ') + date + ' at ' + time, undefined, staffActor(), 'Booking calendar');
 }
 
+// The hours of one date: its own choice first, then the open weekdays with the default hours.
+export const dateOverride = (date: string) => ({
+	closed: db.blocked.includes(date), open: db.opened.includes(date), ownOpen: db.dateHours[date]?.openHour, ownClose: db.dateHours[date]?.closeHour
+});
+export const dayHours = (date: string) => hoursForDate(db.hours, date, dateOverride(date));
+
+// Any number of customers can share an hour, so a slot is free unless it is blocked or already past.
 export function slotsFor(date: string) {
-	const taken = new Set(bookingsOn(date).map((b) => b.slot));
 	const past = date === today() ? nowHour() : -1;
-	return slots.map((time) => ({ time, free: !isSlotBlocked(date, time) && !taken.has(time) && parseInt(time) > past }));
+	return dayHours(date).hours.map((hour) => {
+		const time = String(hour).padStart(2, '0') + ':00';
+		return { time, free: !isSlotBlocked(date, time) && hour > past };
+	});
 }
 
-export const spotsLeft = (date: string) =>
-	Math.min(shop.dailyLimit - bookingsOn(date).length, slotsFor(date).filter((s) => s.free).length);
+export const spotsLeft = (date: string) => slotsFor(date).filter((s) => s.free).length;
 
 export function dayStatus(date: string) {
 	if (db.blocked.includes(date)) return 'blocked';
-	if (!db.opened.includes(date) && !isOpenDay(date)) return 'closed';
+	if (dayHours(date).closed) return 'closed';
 	return spotsLeft(date) > 0 ? 'open' : 'full';
 }
 
-// The real build enforces this with a unique index in Postgres, not in the browser.
+// The real build checks the date's hours and blocks inside the database save, not in the browser.
 function assertFree(date: string, slot: string) {
 	if (!isBookableDate(date) || dayStatus(date) !== 'open' || !slotsFor(date).find((s) => s.time === slot)?.free)
-		throw new Error('That slot was just taken. Please pick another.');
+		throw new Error('That time is no longer available. Please pick another.');
 }
 
 function assertServiceDay(selection: Selection | undefined, date: string) {
@@ -420,6 +430,7 @@ export function setDateAvailability(date: string, override: 'open' | 'closed' | 
  if (date < today()) throw Error('Choose today or a future date.');
  db.blocked = db.blocked.filter(day => day !== date);
  db.opened = db.opened.filter(day => day !== date);
+ delete db.dateHours[date];
  if (override === 'closed') db.blocked.push(date);
  if (override === 'open') db.opened.push(date);
  const action = { open: 'Opened bookings', closed: 'Closed bookings', regular: 'Restored regular hours' };

@@ -87,13 +87,43 @@ Auth levels used below: **public** (no sign-in check in the route; the database 
 
 ---
 
+## Maintenance reminders (F-017)
+
+Six months after staff mark a booking Done, the customer gets one email at 9 AM Philippine time (see F-017). Booking emails are not affected by these settings.
+
+### `POST /api/reminders/unsubscribe`
+- **Who:** public: a valid signed token is the only credential (no sign-in). Same-origin required (call it from the unsubscribe page, `/reminders/unsubscribe`).
+- **Input (JSON):** `token` string, 1-200 chars, required. It is the `token` query value of the link in the email: `/reminders/unsubscribe?token=<token>`. Send it as received (the browser already decodes the query value).
+- **Success:** `204` no body. Repeating a valid token, or using it after the customer already unsubscribed, is also `204`. Only maintenance reminders stop, for that customer, for all their jobs.
+- **Errors:** `400` token missing, malformed, edited, signed for another purpose, or older than 1 year (`"This link doesn't work any more."`: show the "link invalid or expired" state); `403` same-origin check failed; `413`; `503` backend or reminder settings not configured (show the retry state).
+- The app has no rate limiter of its own (see the `429` note above). The signature is checked before any database call.
+
+### `GET /api/account/reminders`
+- **Who:** signed-in customer. Reads only the caller's own setting.
+- **Success:** `200 { maintenance: boolean }`. `true` (default) means reminders are on.
+- **Errors:** `401`; `503`.
+
+### `PUT /api/account/reminders`
+- **Who:** signed-in customer, own setting only. Same-origin required.
+- **Input (JSON):** `maintenance` boolean, required (a string or number is `400`). `false` stops maintenance reminders, `true` turns them back on (also after an email unsubscribe).
+- **Success:** `200 { maintenance: boolean }` (the saved value).
+- **Errors:** `400`; `401`; `403` same-origin; `503`.
+
+---
+
 ## Availability & catalog
 
 ### `GET /api/availability`
 - **Who:** public (no sign-in check in the route; the database function decides what is returned).
 - **Input (query):** `from` date, `to` date, both required.
-- **Success:** `200` availability data from the database for the range (shape unclear from code; see Shared types `Availability`).
+- **Success:** `200` array of `Availability` rows (see Shared types): only hours the shop can take, each `status: "open"`, plus `openHour`/`closeHour`/`closed` per date. Hours follow the admin's default hours and open weekdays, and each date's own hours or closed choice. Until the admin saves new hours the result is 9 AM-4 PM slots, Wednesday-Sunday. No `booked` status and no counts.
 - **Errors:** `400` missing or badly formatted dates, or range rejected ("up to 42 days within the booking calendar"); `503`.
+
+### `GET /api/shop-hours`
+- **Who:** public, no sign-in needed. Same answer for everyone.
+- **Input:** none.
+- **Success:** `200 { openHour: number, closeHour: number, openWeekdays: number[] }`: the admin's current default hours (0-23 and 1-24, closing after opening; 9 and 17 until changed) and open weekdays (0 = Sunday ... 6 = Saturday, sorted; Wednesday-Sunday is `[0,3,4,5,6]` until changed). Dates with their own hours or a closed choice are not reflected (use `/api/availability`). No private data. `Cache-Control: public, max-age=60`.
+- **Errors:** `503` "Opening hours are temporarily unavailable." (not cached).
 
 ### `GET /api/catalog`
 - **Who:** public (no sign-in check in the route).
@@ -125,7 +155,7 @@ Auth levels used below: **public** (no sign-in check in the route; the database 
 
 ### `POST /api/bookings`
 - **Who:** verified customer (route checks signed in; database reports `403` for unverified). Same-origin required.
-- **Input (JSON):** `requestId` string (retry key); `date` string; `hour` integer; `services` array of 1-20 strings (each up to 64); `bike` string; `name` string; `phone` string (may be empty: the mobile number is optional for a customer's own online booking; if not empty, the route requires 7-15 digits with only `+`, spaces, `()` and `-`, same rule as `/api/auth/contact`, else `400 "Enter a valid mobile number, or leave it blank."`; the database also caps it at 40 characters); `plate` optional string; `coating` optional object (under 3000 chars JSON); `priceFingerprint` optional 32 lowercase-hex string. Lengths of `bike`, `name`, `phone`, `plate` and the date/hour ranges are not checked in the route (database decides, unclear from code).
+- **Input (JSON):** `requestId` string (retry key); `date` string; `hour` integer 0-23 (the database refuses an hour that is not open for that date: `409`); `services` array of 1-20 strings (each up to 64); `bike` string; `name` string; `phone` string (may be empty: the mobile number is optional for a customer's own online booking; if not empty, the route requires 7-15 digits with only `+`, spaces, `()` and `-`, same rule as `/api/auth/contact`, else `400 "Enter a valid mobile number, or leave it blank."`; the database also caps it at 40 characters); `plate` optional string; `coating` optional object (under 3000 chars JSON); `priceFingerprint` optional 32 lowercase-hex string. Lengths of `bike`, `name`, `phone`, `plate` and the date/hour ranges are not checked in the route (database decides, unclear from code).
 - **Success:** `200` `{ id: uuid, status: string, totalCentavos: number, estimateOpen: boolean }`. `estimateOpen` is true when any service needs a quote or has a price range.
 - **Errors:** `400` invalid input; `401`; `403` verify your email; `409` slot unavailable, or `{ code: "price_changed", message }` when prices changed since the estimate; `503` retry using the same `requestId`.
 
@@ -161,7 +191,7 @@ Auth levels used below: **public** (no sign-in check in the route; the database 
 
 ### `POST /api/bookings/requests`
 - **Who:** signed-in customer who owns the booking (database). Same-origin required.
-- **Input (JSON):** `bookingId` uuid; `submissionId` uuid (retry key); `kind` `"cancel"` or `"reschedule"`; `reason` string up to 500. For `reschedule`: `date` and `hour` (integer 9-16) are required. For `cancel`: `date` and `hour` must be absent or null.
+- **Input (JSON):** `bookingId` uuid; `submissionId` uuid (retry key); `kind` `"cancel"` or `"reschedule"`; `reason` string up to 500. For `reschedule`: `date` and `hour` (integer 0-23, and open for that date) are required. For `cancel`: `date` and `hour` must be absent or null.
 - **Success:** `200` `{ id: uuid }` (the change request).
 - **Errors:** `400` invalid input or database rejected the visit; `401`; `404` booking not found; `409` already a pending request, or rejected by database (message passed through); `503`.
 
@@ -223,27 +253,51 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
 - **Who:** staff with a confirmed email; the needed grant depends on `action` (database-enforced). Same-origin required.
 - **Input (JSON):** by `action`:
   - `share`: `bookingId` uuid, `note` string up to 1000, `photos` boolean.
-  - `change`: `bookingId` uuid, `requestId` uuid, `kind` `"cancel"`/`"reschedule"`, `originalDate` date, `originalHour` integer 9-16 or `null`, `reason` string up to 500; for `reschedule` also `date` and `hour` (9-16), and `originalHour` must not be null; for `cancel`, `date`/`hour` must be absent.
+  - `change`: `bookingId` uuid, `requestId` uuid, `kind` `"cancel"`/`"reschedule"`, `originalDate` date, `originalHour` integer 0-23 or `null`, `reason` string up to 500; for `reschedule` also `date` and `hour` (0-23, must be open for that date), and `originalHour` must not be null; for `cancel`, `date`/`hour` must be absent.
   - `review`: `requestId` uuid, `decision` `"approved"`/`"declined"`.
   - `confirm`: `bookingId` uuid, `note` string up to 500.
-  - `open_date`, `close_date`, `restore_date`: `date` required, no `hour`.
-  - `block_slot`, `unblock_slot`: `date` and `hour` (9-16) required.
-- **Success:** `204`.
-- **Errors:** `400` invalid input or unknown action; `401`; `403`; `404`; `409` booking no longer pending / slot taken / request already reviewed; `503`.
+  - `open_date` (open with the default hours), `close_date` (closed): `date` required, no `hour`. Both also clear the date's own hours.
+  - `restore_date`: `date` required, no `hour`. Removes the date's closed/open choice and own hours; manual blocks stay.
+  - `block_slot`, `unblock_slot`: `date` and `hour` (0-23) required. Hours already past (Philippine time) are refused with `400`.
+  - `set_date_hours`: `date`, `openHour` (0-23), `closeHour` (1-24, greater than `openHour`), optional `confirmOutside` boolean (default `false`), optional `confirmedOutsideCount` integer 0 or more (the `outsideCount` the staff member was shown; only used with `confirmOutside: true`). Own hours for that date only.
+  - All date actions refuse past dates (Philippine time) with `400`, and need the `manageSchedule` grant (`403` otherwise).
+- **Success:** `204`, except `set_date_hours`: `200 { outsideCount: number }`.
+- **`409` for `set_date_hours`:** `{ code: "bookings_outside_hours", bookings: [{ reference, date, hour }], outsideCount }` when future bookings (not cancelled, hour still ahead) on that date would fall outside the new own hours and `confirmOutside` is not `true`. The same `409` is returned when `confirmOutside` is `true` and `confirmedOutsideCount` is sent but the recomputed count is higher (more bookings appeared since the warning): the body carries the new list and count so the screen can warn again. `bookings` lists at most 100, no names. Nothing is saved. Send the same request with `confirmOutside: true` (and the `outsideCount` just shown as `confirmedOutsideCount`) to save anyway. Bookings are never moved or cancelled.
+- **`400` for `set_date_hours` on a past date:** message `That date has passed.`
+- **Errors:** `400` invalid input or unknown action; `401`; `403`; `404`; `409` booking no longer pending / request already reviewed / the time is no longer available (message from the database) / `bookings_outside_hours`; `503`. (`400` for `set_date_hours` also has the message `That date has passed.` for past dates.)
+- Changing hours, weekdays, own hours or blocks never changes existing bookings. Every change is written to the schedule log (shown in the Activity log as area "Availability", actions `open_date`, `close_date`, `restore_date`, `block_slot`, `unblock_slot`, `set_date_hours`, `set_default_hours`).
+
+### `GET /api/staff/schedule-settings`
+- **Who:** signed-in staff with a confirmed email and the Bookings page (the database checks it; the `manageSchedule` grant is not needed to read).
+- **Success:** `200 { openHour: 0-23, closeHour: 1-24, openWeekdays: number[] (0 = Sunday ... 6 = Saturday, sorted), canManage: boolean, version: string }`. `version` is the time the default hours were last saved (ISO string, opaque: send it back unchanged in the next `PUT`). Starting values: `9`, `17`, `[0,3,4,5,6]`. The last slot starts at `closeHour - 1`.
+- **Errors:** `401`; `403`; `503`.
+
+### `PUT /api/staff/schedule-settings`
+- **Who:** staff with the `manageSchedule` grant (database-enforced). Same-origin required.
+- **Input (JSON):** `openHour` integer 0-23; `closeHour` integer 1-24, greater than `openHour`; `openWeekdays` 1-7 unique integers 0-6; optional `confirmOutside` boolean (default `false`); optional `version` string (from `GET`; when sent and no longer current, nothing is saved and `409 schedule_changed` is returned); optional `confirmedOutsideCount` integer 0 or more (the `outsideCount` the staff member was shown; only used with `confirmOutside: true`). A wrong type is `400`.
+- **Success:** `200 { openHour, closeHour, openWeekdays, outsideCount, version }` (`version` is the new current version). `outsideCount` is how many future bookings are now outside the hours (0 unless `confirmOutside` was sent).
+- **`409`:** `{ code: "bookings_outside_hours", bookings: [{ reference, date, hour }], outsideCount }` when future bookings (not cancelled, hour still ahead) that were inside the current hours would fall outside the new hours or on a newly closed weekday and `confirmOutside` is not `true`. `bookings` lists at most 100, sorted by date and hour, with no names. Nothing is saved. Bookings already outside the hours (for example on a date closed by hand) are not listed. The same `409` (new list and count, nothing saved) is returned when `confirmOutside` is `true` and `confirmedOutsideCount` is sent but the recomputed count is higher.
+- **`409 schedule_changed`:** `{ code: "schedule_changed", message: "Opening hours were changed by someone else. Reload to see the latest." }` when `version` was sent and the hours were saved by someone else since. Nothing is saved. Reload with `GET`.
+- **Errors:** `400` with a message (`Choose an opening and closing hour.`, `Closing time must be after opening time.`, `Pick at least one open day.`); `401`; `403` (`You don't have permission to change the schedule.`); `409` as above; `503`.
 
 ### `POST /api/staff/manual-booking`
 - **Who:** staff with a confirmed email and permission to create customer bookings (database). Same-origin required.
 - **Input (JSON):** always `email` (complete address, up to 254) and `action`.
   - `lookup`: finds the verified customer. Returns `200` the customer record (shape unclear from code).
-  - `book`: `customerId` uuid, `requestId` uuid, `date`, `hour` (integer 9-16, or `null` when `walkIn` is true), `walkIn` optional boolean, `services` 1-20 strings (each up to 64), `bike` up to 120, `name` up to 120, `phone` up to 40, `plate` up to 30 (all required strings), `coating` optional object (under 3000 chars), `priceFingerprint` optional (not type-checked in route).
+  - `book`: `customerId` uuid, `requestId` uuid, `date`, `hour` (integer 0-23 that is open for that date, or `null` when `walkIn` is true; the database refuses other hours with `409`), `walkIn` optional boolean, `services` 1-20 strings (each up to 64), `bike` up to 120, `name` up to 120, `phone` up to 40, `plate` up to 30 (all required strings), `coating` optional object (under 3000 chars), `priceFingerprint` optional (not type-checked in route).
 - **Success:** `200` customer record (lookup) or created booking data (book) (shape unclear from code).
 - **Errors:** `400`; `401`; `403` unconfirmed email or no permission; `404` no unique verified account matched / account no longer matches; `409` slot unavailable or `{ code: "price_changed", message }`; `503`.
 
 ### `POST /api/staff/records`
 - **Who:** staff with booking-records access (database; route has no sign-in check). Same-origin required.
-- **Input (JSON, all required):** `from` and `through` (both dates, or both empty strings for no date filter); `search` string up to 254; `status` one of `all`, `pending`, `confirmed`, `done`, `cancelled`; `source` one of `all`, `online`, `walk-in`; `page` integer 1-500; `report` boolean.
-- **Success:** `200` booking records page (shape unclear from code).
-- **Errors:** `400` invalid filters or range over 366 days; `403`; `503`.
+- **Input (JSON, all required):** `from` and `through` (both dates, or both empty strings for no date filter); `search` string up to 254; `status` one of `all`, `pending`, `confirmed`, `done`, `cancelled`; `source` one of `all`, `online`, `walk-in`; `page` integer 1-500; `report` boolean. Optional `sort`: `"date"` (default, newest visit first), `"price"` (high to low: final price for done bookings, original estimate for the others; bookings with no price last) or `"status"` (pending, booked, done, cancelled). Sorting covers all matching records, not just the page; ties break by newest created, then id, so pages never repeat or skip a row. Any other `sort` value is `400`.
+- **Success:** `200` `{ records, metrics, total, page, pages, canViewIncome, sort }`.
+  - `sort`: the sort actually applied. Without the `viewIncome` grant `"price"` is applied as `"date"` (the order must not reveal amounts).
+  - `metrics`: `{ total, pending, booked, completed, cancelled, walkIns }`; with `report: true` also `completedValueCentavos` (null without `viewIncome`) and `completedWithoutValue`.
+  - `records`: up to 20 rows: `id`, `reference` (`HG-n`), `visit_date`, `visit_hour`, `bike`, `customer_id`, `customer_name`, `customer_phone`, `customer_email`, `plate`, `status` (`pending|confirmed|done|cancelled`), `created_at`, `source` (`online|walk-in`), `services` (labels), `original_services` and `current_services` (arrays of `{ code, label, price_centavos, max_centavos?, quote_required?, promotion?, details? }`), `coating_options`, `approved_at`, `completed_at`, `private_completion_note`, `approval_note`, `shared_note`, `shared_photos`, `photo_count`, `request_pending`, plus the money fields below.
+  - Money fields: `final_price_centavos` (done bookings, after any price correction; null if not completed), `original_total_centavos` (the booking-time estimate, use it for the Price column of Pending/Booked), `total_centavos` (current total).
+  - **Without `viewIncome`:** `final_price_centavos`, `original_total_centavos` and `total_centavos` are `null`, and service lines in `original_services`/`current_services` (and their `details`) have `price_centavos`, `max_centavos` and `promotion` removed (labels and codes remain). `original_total_centavos` is new; all other fields are unchanged apart from the money hiding above.
+- **Errors:** `400` invalid filters, sort or range over 366 days; `403`; `503`.
 
 ### `POST /api/staff/customers`
 - **Who:** staff with customer access (database; route has no sign-in check). Uses POST so emails and ids stay out of URLs. Same-origin required.
@@ -486,6 +540,8 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
 - **`PriceFingerprint`:** 32-character lowercase hex string from the price estimate; sent back on booking calls to detect price changes.
 - **`Coating`:** a free-form JSON object (not an array), under 3000 characters when serialised. Its inner fields are defined by the database (unclear from code).
 - **`Booking` (from `GET /api/bookings`):** `{ id, reference_no, visit_date, visit_hour, bike, status, original_services, original_total_centavos, current_services, current_total_centavos, coating_options, current_coating_options, created_at, approved_at, completed_at, cancelled_at }`. Statuses seen in code: `pending`, `confirmed`, `done`, `cancelled`. Service entries can include `quote_required` and `max_centavos`.
-- **`Availability`:** returned by the `herco_availability` function; shape unclear from code. Calendar hours are 9-16.
+- **`Availability`:** array from `GET /api/availability`, one row per open hour: `{ visit_date: "YYYY-MM-DD", visit_hour: 0-23, status: "open", openHour, closeHour, closed: false }`. `openHour`/`closeHour` are that date's first slot hour and closing hour (last slot starts at `closeHour - 1`). Only bookable hours are listed (past, blocked and out-of-hours hours are not). A date with no bookable hour returns one row `{ visit_date, visit_hour: null, status: "closed", openHour, closeHour, closed }`: `closed: true` (and `openHour`/`closeHour` null) when the shop is closed that date, `closed: false` when the date has hours but none left (all past or blocked). `booked` is never returned; any number of customers may share an hour.
+- **Staff day view (`GET /api/staff/bookings?date=`) additions:** `slots` now holds only the date's real hours: `[{ hour, status: "open"|"past"|"blocked", blocked: boolean, booked: number }]` (`booked` counts non-cancelled bookings in that hour). New keys: `closed` boolean, `open_hour`, `close_hour` (null when closed), `own_open_hour`, `own_close_hour` (the date's own hours, else null). `override` is unchanged (`true`/`false`/`null`). Each booking has `outside_hours: boolean`.
+- **Staff calendar (`GET /api/staff/calendar`) additions per date:** `closed` (follows the date's real hours), `open_hour`, `close_hour`, `outside_hours` (count of non-cancelled bookings outside the hours), `hours: [{ hour, booked }]` (non-cancelled bookings per hour). Existing keys `pending`, `booked` (confirmed only), `completed` are unchanged.
 - **`WorkspaceAccess`:** permission object from `herco_workspace_permissions`, parsed by `parseWorkspaceAccess` in `src/lib/shared/workspace-navigation.ts` (not read for this document; shape unclear from code).
 - **`StaffAccessGrant` (staff-access):** roles `staff`, `admin`, `restricted_admin` (the screens no longer offer `restricted_admin` since 2026-11-23 but still accept and display it as Admin); `pages` and `actions` are arrays of grant-name strings (names defined in the database; unclear from code).

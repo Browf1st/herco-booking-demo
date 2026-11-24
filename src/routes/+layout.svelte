@@ -5,22 +5,25 @@
 	import { onMount } from 'svelte';
 	import { syncBookings } from '#lib/demo/store.svelte.ts';
 	import { saveFanProfile, syncOperations } from '#lib/demo/operations.svelte.ts';
-	import { account } from '#lib/demo/account.svelte.ts';
+	import { account, signOut as signOutDemoCustomer } from '#lib/demo/account.svelte.ts';
 	import { asset, resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { photos, shop } from '#lib/shared/config.ts';
 	import type { LayoutProps } from './$types';
 	import { adminNavigation, adminPath } from '#lib/demo/adminNavigation.ts';
-	import { switchStaffSession, syncStaffAccess } from '#lib/demo/staffAccess.svelte.ts';
+	import { staffAccess, switchStaffSession, syncStaffAccess } from '#lib/demo/staffAccess.svelte.ts';
 	import { parseWorkspaceAccess, workspaceLanding, workspaceGroups, workspaceLinks, type WorkspaceAccess } from '#lib/shared/workspace-navigation.ts';
-	import { THEME_EVENT } from '#lib/shared/theme.ts';
-
+	import type { Component } from 'svelte';
+	import type { MenuUser } from '#lib/shared/account-menu.ts';
+	
 	let { children }: LayoutProps = $props();
 	let bookMenu = $state<HTMLDetailsElement>();
 	let menuOpen = $state(false);
 	let menuTrigger: HTMLButtonElement;
 	let header: HTMLElement;
-	let accountMenu = $state<HTMLDetailsElement>();
+	let profile = $state<{ name: string; email: string } | null>(null);
+	// The Account menu loads after the page is shown, so it stays out of every page's first download.
+	let AccountMenu = $state.raw<Component<{ user: MenuUser | null; settingsHref: string; signingOut: boolean; onsignout: () => void }>>();
 	let workerAccess = $state<WorkspaceAccess | null>(null);
 	let workerNavigation = $state<'loading' | 'ready' | 'error'>('loading');
 	let signingOut = $state(false);
@@ -34,15 +37,14 @@
 		if (bookMenu) bookMenu.open = false;
 		const open = openOwnerMenu();
 		if (open) open.open = false;
-		if (accountMenu) accountMenu.open = false;
 		if (!demo) void refreshWorkerNavigation();
 	});
-	let theme = $state<'system' | 'light' | 'dark'>('system');
-	const themes = [{ value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }] as const;
 	const activeAdmin = $derived(adminNavigation(page.url.searchParams));
 	const ownerLinks = [{ tab: 'Reports', label: 'Reports' }, { tab: 'Staff Access', label: 'Accounts' }, { tab: 'Activity log', label: 'Activity Log' }] as const;
 	const moreTabs = ['Booking', 'Customers', 'HERCO Points', 'Inventory', 'Pricing'] as const;
 	const demo = import.meta.env.MODE !== 'worker';
+	// The footer shows the starting hours until the real ones load.
+	let ShopHoursText = $state<Component>();
 	let sessionError = $state('');
 	const customerOnlyRoutes = new Set(['/', '/book', '/points', '/my-bookings', '/preview', '/walk-in']);
 	const staffOnlyRoutes = new Set(['/admin', '/booking-history', '/reports', '/customers', '/staff-points', '/inventory',
@@ -121,7 +123,7 @@
 			workerAccess = null;
 			pendingCounts = undefined;
 			workerNavigation = 'ready';
-			if (accountMenu) accountMenu.open = false;
+			profile = null;
 			await goto(resolve('/account'), { invalidateAll: true });
 			window.dispatchEvent(new Event('herco-account-changed'));
 		} catch {
@@ -140,40 +142,38 @@
 		}
 	}
 
-	function syncTheme() {
-		const current = document.documentElement.dataset.theme;
-		theme = current === 'light' || current === 'dark' ? current : 'system';
-	}
-
-	function applyTheme(value: string) {
-		if (value === 'light' || value === 'dark') document.documentElement.dataset.theme = value;
-		else delete document.documentElement.dataset.theme;
-		syncTheme();
-	}
-
-	function chooseTheme(value: typeof theme) {
-		applyTheme(value);
+	// Who is signed in, for the header Account menu (the Worker build asks the server who the signed-in user is).
+	async function loadProfile() {
 		try {
-			if (theme === 'system') localStorage.removeItem('herco-theme');
-			else localStorage.setItem('herco-theme', theme);
-		} catch {}
-		window.dispatchEvent(new Event(THEME_EVENT));
+			const response = await fetch(resolve('/api/auth/contact'), { headers: { accept: 'application/json' } });
+			const data = response.ok ? await response.json() : null;
+			profile = data ? { name: data.name || String(data.email).split('@')[0], email: String(data.email) } : null;
+		} catch { profile = null; }
 	}
+	// Demo: staff views only on the admin pages, otherwise the demo customer account.
+	const menuUser = $derived<MenuUser | null>(demo
+		? (page.route.id === '/admin'
+			? (staffAccess.owner || staffAccess.admin || staffAccess.current ? { name: staffAccess.current?.name ?? 'Demo ' + (staffAccess.owner ? 'owner' : 'admin'), email: staffAccess.current?.email ?? '', role: staffAccess.owner ? 'Owner' : staffAccess.current?.role ?? 'Admin' } : null)
+			: account.current ? { name: account.current.name, email: account.current.email, role: 'Customer' } : null)
+		: profile ? { ...profile, role: workerAccess?.role.replace('restricted_', '') ?? 'Customer' } : null);
+	const signOutMenu = () => demo ? (page.route.id === '/admin' ? switchStaffSession(null) : (signOutDemoCustomer(), goto(resolve('/account')))) : signOutWorker();
 
 	onMount(() => {
-		syncTheme();
+		void import('#lib/shared/AccountMenu.svelte').then((module) => { AccountMenu = module.default; });
+		void import('./ShopHoursText.svelte').then((module) => { ShopHoursText = module.default; });
 		const onThemeStorage = (event: StorageEvent) => {
-			if (event.key === 'herco-theme' || event.key === null) applyTheme(event.newValue ?? 'system');
+			if (event.key !== 'herco-theme' && event.key !== null) return;
+			if (event.newValue === 'light' || event.newValue === 'dark') document.documentElement.dataset.theme = event.newValue;
+			else delete document.documentElement.dataset.theme;
 		};
 		window.addEventListener('storage', onThemeStorage);
-		window.addEventListener(THEME_EVENT, syncTheme);
 		if (!demo) {
-			const refresh = () => { void refreshWorkerNavigation(); };
+			void loadProfile();
+			const refresh = () => { void refreshWorkerNavigation(); void loadProfile(); };
 			window.addEventListener('herco-account-changed', refresh);
 			window.addEventListener('focus', refresh);
 			return () => {
 				window.removeEventListener('storage', onThemeStorage);
-				window.removeEventListener(THEME_EVENT, syncTheme);
 				window.removeEventListener('herco-account-changed', refresh);
 				window.removeEventListener('focus', refresh);
 			};
@@ -184,7 +184,6 @@
 		const stopStaffAccess = syncStaffAccess();
 		return () => {
 			window.removeEventListener('storage', onThemeStorage);
-			window.removeEventListener(THEME_EVENT, syncTheme);
 			stopOperations();
 			stopBookings();
 			stopStaffAccess();
@@ -200,7 +199,6 @@
 	const open = openOwnerMenu();
 	if (open && event.target instanceof Node && !open.contains(event.target)) open.open = false;
 	if (bookMenu?.open && event.target instanceof Node && !bookMenu.contains(event.target)) bookMenu.open = false;
-	if (accountMenu?.open && event.target instanceof Node && !accountMenu.contains(event.target)) accountMenu.open = false;
 	if (menuOpen && event.target instanceof Node && !header.contains(event.target)) menuOpen = false;
 	// Booking card "⋯ More actions" menus close when you tap anywhere else.
 	for (const more of document.querySelectorAll<HTMLDetailsElement>('.more[open]:has(.more-options)')) if (!more.contains(event.target as Node)) more.open = false;
@@ -209,9 +207,6 @@
 	if (more) {
 		more.open = false;
 		more.querySelector('summary')?.focus();
-	} else if (event.key === 'Escape' && accountMenu?.open) {
-		accountMenu.open = false;
-		accountMenu.querySelector('summary')?.focus();
 	} else if (event.key === 'Escape' && bookMenu?.open) {
 		bookMenu.open = false;
 		bookMenu.querySelector('summary')?.focus();
@@ -224,15 +219,6 @@
 		menuTrigger.focus();
 	}
 }} />
-
-<!-- Light/dark choice (owner item 14, 2026-11-23): in the staff account menu and the footer, not in a strip at the top. -->
-{#snippet themeChoices()}
-	<div class="theme-switch" role="group" aria-label="Theme">
-		{#each themes as option (option.value)}
-			<button type="button" aria-pressed={theme === option.value} onclick={() => chooseTheme(option.value)}><ActionIcon name={option.value === 'system' ? 'system' : option.value === 'light' ? 'sun' : 'moon'} />{option.label}</button>
-		{/each}
-	</div>
-{/snippet}
 
 {#if demo || sessionError}<div class="demo-switch">
 	<div class="wrap">
@@ -273,16 +259,6 @@
 					{/if}
 				{/each}
 			{/if}
-			<details class="account-menu" bind:this={accountMenu}>
-				<summary><ActionIcon name="user" />Account <span class="owner-caret" aria-hidden="true"></span></summary>
-				<div class="account-options">
-					{#if workerAccess}<span class="muted small">{workerAccess.role === 'owner' ? 'Owner' : workerAccess.role === 'superadmin' ? 'Superadmin' : workerAccess.role === 'staff' ? 'Staff' : 'Admin'}</span>{/if}
-					<a href={resolve('/account')}>Account settings</a>
-					<span class="muted small">Theme</span>
-					{@render themeChoices()}
-					{#if workerAccess}<button type="button" onclick={signOutWorker} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button>{/if}
-				</div>
-			</details>
 		</nav>
 		{:else if !demo || page.route.id !== '/admin'}
 		<nav id="header-navigation" class="row main-nav" class:menu-open={menuOpen} aria-label="Customer navigation">
@@ -290,7 +266,7 @@
 			<a class="link" href={resolve('/preview')} aria-current={page.route.id === '/preview' ? 'page' : undefined}>Showcase</a>
 			<a class="link" href={resolve('/points')} aria-current={page.route.id === '/points' ? 'page' : undefined}>HERCO Points</a>
 			<a class="link" href={resolve('/my-bookings')} aria-current={page.route.id === '/my-bookings' ? 'page' : undefined}>Bookings</a>
-			<a class="link" href={resolve('/account')} aria-current={page.route.id === '/account' ? 'page' : undefined}>Account</a>
+			{#if !menuUser}<a class="link" href={resolve('/account')} aria-current={page.route.id === '/account' ? 'page' : undefined}>Account</a>{/if}
 			<details class="book-menu" bind:this={bookMenu}>
 				<summary class="btn sm" class:booking-current={page.route.id === '/book'}><ActionIcon name="calendar" />Book <span aria-hidden="true">▾</span></summary>
 				<div class="book-options">
@@ -323,6 +299,7 @@
 			{/if}
 		</nav>
 		{/if}
+		<div class="account-slot">{#if AccountMenu}<AccountMenu user={menuUser} settingsHref={resolve('/account')} {signingOut} onsignout={signOutMenu} />{/if}</div>
 	</div>
 </header>
 	{#if navigationError}<p class="wrap error small" role="alert">{navigationError}</p>{/if}
@@ -336,11 +313,10 @@
 			<img class="mark" src={asset(photos.logo)} alt="" width="54" height="46" />
 			<div>
 				<p class="display name">{shop.name}</p>
-				<p class="muted small">{shop.area}. Open Wednesday to Sunday, 9AM to 5PM.</p>
+				<p class="muted small">{shop.area}. Open {#if ShopHoursText}<ShopHoursText />{:else}Wed to Sun, 9 AM to 5 PM{/if}.</p>
 				{#if !demo}<a class="small" href={resolve('/privacy-preferences')}>Privacy preferences</a>{/if}
 			</div>
 		</div>
-		<div class="footer-theme"><span class="muted small">Theme</span>{@render themeChoices()}</div>
 	</div>
 </footer>
 
@@ -361,13 +337,6 @@
 		padding-block: .2rem;
 	}
 
-	/* System / Light / Dark as one small segmented control. */
-	.theme-switch { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
-	/* [type] outranks the account menu's button style. */
-	.theme-switch button[type] { display: inline-flex; align-items: center; gap: .3rem; min-height: 2.25rem; padding: 0 .6rem; border: 0; border-radius: 4px; background: transparent; color: var(--text); font: 650 .82rem var(--body); cursor: pointer; }
-	.theme-switch button[type]:hover { background: var(--panel-2); }
-	.theme-switch button[type][aria-pressed='true'] { background: var(--accent-fill); color: var(--accent-ink); }
-	.footer-theme { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 
 	.view-switch { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: .45rem; background: var(--panel); }
 	.view-switch a { padding: .3rem .55rem; border-radius: .29rem; color: var(--muted); font-size: .77rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
@@ -449,19 +418,12 @@
 	.book-options a:hover { background: var(--panel-2); }
 	@media (max-width: 800px) { .book-options { position: static; margin-top: .25rem; } }
 	.menu-trigger { display: none; }
+	.account-slot { display: flex; align-items: center; flex: none; min-height: 44px; margin-inline-start: .5rem; }
 	/* Staff header reuses the demo admin tabs; dropdowns need visible overflow to open below the bar. */
 	.staff-main-nav { overflow: visible; flex-wrap: wrap; justify-content: flex-end; gap: 0 clamp(.75rem, 2vw, 1.5rem); }
 	.owner-options a { display: flex; align-items: center; gap: .5rem; white-space: nowrap; }
 	.owner-options .option-label { flex: 1; }
 	.owner-group summary .tab-count { margin-inline-start: .1rem; }
-	.account-menu { position: relative; }
-	.account-menu summary { display: flex; align-items: center; gap: .45rem; height: 100%; cursor: pointer; list-style: none; padding: 12px 0; border-bottom: 3px solid transparent; font: 700 1.05rem var(--display); letter-spacing: .05em; text-transform: uppercase; }
-	.account-menu summary::-webkit-details-marker { display: none; }
-	.account-menu[open] > summary .owner-caret { rotate: 225deg; }
-	.account-options { position: absolute; inset: 100% 0 auto auto; z-index: 1; display: grid; gap: .15rem; min-width: 11rem; padding: .25rem; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); box-shadow: 0 4px 12px var(--card-shadow); }
-	.account-options .muted { padding: .35rem .65rem 0; }
-	.account-options a, .account-options button { padding: .5rem .65rem; border: 0; border-radius: 4px; background: transparent; color: var(--text); font: 650 .92rem var(--body); letter-spacing: 0; text-transform: none; text-align: start; text-decoration: none; cursor: pointer; }
-	.account-options a:hover, .account-options button:hover { background: var(--panel-2); }
 	.navigation-retry { display: flex; align-items: center; gap: .4rem; border: 0; background: transparent; color: var(--text); font: 700 1.05rem var(--display); text-transform: uppercase; cursor: pointer; }
 
 	header {
@@ -553,7 +515,11 @@
 			padding-block: 8px;
 		}
 
-		header .menu-trigger { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); font-size: 1.35rem; cursor: pointer; }
+		
+		.logo { order: 1; }
+		.account-slot { order: 2; margin-inline-start: auto; }
+
+header .menu-trigger { order: 3; display: grid; place-items: center; width: 44px; height: 44px; flex: none; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); font-size: 1.35rem; cursor: pointer; }
 		.main-nav {
 			display: none;
 			position: absolute;
@@ -573,7 +539,6 @@
 		.owner-options { position: static; min-width: 0; box-shadow: none; }
 		.main-nav a { padding: .5rem; }
 		.main-nav a[aria-current] { color: var(--accent); }
-		.account-options { position: static; box-shadow: none; }
 		header .link {
 			font-size: 0.95rem;
 			letter-spacing: 0.04em;

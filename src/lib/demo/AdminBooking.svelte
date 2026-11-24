@@ -3,7 +3,6 @@
  import BookingCard from '../shared/BookingCard.svelte';
  import { servicesLine } from '../shared/records-ui';
  import VisitPicker from './VisitPicker.svelte';
- import EditCoating from './EditCoating.svelte';
  import { fmtDate, fmtSlot } from '../shared/dates';
  import { canPerform } from './staffAccess.svelte.ts';
  import { approveBooking, completeBooking, hasUnfinalizedServicePrices, MAX_COMPLETION_PHOTOS, reschedule, reviewChange, setStatus, type Booking, type ChangeRequest } from './store.svelte';
@@ -111,7 +110,7 @@
     <details class="more" bind:this={more}>
      <summary class="btn sm ghost" aria-label="More actions"><span aria-hidden="true">⋯</span></summary>
      <div class="more-options">
-      {#if canEdit}<EditCoating {booking} staff />{/if}
+      {#if canEdit}{#await import('./EditCoating.svelte') then { default: EditCoating }}<EditCoating {booking} staff />{/await}{/if}
       {#if canMove}<button type="button" class="btn sm ghost" onclick={() => { if (more) more.open = false; moveDate = moveSlot = moveError = ''; moveDialog?.showModal(); }}><ActionIcon name="calendar" />Reschedule booking</button>{/if}
       {#if canCancel}<button type="button" class="btn sm danger cancel-option" onclick={() => { if (more) more.open = false; openCancellation(); }}><ActionIcon name="block" />Cancel booking</button>{/if}
      </div>

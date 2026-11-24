@@ -15,7 +15,6 @@ export const shop = {
 	openDays: [3, 4, 5, 6, 0],
 	openHour: 9,
 	closeHour: 17,
-	dailyLimit: 8,
 	dateStripDays: 21,
 };
 

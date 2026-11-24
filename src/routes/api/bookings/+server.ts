@@ -1,4 +1,5 @@
 import { readJsonBody } from '#lib/server/request-body.ts';
+import { isVisitHour } from '#lib/server/schedule-input.ts';
 import { error, json } from '@sveltejs/kit';
 import { requestSupabase, requireSameOrigin } from '#lib/server/supabase.ts';
 import { isValidMobile } from '#lib/shared/mobile.ts';
@@ -43,7 +44,7 @@ export const POST: RequestHandler = async (event) => {
 	if (
 		typeof body?.requestId !== 'string' ||
 		typeof body.date !== 'string' ||
-		!Number.isInteger(body.hour) ||
+		!isVisitHour(body.hour) ||
 		!Array.isArray(body.services) ||
 		!body.services.length ||
 		body.services.length > 20 ||

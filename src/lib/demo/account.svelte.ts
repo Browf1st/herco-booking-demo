@@ -34,6 +34,16 @@ export function saveProfilePhone(phone: string) {
  localStorage.setItem(key, JSON.stringify(current));
  saveFanProfile(current);
 }
+// Demo "Maintenance reminders" switch (F-017). On unless the visitor turned it off on this browser.
+const remindersKey = (id: string) => `herco-demo-maintenance-reminders:${id}`;
+export function maintenanceRemindersOn(id: string) {
+ return read(remindersKey(id)) !== 'off';
+}
+export function setMaintenanceReminders(on: boolean) {
+ const current = account.current;
+ if (!current) return;
+ try { localStorage.setItem(remindersKey(current.id), on ? 'on' : 'off'); } catch { /* keeps the choice for this visit only */ }
+}
 export function signOut() {
  account.current = undefined;
  localStorage.removeItem(key);
