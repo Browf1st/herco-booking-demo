@@ -91,7 +91,7 @@ begin
     for p in 1..3 loop
       page := public.herco_staff_booking_records(current_date+61,current_date+61,'RPAGE','all','all',p,false,s);
       select coalesce(array_agg((r->>'id')::uuid),'{}') into ids from jsonb_array_elements(page->'records') r;
-      if cardinality(ids) <> case when p < 3 then 20 else 5 end then raise exception 'Page % of % has % rows', p, s, cardinality(ids); end if;
+      if cardinality(ids) <> (case when p < 3 then 20 else 5 end) then raise exception 'Page % of % has % rows', p, s, cardinality(ids); end if;
       if seen && ids then raise exception 'A booking repeats between pages (sort %)', s; end if;
       seen := seen || ids;
     end loop;
