@@ -239,7 +239,7 @@ begin
 
   -- first name only, and services follow the current (edited) services
   b := public.herco_test_done(a, 'ana@example.test', '  Maria Clara Santos ', '2026-03-07 10:00+08');
-  update public.herco_bookings set current_services = '[{"code":"a","label":"Wash","price_centavos":1},{"code":"b","label":"Powder coating","price_centavos":2}]' where id = b;
+  update public.herco_bookings set current_services = '[{"code":"a","label":"Wash","price_centavos":1},{"code":"b","label":"Powder coating","price_centavos":2}]', current_total_centavos = 3 where id = b;
   select * into job from public.herco_test_job(b);
   answer := public.herco_check_maintenance_reminder_outbox(job.id, job.token);
   if answer->>'firstName' <> 'Maria' or answer->'services' <> '["Wash", "Powder coating"]'::jsonb then
