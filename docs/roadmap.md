@@ -29,7 +29,7 @@ Every feature below exists in demo form, with browser storage and pretend sign-i
 | F-010 | HERCO Points and rewards | Needs answers (Q-14) | F-005, F-012 | [spec](features/F-010-points-rewards.md) |
 | F-011 | Reports and activity log | Needs answers (Q-04); Reports v2 revisions built 2026-11-24 (read-only details) | F-009, F-012 | [spec](features/F-011-reports-activity-log.md) |
 | F-012 | Staff access and roles | Needs answers (Q-11); first Owner set up | F-005 | [spec](features/F-012-staff-access.md) |
-| F-013 | Inventory and stock exports | Testing (opening counts needed, Q-15) | F-012 | [spec](features/F-013-inventory.md) |
+| F-013 | Inventory and stock exports | Testing (Stock on Hand redesign approved, opening counts needed, Q-15) | F-012 | [spec](features/F-013-inventory.md) |
 | F-014 | Email notifications (Brevo worker) | Testing: first booking email sent locally in allowlist mode; events, 24-hour reminder and shop inbox decided; templates await Q-13 | F-001, F-006 | [spec](features/F-014-email-notifications.md) |
 
 UI parity: the Worker screens are being matched to the demo look. Open items in docs/ui-parity-audit.md (Q-18).
