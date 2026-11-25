@@ -10,7 +10,7 @@ Staff track coating materials and supplies, record stock movements and download 
 1. Staff open **Inventory** (`/inventory`).
 2. Add or edit items with optional supplier, storage location, unit cost, billing rate and storage capacity.
 3. Record stock movements (in, out, adjustments).
-4. Download **Stock on hand** or **Movement history** as CSV.
+4. Filter stock history by item and date range, then page through the results.
 
 ## Rules and details
 - Page grant Inventory; action `manageInventory`.
@@ -20,7 +20,11 @@ Staff track coating materials and supplies, record stock movements and download 
 - Low-stock alerts: TBD — ask owner.
 
 ## Screens
-- `/inventory`: item list, item form, movement entry, CSV download buttons, empty and error states.
+- `/inventory`: four stock totals, supply search, category and stock status filters, item form, movement entry, and empty and error states.
+- Stock on hand uses a desktop table and phone item cards. Both show the same stock, status, reorder threshold, and available inventory actions.
+- Stock history aligns Apply filters with the fields on desktop and places pagination on the right. The screen has no CSV download controls. The existing export endpoint remains available to authorized callers.
+- The owner approved this screen update on 2026-11-25.
+- Layout rules for this screen (and the details pattern for future screens): [stock-style staff screen layout](../inventory-layout.md).
 
 ## Data
 - Inventory items, options, movement ledger (migrations exist, incl. `herco_inventory_options_write`; TEST items seeded).
