@@ -4,7 +4,7 @@
 	import { asset, resolve } from '$app/paths';
 	import AvailabilityCalendar from '#lib/shared/AvailabilityCalendar.svelte';
 	import { photos, shop } from '#lib/shared/config.ts';
-	import { showcaseHome, showcaseTotal } from '#lib/shared/showcase-home.ts';
+	import { showcaseHome } from '#lib/shared/showcase-home.ts';
 	import { addDays, fmtDate, today, upcoming } from '#lib/shared/dates.ts';
 	import { defaultSettings } from '#lib/shared/schedule-hours.ts';
 	import { formatClosedDays, formatShopHours } from '#lib/shared/shop-hours-text.ts';
@@ -184,22 +184,27 @@
 	<p class="eyebrow">Showcase</p>
 	<h2>Finished in our shop</h2>
 	<p class="muted">A few recent jobs. Ask the garage about current colours and whether a finish suits your parts.</p>
-	<ul class="finish-grid">
-		{#each showcaseHome as item (item.slug)}
-			<li>
-				<figure class="stack">
-					<img src={asset(`photos/showcase/${item.slug}-480.webp` as Parameters<typeof asset>[0])}
-						alt={item.alt} width="480" height="480" loading="lazy" decoding="async" />
-					<figcaption class="small">
-						{#if import.meta.env.MODE === 'worker' || features().preview}<a href={resolve('/preview?tab=powder')}>{item.title}</a>{:else}{item.title}{/if}
-					</figcaption>
-				</figure>
-			</li>
+	<div class="finish-groups">
+		{#each showcaseHome as group (group.folder)}
+			<div class="finish-group stack">
+				<h3>{group.title}</h3>
+				<ul class="finish-grid">
+					{#each group.photos as item (item.slug)}
+						<li>
+							<figure class="stack">
+								<img src={asset(`photos/${group.folder}/${item.slug}-480.webp` as Parameters<typeof asset>[0])}
+									alt={item.alt} width="480" height="480" loading="lazy" decoding="async" />
+								{#if 'title' in item}<figcaption class="small">{item.title}</figcaption>{/if}
+							</figure>
+						</li>
+					{/each}
+				</ul>
+				{#if import.meta.env.MODE === 'worker' || features().preview}
+					<div class="finish-link"><a class="btn ghost" href={resolve(group.href)}><ActionIcon name="view" />View {group.title}</a></div>
+				{/if}
+			</div>
 		{/each}
-	</ul>
-	{#if import.meta.env.MODE === 'worker' || features().preview}
-		<div><a class="btn" href={resolve('/preview?tab=powder')}><ActionIcon name="view" />See all {showcaseTotal} in Showcase</a></div>
-	{/if}
+	</div>
 </section>
 
 
@@ -372,24 +377,16 @@
 		color: var(--accent);
 	}
 
-	.finish-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 12px;
-	}
-
-	/* Four Showcase photos: two columns on phones, one row on desktop. */
-	.finish-grid { margin: 0; padding: 0; list-style: none; }
-	.finish-grid figure { gap: 6px; }
+	.finish-groups { display: grid; gap: 24px; }
+	.finish-group { grid-template-rows: auto auto 1fr; }
+	.finish-group h3, .finish-grid figure { margin: 0; }
+	.finish-link { margin-top: auto; }
+	.finish-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
 	.finish-grid figcaption { font-weight: 650; overflow-wrap: anywhere; }
-	/* The whole tile opens the Showcase: the caption link covers the photo too. */
-	.finish-grid figure { position: relative; }
-	.finish-grid figcaption a { color: inherit; text-decoration: none; }
-	.finish-grid figcaption a::after { content: ''; position: absolute; inset: 0; }
-	.finish-grid figcaption a:hover { text-decoration: underline; }
 
 	@media (min-width: 800px) {
-		.finish-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+		.finish-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.finish-grid { gap: 16px; }
 	}
 
 	.finish-grid img,

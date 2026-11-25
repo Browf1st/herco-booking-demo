@@ -38,8 +38,8 @@ const photoLimits = {
 // The grid loads the 480 files lazily; the photo viewer loads one 960 file at a time.
 const folderPhotoLimits = { showcase: { '-480.webp': 110, '-960.webp': 320 } };
 const responsivePhotos = {
-	// Showcase file names are built from slugs (`photos/showcase/<slug>-480.webp`), so check the folder path.
-	index: ['herco-cruiser-480.webp', 'powder/fire-red-scooter-wheels-480.webp', 'photos/showcase/'],
+	// Home builds Showcase URLs from each photo's folder and slug.
+	index: ['herco-cruiser-480.webp', 'powder/fire-red-scooter-wheels-480.webp', 'black-and-red-two-tone-wheel', 'blue-side'],
 	preview: ['photos/showcase/', 'black-and-red-two-tone-wheel']
 };
 

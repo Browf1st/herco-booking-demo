@@ -4,7 +4,7 @@ import test from 'node:test';
 import { powderShowcase, showcaseCategories } from '../src/lib/shared/powder-showcase.ts';
 import { ceramicPairs, ceramicPhotos } from '../src/lib/shared/ceramic-showcase.ts';
 import { SHOWCASE_PAGE, countByCategory, distributeColumns, filterPhotos, shownCount, stepIndex, swipeDelta } from '../src/lib/shared/showcase-gallery.ts';
-import { showcaseHome, showcaseTotal } from '../src/lib/shared/showcase-home.ts';
+import { showcaseHome } from '../src/lib/shared/showcase-home.ts';
 
 const staticFile = (path) => new URL('../static/' + path, import.meta.url);
 const categoryIds = showcaseCategories.map((category) => category.id);
@@ -107,15 +107,20 @@ test('only a clear sideways swipe changes the photo', () => {
 	assert.equal(swipeDelta(-80, 70), 0, 'mostly vertical scroll');
 });
 
-test('the Home strip shows 4 real Showcase photos and the right total', () => {
-	assert.equal(showcaseTotal, powderShowcase.length);
-	assert.equal(showcaseHome.length, 4);
-	for (const item of showcaseHome) {
-		const photo = powderShowcase.find((entry) => entry.slug === item.slug);
-		assert.ok(photo, item.slug + ' is not in the Showcase list');
-		assert.equal(item.title, photo.title);
-		assert.equal(item.alt, photo.alt);
+test('Home previews two real photos per service and links to both Showcase tabs', () => {
+	assert.deepEqual(showcaseHome.map((group) => group.href), ['/preview?tab=powder', '/preview?tab=ceramic']);
+	for (const group of showcaseHome) {
+		assert.equal(group.photos.length, 2);
+		const gallery = group.folder === 'showcase' ? powderShowcase : ceramicPhotos;
+		for (const item of group.photos) {
+			const photo = gallery.find((entry) => entry.slug === item.slug);
+			assert.ok(photo, item.slug + ' is not in its gallery');
+			assert.equal(item.alt, photo.alt);
+			assert.ok(existsSync(staticFile(`photos/${group.folder}/${item.slug}-480.webp`)));
+			if ('title' in item) assert.equal(item.title, photo.title);
+		}
 	}
+	assert.ok(showcaseHome[1].photos.every((item) => !('title' in item)));
 });
 
 // Fixed columns (owner 2026-11-24): "Show more" must not move photos already on screen.
