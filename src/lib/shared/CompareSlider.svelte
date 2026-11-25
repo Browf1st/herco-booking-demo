@@ -12,7 +12,7 @@
 	<span class="tag">Before</span>
 	<span class="tag after">After</span>
 	<span class="handle"></span>
-	<input type="range" min="0" max="100" bind:value={pos} aria-label="Drag to compare before and after" />
+	<input type="range" min="0" max="100" bind:value={pos} aria-label="{alt} before and after comparison" />
 </div>
 
 <style>

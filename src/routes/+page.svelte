@@ -191,14 +191,14 @@
 					<img src={asset(`photos/showcase/${item.slug}-480.webp` as Parameters<typeof asset>[0])}
 						alt={item.alt} width="480" height="480" loading="lazy" decoding="async" />
 					<figcaption class="small">
-						{#if import.meta.env.MODE === 'worker' || features().preview}<a href={resolve('/preview')}>{item.title}</a>{:else}{item.title}{/if}
+						{#if import.meta.env.MODE === 'worker' || features().preview}<a href={resolve('/preview?tab=powder')}>{item.title}</a>{:else}{item.title}{/if}
 					</figcaption>
 				</figure>
 			</li>
 		{/each}
 	</ul>
 	{#if import.meta.env.MODE === 'worker' || features().preview}
-		<div><a class="btn" href={resolve('/preview')}><ActionIcon name="view" />See all {showcaseTotal} in Showcase</a></div>
+		<div><a class="btn" href={resolve('/preview?tab=powder')}><ActionIcon name="view" />See all {showcaseTotal} in Showcase</a></div>
 	{/if}
 </section>
 

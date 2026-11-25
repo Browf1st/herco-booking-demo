@@ -2,16 +2,24 @@
 	import { onMount, tick } from 'svelte';
 	import ActionIcon from '#lib/shared/ActionIcon.svelte';
 	import { asset, resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 
-	import CompareSlider from '#lib/shared/CompareSlider.svelte';
+	import CeramicShowcase from '#lib/shared/CeramicShowcase.svelte';
+	import { ceramicPairs, ceramicPhotos } from '#lib/shared/ceramic-showcase.ts';
 	import ShowcaseLightbox from '#lib/shared/ShowcaseLightbox.svelte';
-	import { photos } from '#lib/shared/config.ts';
 	import { powderShowcase, showcaseCategories } from '#lib/shared/powder-showcase.ts';
 	import { countByCategory, distributeColumns, filterPhotos, shownCount } from '#lib/shared/showcase-gallery.ts';
 	import { features } from '#lib/demo/store.svelte.ts';
 
 	const counts = countByCategory(powderShowcase);
 	const filters = [{ id: 'all', label: 'All' }, ...showcaseCategories];
+	const tabs = [
+		{ id: 'powder', label: 'Powder Coating', count: powderShowcase.length },
+		{ id: 'ceramic', label: 'Ceramic Coating & Polish', count: ceramicPairs.length + ceramicPhotos.length }
+	] as const;
+	type ShowcaseTab = (typeof tabs)[number]['id'];
+	const activeTab = $derived((page.shallow?.url ?? page.url).searchParams.get('tab') === 'ceramic' ? 'ceramic' : 'powder');
 	let filter = $state('all');
 	let pages = $state(1);
 	let open = $state(-1);
@@ -37,6 +45,25 @@
 
 	function choose(id: string) { filter = id; pages = 1; }
 
+	function selectTab(id: ShowcaseTab) {
+		if (id === activeTab) return;
+		return goto(resolve(id === 'ceramic' ? '/preview?tab=ceramic' : '/preview'), { shallow: true, replace: true });
+	}
+
+	function handleTabKey(event: KeyboardEvent, id: ShowcaseTab) {
+		let target: ShowcaseTab;
+		switch (event.key) {
+			case 'Home': target = 'powder'; break;
+			case 'End': target = 'ceramic'; break;
+			case 'ArrowLeft':
+			case 'ArrowRight': target = id === 'ceramic' ? 'powder' : 'ceramic'; break;
+			default: return;
+		}
+		event.preventDefault();
+		selectTab(target);
+		document.getElementById(`showcase-tab-${target}`)?.focus();
+	}
+
 	// Keyboard and screen-reader users continue from the first new photo (the button may disappear).
 	// The page stays where it is: the new photos are below the "Show more" button.
 	async function showMore() {
@@ -50,77 +77,108 @@
 <svelte:head><title>Showcase | HERCO</title></svelte:head>
 
 <section class="section wrap stack showcase">
-	<div class="intro">
+	<div class="showcase-header">
 		<div class="stack">
-			<p class="eyebrow">Showcase</p>
-			<h1>Real work from the HERCO shop</h1>
-			<p class="muted">{powderShowcase.length} photos of wheels, bikes and parts coated in the shop. Tap any photo to see it full size.</p>
+			<p class="eyebrow">Showcase <span>Crafted in-house</span></p>
+			<h1>Real work from<br />the HERCO shop</h1>
+			<p class="muted description">High-durability powder coating, mirror-finish ceramic paint restoration, and precision surface detailing built to conquer street, track, and weather.</p>
 		</div>
-		<div><a class="btn" href={resolve('/book?service=wheel-colour')}><ActionIcon name="calendar" />Book powder coating</a></div>
+		{#if import.meta.env.MODE === 'worker' || features().preview}
+			<a class="btn showcase-book" href={resolve(activeTab === 'ceramic' ? '/book?service=ceramic' : '/book?service=wheel-colour')}>
+				<ActionIcon name="calendar" />
+				{activeTab === 'ceramic' ? 'Book ceramic coating' : 'Book powder coating'}
+			</a>
+		{/if}
 	</div>
 
 	{#if import.meta.env.MODE === 'worker' || features().preview}
-		<div class="card ceramic">
-			<CompareSlider before={photos.before} after={photos.after} alt="Scooter coated by the shop" loading="eager" />
-			<div class="stack">
-				<p class="eyebrow">Ceramic coating</p>
-				<h2>Before and after</h2>
-				<p class="muted">Drag the slider to compare a glossy black ceramic finish.</p>
-				<div><a class="btn sm ghost" href={resolve('/book?service=ceramic')}><ActionIcon name="calendar" />Book ceramic coating</a></div>
-			</div>
-		</div>
-
-		<div class="chips" role="group" aria-label="Filter photos">
-			{#each filters as option (option.id)}
-				<button type="button" class="chip" aria-pressed={filter === option.id} onclick={() => choose(option.id)}>
-					{option.label}<span class="count">{counts[option.id] ?? 0}</span>
+		<div class="tabs" role="tablist" aria-label="Coating showcases">
+			{#each tabs as tab (tab.id)}
+				<button type="button" role="tab" id="showcase-tab-{tab.id}" aria-controls="showcase-{tab.id}"
+					aria-selected={activeTab === tab.id} tabindex={activeTab === tab.id ? 0 : -1}
+					onclick={() => selectTab(tab.id)} onkeydown={(event) => handleTabKey(event, tab.id)}>
+					{tab.label}<span class="tab-count">{tab.count}</span>
 				</button>
 			{/each}
 		</div>
-
-		<div class="masonry" role="list" aria-label="Powder coating photos" aria-busy={!ready}>
-			{#if ready}{#each columns as column, columnIndex (columnIndex)}
-				<div class="column" role="presentation">
-					{#each column as { photo, index } (photo.slug)}
-						<figure role="listitem">
-							<button type="button" class="tile" data-index={index} onclick={() => (open = index)} aria-label={`View larger: ${photo.title}`}>
-								<img src={src(photo.slug, 480)} srcset={`${src(photo.slug, 480)} 480w, ${src(photo.slug, 960)} 960w`}
-									sizes="(min-width: 1100px) 260px, (min-width: 900px) 24vw, (min-width: 600px) 32vw, 48vw"
-									alt={photo.alt} width={photo.w} height={photo.h} loading={index < 4 ? 'eager' : 'lazy'} decoding="async" />
-								<span class="label">{photo.finish ?? photo.title}</span>
-							</button>
-						</figure>
-					{/each}
-				</div>
-			{/each}{/if}
+		<div id="showcase-ceramic" role="tabpanel" aria-labelledby="showcase-tab-ceramic" hidden={activeTab !== 'ceramic'}>
+			{#if activeTab === 'ceramic'}<CeramicShowcase />{/if}
 		</div>
 
-		<div class="more">
-			<p class="muted small" aria-live="polite">Showing {shown} of {matching.length} photos</p>
-			{#if shown < matching.length}
-				<button type="button" class="btn ghost" onclick={showMore}><ActionIcon name="add" />Show {Math.min(24, matching.length - shown)} more</button>
+		<div id="showcase-powder" role="tabpanel" aria-labelledby="showcase-tab-powder" hidden={activeTab !== 'powder'}>
+			{#if activeTab === 'powder'}
+				<div class="stack">
+					<div class="chips" role="group" aria-label="Filter photos">
+						{#each filters as option (option.id)}
+							<button type="button" class="chip" aria-pressed={filter === option.id} onclick={() => choose(option.id)}>
+								{option.label}<span class="count">{counts[option.id] ?? 0}</span>
+							</button>
+						{/each}
+					</div>
+
+					<div class="masonry" role="list" aria-label="Powder coating photos" aria-busy={!ready}>
+						{#if ready}{#each columns as column, columnIndex (columnIndex)}
+							<div class="column" role="presentation">
+								{#each column as { photo, index } (photo.slug)}
+									<figure role="listitem">
+										<button type="button" class="tile" data-index={index} onclick={() => (open = index)} aria-label={`View larger: ${photo.title}`}>
+											<img src={src(photo.slug, 480)} srcset={`${src(photo.slug, 480)} 480w, ${src(photo.slug, 960)} 960w`}
+												sizes="(min-width: 1100px) 260px, (min-width: 900px) 24vw, (min-width: 600px) 32vw, 48vw"
+												alt={photo.alt} width={photo.w} height={photo.h} loading={index < 4 ? 'eager' : 'lazy'} decoding="async" />
+											<span class="label">{photo.finish ?? photo.title}</span>
+										</button>
+									</figure>
+								{/each}
+							</div>
+						{/each}{/if}
+					</div>
+
+					<div class="more">
+						<p class="muted small" aria-live="polite">Showing {shown} of {matching.length} photos</p>
+						{#if shown < matching.length}
+							<button type="button" class="btn ghost" onclick={showMore}><ActionIcon name="add" />Show {Math.min(24, matching.length - shown)} more</button>
+						{/if}
+					</div>
+
+					<ShowcaseLightbox photos={matching} bind:index={open} />
+				</div>
 			{/if}
 		</div>
-
-		<ShowcaseLightbox photos={matching} bind:index={open} />
 	{:else}
 		<p class="muted">The showcase is part of the Pro package. Switch the demo to Pro in the footer to see it.</p>
 	{/if}
 </section>
 
 <style>
-	.showcase h1 { font-size: clamp(2rem, 7vw, 3.2rem); }
-	.intro { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
-	.intro p { margin: 0; }
+	.showcase-header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
+	.showcase-header .eyebrow { display: flex; align-items: center; gap: 10px; margin: 0; }
+	.eyebrow::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-fill); }
+	.eyebrow span { padding-inline-start: 10px; border-inline-start: 1px solid var(--line); color: var(--muted); letter-spacing: .05em; }
+	.showcase h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.75rem); font-style: italic; line-height: 1; text-transform: uppercase; }
+	.description { max-width: 66ch; margin: 0; }
+	.showcase-book { min-height: 44px; font-family: var(--display); font-style: italic; text-transform: uppercase; }
 
-	/* Compact card so the photo wall starts near the top, even on phones. */
-	.ceramic { display: grid; grid-template-columns: minmax(0, 42%) 1fr; gap: 12px; padding: 10px; align-items: center; }
-	.ceramic h2 { font-size: clamp(1.2rem, 4vw, 1.8rem); }
-	.ceramic p { margin: 0; }
-	.ceramic .muted { font-size: .9rem; }
-	@media (min-width: 760px) {
-		.ceramic { grid-template-columns: minmax(0, 220px) 1fr; padding: 16px; gap: 24px; }
+	.tabs { display: flex; flex-wrap: wrap; column-gap: 12px; border-bottom: 1px solid var(--line); }
+	.tabs button {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		min-height: 44px;
+		padding: 8px clamp(5px, 1.2vw, 16px);
+		border: 0;
+		border-bottom: 2px solid transparent;
+		background: transparent;
+		color: var(--muted);
+		font: 700 clamp(.75rem, 2.4vw, 1.05rem) var(--display);
+		text-transform: uppercase;
+		cursor: pointer;
 	}
+	.tabs button::before { content: ''; width: 7px; height: 7px; border-radius: 50%; }
+	.tabs button[aria-selected='true'] { border-bottom-color: var(--accent-fill); color: var(--text); }
+	.tabs button[aria-selected='true']::before { background: var(--accent-fill); }
+	.tab-count { padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; font-size: .72rem; }
+	.tabs button[aria-selected='true'] .tab-count { border-color: var(--accent-fill); }
+	.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 	.chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
 	.chip {

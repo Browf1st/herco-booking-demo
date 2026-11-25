@@ -38,6 +38,7 @@ UI parity: the Worker screens are being matched to the demo look. Open items in 
 | Item | Request | Status | Spec |
 |---|---|---|---|
 | A | Showcase revamp: all 91 unique shop photos, masonry wall, category filters, photo viewer; Home shows 4 photos + "See all" | Done | [F-001](features/F-001-customer-booking.md) |
+| F-018 | Ceramic and Powder Showcase tabs | Done locally | [spec](features/F-018-ceramic-showcase.md) |
 | 11 | HERCO Points ranking number did not follow the sort | Done: # is always the real points rank | [F-010](features/F-010-points-rewards.md) |
 | 12 | Page titles differ between staff tabs | Done: one Reports-style header on every staff tab, both builds | [F-007](features/F-007-staff-queue.md) |
 | 13 | Saving staff access gave an error; why "Restricted Admin"? | Done: form crash fixed; "Restricted Admin" removed (roles are labels only) | [F-012](features/F-012-staff-access.md) |

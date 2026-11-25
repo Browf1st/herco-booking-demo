@@ -2,11 +2,38 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import test from 'node:test';
 import { powderShowcase, showcaseCategories } from '../src/lib/shared/powder-showcase.ts';
+import { ceramicPairs, ceramicPhotos } from '../src/lib/shared/ceramic-showcase.ts';
 import { SHOWCASE_PAGE, countByCategory, distributeColumns, filterPhotos, shownCount, stepIndex, swipeDelta } from '../src/lib/shared/showcase-gallery.ts';
 import { showcaseHome, showcaseTotal } from '../src/lib/shared/showcase-home.ts';
 
 const staticFile = (path) => new URL('../static/' + path, import.meta.url);
 const categoryIds = showcaseCategories.map((category) => category.id);
+
+test('ceramic comparisons and standalone photos reference distinct, optimized assets', () => {
+	const assets = new Set();
+	function checkAsset(path, limit) {
+		assert.ok(!assets.has(path), path + ' is used twice');
+		assets.add(path);
+		assert.ok(statSync(staticFile(path)).size <= limit * 1024, path + ' is too large');
+	}
+
+	assert.ok(ceramicPairs.length > 1);
+	for (const pair of ceramicPairs) {
+		assert.ok(pair.title.trim());
+		assert.match(pair.before, /-before-720\.webp$/);
+		assert.equal(pair.after, pair.before.replace('-before-', '-after-'));
+		checkAsset(pair.before, 170);
+		checkAsset(pair.after, 170);
+	}
+	assert.ok(ceramicPhotos.length > 0);
+	for (const photo of ceramicPhotos) {
+		assert.ok(photo.alt.trim() && photo.w > 0 && photo.h > 0);
+		checkAsset(`photos/ceramic/${photo.slug}-480.webp`, 110);
+		checkAsset(`photos/ceramic/${photo.slug}-960.webp`, 320);
+	}
+	const filenames = [...assets].map((path) => path.split('/').at(-1));
+	assert.deepEqual(readdirSync(staticFile('photos/ceramic')).sort(), filenames.sort());
+});
 
 // Showcase revamp (owner request 2026-11-23): every unique shop photo, masonry, filters, viewer.
 
@@ -121,4 +148,12 @@ test('every showcase photo has a name label on the image and no caption undernea
 	assert.match(page, /<span class="label">\{photo\.finish \?\? photo\.title\}<\/span>/);
 	assert.doesNotMatch(page, /figcaption/);
 	assert.ok(powderShowcase.every((photo) => (photo.finish ?? photo.title).trim().length > 0));
+});
+
+test('ceramic photos keep accessible descriptions without visible name captions', async () => {
+	const { readFile } = await import('node:fs/promises');
+	const gallery = await readFile(new URL('../src/lib/shared/CeramicShowcase.svelte', import.meta.url), 'utf8');
+	assert.doesNotMatch(gallery, /<figcaption|\{(?:pair|photo)\.title\}</);
+	assert.match(gallery, /alt=\{pair\.title\}/);
+	assert.match(gallery, /alt=\{photo\.alt\}/);
 });
