@@ -22,6 +22,7 @@
 	let directoryPage = $state(0);
 	let loading = $state(worker);
 	let notice = $state('');
+	let showNameGroups = $state(false);
 	let histories = $state<Record<string, { state: 'loading' | 'ready' | 'failed'; page: number; data?: History; message?: string }>>({});
 	let directoryRequest: AbortController | undefined;
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -97,6 +98,18 @@
 <section class="section wrap stack customers-page">
 	<PageHeader title="Customers" subtitle="Find a customer and see their past visits." />
 	{#if worker}
+		<details class="card" ontoggle={(event) => showNameGroups = event.currentTarget.open}>
+			<summary>Browse bookings by recorded name</summary>
+			{#if showNameGroups}
+				{#await import('#lib/live/BookingNameGroup.svelte')}
+					<p role="status">Loading booking groups…</p>
+				{:then { default: BookingNameGroup }}
+					<BookingNameGroup surface="customers" />
+				{:catch}
+					<p role="alert">Could not open booking groups. Reload to try again.</p>
+				{/await}
+			{/if}
+		</details>
 		<div class="card customer-total"><span class="muted small">Total accounts</span><b>{directory ? directory.total.toLocaleString('en-PH') : '—'}</b></div>
 		<label>Search customers<input type="search" bind:value={search} oninput={searchChanged} placeholder="Name, email, mobile number or account ID" maxlength="254" autocomplete="off" /></label>
 		{#if loading && !directory}

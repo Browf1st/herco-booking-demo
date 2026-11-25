@@ -69,7 +69,7 @@ Follow-up fixes (2026-11-23): the booking card "⋯" menu closes on a tap elsewh
 - [x] Q-07b F-002: Answered 2026-11-23: (C) no limit per hour; the admin blocks the hour when the shop is full.
 - [ ] Q-08 F-006: Limits on changes: (A) customers can cancel or reschedule anytime, staff decide (B) not within 24 hours of the visit. Do open requests expire? Does the old time stay held while a reschedule waits?
 - [ ] Q-09 F-001: Guest booking without an account: (A) keep off, sign-in required, as built (B) allow guests, with rules for claiming the booking later.
-- [ ] Q-10 F-008: Manual bookings for customers with no account: (A) staff can only book for verified accounts, as built (B) staff can create a booking and link it later.
+- [x] Q-10 F-008: Owner confirmed on 2026-11-25 that staff with booking permission can create guest manual bookings. Group bookings by the recorded customer name in staff records. Account linking is out of scope.
 - [ ] Q-11 F-012: Confirm the role list and the pages and actions each role gets: Owner, Superadmin, Admin, Staff. Who is the Superadmin? (2026-11-23: "Restricted Admin" dropped by the owner; roles are labels and access comes from the ticked pages and actions.)
 - [ ] Q-12 F-006/F-007: Can customers see the shop's approval notes? (A) no, staff only (B) yes, a separate customer-facing note.
 - [ ] Q-13 F-014: Approve the email wording (templates). Partly answered 2026-11-23: change-request emails go to the owner's own Gmail for now (saved only in the database, not in Git); customers get booking received, booking confirmed, change request decided, and a reminder 24 hours before the visit; plus a new 6-month maintenance reminder (F-017).

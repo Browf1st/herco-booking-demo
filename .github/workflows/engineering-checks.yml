@@ -66,3 +66,4 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f tests/database/shop-hours-public.sql
           psql -v ON_ERROR_STOP=1 -f tests/database/staff-price-edits.sql
           psql -v ON_ERROR_STOP=1 -f tests/database/customer-directory.sql
+          psql -v ON_ERROR_STOP=1 -f tests/database/staff-guest-booking.sql

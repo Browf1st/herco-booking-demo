@@ -301,11 +301,18 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
 
 ### `POST /api/staff/manual-booking`
 - **Who:** staff with a confirmed email and permission to create customer bookings (database). Same-origin required.
-- **Input (JSON):** always `email` (complete address, up to 254) and `action`.
+- **Input (JSON):** `action`. Send `email` (complete address, up to 254) for `lookup` and `book`.
   - `lookup`: finds the verified customer. Returns `200` the customer record (shape unclear from code).
   - `book`: `customerId` uuid, `requestId` uuid, `date`, `hour` (integer 0-23 that is open for that date, or `null` when `walkIn` is true; the database refuses other hours with `409`), `walkIn` optional boolean, `services` 1-20 strings (each up to 64), `bike` up to 120, `name` up to 120, `phone` up to 40, `plate` up to 30 (all required strings), `coating` optional object (under 3000 chars), `priceFingerprint` optional (not type-checked in route).
-- **Success:** `200` customer record (lookup) or created booking data (book) (shape unclear from code).
+  - `book_guest`: same scheduled-visit fields as `book` except omit `customerId`, `email`, and `walkIn`. Send a nonblank `name`. `phone` is optional and limited to 40 characters.
+- **Success:** `200` verified customer record for `lookup`, or `{id, reference, status, totalCentavos, intakeRequired, estimateOpen}` for either booking action.
 - **Errors:** `400`; `401`; `403` unconfirmed email or no permission; `404` no unique verified account matched / account no longer matches; `409` slot unavailable or `{ code: "price_changed", message }`; `503`.
+
+### `POST /api/staff/booking-name-groups`
+- **Who:** verified staff with Customers access for `surface: "customers"`, or Booking History access for `surface: "history"`. Same-origin required. Responses are private and never cached.
+- **Input (JSON):** `surface`, integer `page` (positive integer), optional `q` for directory search, and optional exact `name` to show bookings. History requires `name`. Text fields are limited to 120 characters. Case and extra spaces are ignored for matching.
+- **Success:** `{total, groups: [{name, total}]}` for directory results, or `{name, total, bookings: [{id, reference, date, hour, status, bike}]}` for visits. Pages contain up to 20 records.
+- **Errors:** `400` invalid input, `403` insufficient access, `503` unavailable service.
 
 ### `POST /api/staff/records`
 - **Who:** staff with booking-records access (database; route has no sign-in check). Same-origin required.

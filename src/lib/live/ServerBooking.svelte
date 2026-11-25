@@ -27,11 +27,12 @@
 		promotion?: { label: string; base_price_centavos: number } | null;
 	};
 	type Slot = { visit_date: string; visit_hour: number; status: string };
-	type Booking = { id: string; status: string; totalCentavos: number; estimateOpen?: boolean };
+	type Booking = { id: string; reference?: string; status: string; totalCentavos: number; estimateOpen?: boolean };
 	type Intake = { version: string; title: string; body: string; method: 'typed_name'; date: string };
 	type EstimateLine = PricedService & { code: string; label: string; promotion?: { label: string } | null };
 	type Estimate = { lines: EstimateLine[]; totalCentavos: number; fingerprint: string };
-	let { walkIn = false,manualCustomer }: { walkIn?: boolean;manualCustomer?:{id:string;email:string} } = $props();
+	let { walkIn = false, manualCustomer, manualGuest = false }: { walkIn?: boolean; manualCustomer?: { id: string; email: string }; manualGuest?: boolean } = $props();
+	const staffBooking = $derived(Boolean(manualCustomer) || manualGuest);
 
 	let services = $state<Service[]>([]);
 	let slots = $state<Slot[]>([]);
@@ -42,7 +43,7 @@
 	let visitHour = $state('');
 	let name = $state('');
 	let phone = $state('');
-	// Customers may skip the mobile number on their own online booking; walk-ins and staff bookings still need it.
+	// Walk-ins and verified-account staff bookings require a mobile number.
 	const phoneRequired = $derived(walkIn || !!manualCustomer);
 	let unit=$state(''), custom=$state(''), powderBike=$state(''), modelYear=$state<number>(), notes=$state('');
  const manualModel=$derived(unit==='other'||unit==='other-big-bike');
@@ -178,7 +179,7 @@
  fetch(resolve('/api/booking-catalog'))
 			]);
 			if (!catalog.ok) throw new Error('Could not load services. Try again.');
-			email = manualCustomer?.email ?? (await session.json()).email ?? '';
+			email = manualGuest ? '' : manualCustomer?.email ?? (await session.json()).email ?? '';
 			services = await catalog.json();
  if(!richCatalog.ok)throw new Error('Could not load the service catalog. Try again.');
  catalogConfig=(await richCatalog.json()).config;
@@ -188,7 +189,7 @@
  catalogSelection.finish=page.url.searchParams.get('finish')??'';
 			slots = freshSlots;
 			intake = approvedForm;
-			if(!manualCustomer)void fetch(resolve('/api/auth/contact')).then(async response => {
+			if (!staffBooking) void fetch(resolve('/api/auth/contact')).then(async response => {
 				if (!response.ok) return;
 				const contact = await response.json();
 				if (!name) name = contact.name;
@@ -227,13 +228,16 @@
 					: { date: visitDate, hour: Number(visitHour) }),
 				services: [...selected].sort(),
 				bike: bike.trim(), name: name.trim(), phone: phone.trim(), plate: plate.trim(),
-				coating: configured,...(manualCustomer?{action:'book',customerId:manualCustomer.id,email:manualCustomer.email,walkIn}:{})
+				coating: configured,
+				...(manualGuest ? { action: 'book_guest' } : manualCustomer
+					? { action: 'book', customerId: manualCustomer.id, email: manualCustomer.email, walkIn }
+					: {})
 			};
 			const fingerprint = JSON.stringify(payload);
 			const requestId = attempts.get(fingerprint) ?? crypto.randomUUID();
 			attempts.set(fingerprint, requestId);
 
-			const response = await fetch(resolve(manualCustomer?'/api/staff/manual-booking':walkIn ? '/api/walk-in-bookings' : '/api/bookings'), {
+			const response = await fetch(resolve(staffBooking?'/api/staff/manual-booking':walkIn ? '/api/walk-in-bookings' : '/api/bookings'), {
 				method: 'POST',
 				headers: { 'content-type': 'application/json', accept: 'application/json' },
 				body: JSON.stringify({ ...payload, requestId, priceFingerprint: estimate.fingerprint })
@@ -243,7 +247,7 @@
  reviewDialog?.close();
 				trackShopEvent('booking_submitted');
 				// Customers land on My Bookings, where the new booking shows its live status.
-				if (!manualCustomer) {
+				if (!staffBooking) {
 					await goto(resolve('/my-bookings') + '?submitted=' + encodeURIComponent(saved.id));
 					return;
 				}
@@ -270,7 +274,9 @@
 				}
 			}
 		} catch {
-			submitError = 'Could not confirm your booking. Retry with the same details or check My Bookings.';
+			submitError = staffBooking
+				? 'Could not confirm the booking. Retry with the same details or check Booking History.'
+				: 'Could not confirm your booking. Retry with the same details or check My Bookings.';
 		} finally {
 			submitting = false;
 		}
@@ -278,11 +284,11 @@
 
 	onMount(() => { void load(); });
 </script>
-<svelte:head><title>{manualCustomer?'Manual booking':walkIn?'Walk-in intake':'Book a visit'} | HERCO</title></svelte:head>
+<svelte:head><title>{staffBooking?'Manual booking':walkIn?'Walk-in intake':'Book a visit'} | HERCO</title></svelte:head>
 <section class="section wrap stack booking">
 <h1>{booked?'Booking submitted':walkIn?'Walk-in intake':'Book a visit'}</h1>
-{#if loading}<p role="status">Loading booking options…</p>{:else if signedOut}<p>Sign in to submit a booking and view it on any device.</p><div><a class="btn" href={resolve('/account')}><ActionIcon name="login" />Sign in</a></div>{:else if loadError}<p role="alert">{loadError}</p><div><button class="btn ghost" onclick={load}><ActionIcon name="reset" />Try again</button></div>{:else if booked}<p class="eyebrow">{booked.id}</p><p>The shop will review your request.</p><div class="card stack"><p><strong>{serviceLabel(catalogSelection)}</strong> · {bike}{modelYear?' · Model year '+modelYear:''}</p><p>{walkIn?'Walk-in today':fmtDate(visitDate)+' at '+fmtSlot(visitHour+':00')} · Philippine time</p><p>Estimated service price <strong>{currentEstimate?displayEstimate(currentEstimate.lines,currentEstimate.totalCentavos):prices.format(booked.totalCentavos/100)}</strong></p></div><div>{#if manualCustomer}<a class="btn" href={resolve(walkIn?'/walk-in-intake':'/admin')+(walkIn?'?booking='+booked.id:'')}>{walkIn?'Open customer intake':'Back to bookings'}</a>{:else}<a class="btn" href={resolve('/my-bookings')}><ActionIcon name="calendar" />View my bookings</a>{/if}</div>{:else if walkIn&&!intake}<p>Walk-in booking is unavailable while the shop sets up its intake form.</p>{:else if !visibleServices.length}<p>Booking is unavailable while the shop enables its services.</p>{:else}
-<label class="booking-source">Booking source<select value={walkIn?'walk-in':'online'} onchange={event=>{if(manualCustomer){walkIn=event.currentTarget.value==='walk-in';void load();}else void goto(resolve(event.currentTarget.value==='walk-in'?'/walk-in':'/book'));}}><option value="online">Online</option><option value="walk-in">Walk-in</option></select></label>
+{#if loading}<p role="status">Loading booking options…</p>{:else if signedOut}<p>Sign in to submit a booking and view it on any device.</p><div><a class="btn" href={resolve('/account')}><ActionIcon name="login" />Sign in</a></div>{:else if loadError}<p role="alert">{loadError}</p><div><button class="btn ghost" onclick={load}><ActionIcon name="reset" />Try again</button></div>{:else if booked}<p class="eyebrow">{manualGuest ? booked.reference ?? booked.id : booked.id}</p><p>The shop will review your request.</p><div class="card stack"><p><strong>{serviceLabel(catalogSelection)}</strong> · {bike}{modelYear?' · Model year '+modelYear:''}</p><p>{walkIn?'Walk-in today':fmtDate(visitDate)+' at '+fmtSlot(visitHour+':00')} · Philippine time</p><p>Estimated service price <strong>{currentEstimate?displayEstimate(currentEstimate.lines,currentEstimate.totalCentavos):prices.format(booked.totalCentavos/100)}</strong></p></div><div>{#if staffBooking}<a class="btn" href={resolve(walkIn?'/walk-in-intake':'/admin')+(walkIn?'?booking='+booked.id:'')}>{walkIn?'Open customer intake':'Back to bookings'}</a>{:else}<a class="btn" href={resolve('/my-bookings')}><ActionIcon name="calendar" />View my bookings</a>{/if}</div>{:else if walkIn&&!intake}<p>Walk-in booking is unavailable while the shop sets up its intake form.</p>{:else if !visibleServices.length}<p>Booking is unavailable while the shop enables its services.</p>{:else}
+{#if !manualGuest}<label class="booking-source">Booking source<select value={walkIn?'walk-in':'online'} onchange={event=>{if(manualCustomer){walkIn=event.currentTarget.value==='walk-in';void load();}else void goto(resolve(event.currentTarget.value==='walk-in'?'/walk-in':'/book'));}}><option value="online">Online</option><option value="walk-in">Walk-in</option></select></label>{/if}
   <form class="booking-layout" onsubmit={submit}>
    <div class="stack booking-steps">
    <fieldset class="card stack booking-panel">
@@ -353,11 +359,11 @@
     <div class="cols">
      <label>Full name <input bind:value={name} autocomplete="name" placeholder="e.g. Jamie Reyes" maxlength="70" required /></label>
      <label>Mobile number{phoneRequired ? '' : ' (optional)'} <input type="tel" bind:value={phone} autocomplete="tel" placeholder="e.g. 0917 000 0000" maxlength="20" required={phoneRequired} /></label>
-     <label>
+     {#if !manualGuest}<label>
       <span>Email <span class:required-label={!walkIn}>{walkIn ? '(optional)' : '(required)'}</span></span>
       <input type="email" bind:value={email} readonly autocomplete="email" placeholder="e.g. jamie@example.com" maxlength="254" required={!walkIn} aria-describedby={walkIn ? undefined : 'booking-email-help'} />
       {#if !walkIn}<span id="booking-email-help" class="small muted email-help">Used for booking reminders.</span>{/if}
-     </label>
+     </label>{/if}
      <label>Plate number (optional) <input bind:value={plate} placeholder="e.g. ABC 1234" maxlength="20" /></label>
     </div>
    </fieldset>
@@ -398,7 +404,7 @@
    <div><dt>Appointment · Philippine time</dt><dd>{visitDate ? fmtDate(visitDate, {month:'long', day:'numeric', year:'numeric'}) : ''} · {visitHour ? fmtSlot(slotFromHour(visitHour)) : ''}</dd></div>
    <div><dt>Customer</dt><dd>{name.trim()}</dd></div>
    <div><dt>Mobile</dt><dd>{phone.trim() || 'Not provided'}</dd></div>
-   <div><dt>Email</dt><dd>{email.trim() || 'Not provided'}</dd></div>
+   {#if !manualGuest}<div><dt>Email</dt><dd>{email.trim() || 'Not provided'}</dd></div>{/if}
    <div><dt>Motorcycle</dt><dd>{bike}{isPcx && modelYear ? ' · ' + modelYear : ''}</dd></div>
    <div><dt>Plate number</dt><dd>{plate.trim() || 'Not provided'}</dd></div>
    {#if walkIn}<div><dt>Intake signed by</dt><dd>{signerName.trim()}</dd></div>{/if}

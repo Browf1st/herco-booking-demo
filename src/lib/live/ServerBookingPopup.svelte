@@ -38,7 +38,7 @@
 
 <!-- The form is created only when Complete service is clicked, so it starts from the latest price (after any edits). -->
 <dialog class="complete" bind:this={completing} aria-label="Complete service" onclose={() => completeOpen = false}>
-	{#if completeOpen}<ServerCompletionForm bookingId={booking.id} initialPrice={(current.total_centavos ?? 0) / 100} onSaved={completed} onClose={() => completing?.close()} />{/if}
+	{#if completeOpen}<ServerCompletionForm bookingId={booking.id} initialPrice={(current.total_centavos ?? 0) / 100} hasCustomerAccount={booking.customer_id !== null} onSaved={completed} onClose={() => completing?.close()} />{/if}
 </dialog>
 
 {#snippet bookingActions()}

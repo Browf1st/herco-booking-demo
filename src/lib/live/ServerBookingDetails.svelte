@@ -20,7 +20,7 @@
 	async function reload() { await onreload?.(); changeVersion++; }
 	const stamp = (value?: string | null) => value ? new Date(value).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }) : 'Not recorded';
 	const money = (value?: number | null) => value === undefined || value === null ? '—' : new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(value / 100);
-	const phoneLink = $derived('tel:' + booking.customer_phone.replace(/[^\d+]/g, ''));
+	const phone = $derived(booking.customer_phone?.replace(/[^\d+]/g, '') ?? '');
 </script>
 
 <div class="stack">
@@ -39,7 +39,7 @@
 	<section class="stack" aria-label="Motorcycle and contact">
 		<h4>Customer and motorcycle</h4>
 		<p>{booking.plate ? booking.bike + ' · Plate ' + booking.plate : booking.bike}</p>
-		<p>{booking.customer_name} · <a href={phoneLink}>{booking.customer_phone}</a></p>
+		<p>{booking.customer_name}{#if phone} · <a href={'tel:' + phone}>{booking.customer_phone}</a>{/if}</p>
 		{#if booking.customer_email}<p><a href={'mailto:' + booking.customer_email}>{booking.customer_email}</a></p>{/if}
 	</section>
 	<section class="cols" aria-label="Dates in Philippine time">

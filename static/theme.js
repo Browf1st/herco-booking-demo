@@ -1,4 +1,3 @@
-// Presentation preference only. Never store production credentials or roles here.
 try {
 	const theme = localStorage.getItem('herco-theme');
 	if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;

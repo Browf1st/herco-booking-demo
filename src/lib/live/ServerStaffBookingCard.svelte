@@ -17,6 +17,8 @@
 	const active = $derived(booking.status === 'pending' || booking.status === 'confirmed');
 	const past = $derived(booking.visit_date < today());
 	const canChange = $derived(active && !past && !booking.request_pending);
+	const hasCustomerAccount = $derived(booking.customer_id !== null);
+	const canOpenIntake = $derived(hasCustomerAccount && permissions.canRequestIntake && booking.status !== 'done');
 	function open(next: typeof action) { action = next; issue = ''; note = next === 'share' ? booking.shared_note ?? '' : ''; sharePhotos = Boolean(booking.shared_photos); if (more) more.open = false; dialog?.showModal(); }
 	function saved() { dialog?.close(); onSaved(); }
 	async function submit(event: SubmitEvent) {
@@ -35,14 +37,14 @@
 		{#if booking.request_pending && Object.values(permissions).some(Boolean)}<a class="btn sm ghost" href={resolve('/admin') + '?view=requests'}><ActionIcon name="edit" />Review request</a>
 		{:else if canChange && booking.status === 'pending' && permissions.can_confirm}<button class="btn sm confirm-action" onclick={() => open('confirm')}><ActionIcon name="check" />Confirm booking</button>
 		{:else if booking.status === 'confirmed' && permissions.canComplete}<button class="btn sm complete-action" onclick={() => open('complete')}><ActionIcon name="finish" />Complete service</button>{/if}
-		{#if permissions.can_edit_services || permissions.can_cancel || permissions.can_reschedule || permissions.canComplete || permissions.canRequestIntake || permissions.canAdjustPrices}
+		{#if permissions.can_edit_services || permissions.can_cancel || permissions.can_reschedule || permissions.canComplete || canOpenIntake || permissions.canAdjustPrices}
 			<details class="more" bind:this={more}><summary class="btn sm ghost" aria-label="More actions"><span aria-hidden="true">⋯</span></summary><div class="more-options">
 				{#if permissions.can_edit_services}<button class="btn sm ghost" onclick={() => open('services')}><ActionIcon name="edit" />{active ? 'Edit services' : 'Service history'}</button>{/if}
 				{#if permissions.canAdjustPrices}<a class="btn sm ghost" href={resolve('/booking-prices') + '?booking=' + booking.id}>Adjust prices</a>{/if}
 				{#if canChange && booking.visit_hour !== null && permissions.can_reschedule}<button class="btn sm ghost" onclick={() => open('reschedule')}><ActionIcon name="calendar" />Reschedule booking</button>{/if}
-				{#if permissions.canRequestIntake && booking.status !== 'done'}<a class="btn sm ghost" href={resolve('/walk-in-intake') + '?booking=' + booking.id}>Walk-in intake</a>{/if}
+				{#if canOpenIntake}<a class="btn sm ghost" href={resolve('/walk-in-intake') + '?booking=' + booking.id}>Walk-in intake</a>{/if}
 				{#if permissions.canComplete && booking.status === 'done'}<button class="btn sm ghost" onclick={() => open('complete')}>Completion photos</button>{/if}
-				{#if permissions.can_edit_services || permissions.canComplete}<button class="btn sm ghost" onclick={() => open('share')}>Share customer note/photos</button>{/if}
+				{#if hasCustomerAccount && (permissions.can_edit_services || permissions.canComplete)}<button class="btn sm ghost" onclick={() => open('share')}>Share customer note/photos</button>{/if}
 				{#if canChange && permissions.can_cancel}<button class="btn sm danger cancel-option" onclick={() => open('cancel')}><ActionIcon name="block" />Cancel booking</button>{/if}
 			</div></details>
 		{/if}
@@ -52,12 +54,12 @@
 	{#if action === 'confirm' || action === 'share'}
 		<form class="stack" onsubmit={submit}><h3>{action === 'share' ? 'Share with customer' : 'Confirm booking'}</h3>
 			{#if action === 'share'}<p>Only this message and selected completion photos appear in the customer's booking details. Private notes remain private.</p><label>Customer-facing note<textarea bind:value={note} rows="4" maxlength="1000" disabled={busy}></textarea></label><label class="check"><input type="checkbox" bind:checked={sharePhotos} disabled={busy || !booking.photo_count} /> Share this booking's saved completion photos</label><p class="small muted">Clear the message and photo choice to stop sharing.</p>
-			{:else}<label>Private approval note (optional)<textarea bind:value={note} rows="3" maxlength="500" disabled={busy}></textarea></label><p class="small muted">Use Share customer note/photos for a separate message the customer can see.</p>{/if}
+			{:else}<label>Private approval note (optional)<textarea bind:value={note} rows="3" maxlength="500" disabled={busy}></textarea></label>{#if hasCustomerAccount}<p class="small muted">Use Share customer note/photos for a separate message the customer can see.</p>{/if}{/if}
 			{#if issue}<p role="alert">{issue}</p>{/if}<div class="row"><button class="btn sm" disabled={busy}>{busy ? 'Saving…' : action === 'share' ? 'Save sharing choices' : 'Confirm booking'}</button><button type="button" class="btn sm ghost" disabled={busy} onclick={() => dialog?.close()}>Go back</button></div>
 		</form>
 	{:else if action === 'cancel' || action === 'reschedule'}<ServerCustomerChangeForm bookingId={booking.id} kind={action} staffVisit={{ date: booking.visit_date, hour: booking.visit_hour }} onSaved={saved} onClose={() => dialog?.close()} />
 	<!-- These two forms load only when their dialog opens (keeps the staff page's first download small). -->
-	{:else if action === 'complete'}{#key booking.id}{#await import('./ServerCompletionForm.svelte') then { default: ServerCompletionForm }}<ServerCompletionForm bookingId={booking.id} initialPrice={(booking.total_centavos ?? 0) / 100} onSaved={saved} onClose={() => dialog?.close()} />{/await}{/key}
+	{:else if action === 'complete'}{#key booking.id}{#await import('./ServerCompletionForm.svelte') then { default: ServerCompletionForm }}<ServerCompletionForm bookingId={booking.id} initialPrice={(booking.total_centavos ?? 0) / 100} {hasCustomerAccount} onSaved={saved} onClose={() => dialog?.close()} />{/await}{/key}
 	{:else if action === 'services'}{#await import('./BookingServiceEditor.svelte') then { default: BookingServiceEditor }}<BookingServiceEditor bookingId={booking.id} fromStaff={true} />{/await}{/if}
 </dialog>
 <style>

@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { resolve } from '$app/paths';
 	import ActionIcon from '../shared/ActionIcon.svelte';
-	let { bookingId, initialPrice, onSaved = () => {}, onClose }: { bookingId: string; initialPrice?: number; onSaved?: () => void; onClose?: () => void } = $props();
+	let { bookingId, initialPrice, hasCustomerAccount = true, onSaved = () => {}, onClose }: { bookingId: string; initialPrice?: number; hasCustomerAccount?: boolean; onSaved?: () => void; onClose?: () => void } = $props();
 	let files = $state<File[]>([]);
 	let previews = $state<string[]>([]);
 	let price = $state<number | undefined>();
@@ -60,7 +60,7 @@
 		<input class="sr-only" type="file" bind:this={camera} accept="image/jpeg,image/png,image/webp" capture="environment" onchange={choose} disabled={busy} />
 		<input class="sr-only" type="file" bind:this={album} accept="image/jpeg,image/png,image/webp" multiple onchange={choose} disabled={busy} />
 		<div class="row"><button type="button" class="btn sm ghost" disabled={busy} onclick={() => camera?.click()}><ActionIcon name="add" />Take photo</button><button type="button" class="btn sm ghost" disabled={busy} onclick={() => album?.click()}><ActionIcon name="add" />Choose photos</button></div>
-		<p class="small muted">One to three private photos, up to 4 MB each. Share them with the customer separately after completion.</p>
+		<p class="small muted">One to three private photos, up to 4 MB each.{#if hasCustomerAccount} Share them with the customer separately after completion.{/if}</p>
 		<div class="photo-grid">{#each previews as url, index}<div><img src={url} alt={'Selected photo ' + (index + 1)} /><button type="button" class="btn sm ghost" disabled={busy} onclick={() => remove(index)}>Remove photo {index + 1}</button></div>{/each}</div>
 		{#if busy}<p role="status">Saved {uploaded.length} of {files.length} photos…</p>{/if}
 		<div class="row"><button class="btn sm" disabled={busy || !files.length}>{busy ? 'Saving…' : 'Complete service'}</button>{#if onClose}<button type="button" class="btn sm ghost" disabled={busy} onclick={onClose}>Go back</button>{/if}</div>

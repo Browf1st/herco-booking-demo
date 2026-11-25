@@ -27,6 +27,7 @@
 	// The sort the staff member asked for. The server sorts all records; `result.sort` is the sort that really ran.
 	let sort = $state<ReportSort>('date');
 	let loading = $state(true); let issue = $state(''); let request = 0; let detail = $state<StaffBooking>();
+	let bookingName = $state<string>();
 	// Reports only: what this staff member may do (for the Book menu and the popup buttons). The server still checks every action.
 	let access = $state<WorkspaceAccess | null>(null);
 	const money = (cents?: number | null) => cents == null ? '—' : new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(cents / 100);
@@ -103,7 +104,16 @@
 			{:else}
 				<section class="stack" aria-labelledby="records-heading">
 					<div class="row between"><h2 id="records-heading">Bookings</h2><p class="small muted" role="status">{result.total} {result.total === 1 ? 'record' : 'records'} · Newest first</p></div>
-					<div class="stack">{#each result.records as booking (booking.id)}<article class="card"><ServerStaffBookingCard {booking} when={fmtDate(booking.visit_date, { month: 'short', day: 'numeric' }) + ', ' + visitTime(booking)} onDetails={() => detail = booking} /></article>{/each}</div>
+					<div class="stack">
+						{#each result.records as booking (booking.id)}
+							<article class="card stack">
+								<ServerStaffBookingCard {booking} when={fmtDate(booking.visit_date, { month: 'short', day: 'numeric' }) + ', ' + visitTime(booking)} onDetails={() => detail = booking} />
+								{#if booking.customer_name?.trim()}
+									<div><button type="button" class="btn sm ghost" onclick={() => bookingName = booking.customer_name}>View same-name bookings</button></div>
+								{/if}
+							</article>
+						{/each}
+					</div>
 					<Pager {page} pages={result.pages} label="Booking records" onchange={(next) => load(next)} />
 				</section>
 			{/if}
@@ -114,6 +124,15 @@
 		{#if popup && detail}<ReportDetails detail={popup} onclose={() => detail = undefined} changes={access ? changeList : undefined} />{/if}
 	{:else}
 		<DetailsSheet title={detail ? 'Details for ' + detail.customer_name : 'Booking details'} open={Boolean(detail)} onclose={() => detail = undefined}>{#if detail}<ServerBookingDetails booking={detail} actions={access?.actions} pages={access?.pages} onchanged={() => void load(page)} onreload={reloadDetail} />{/if}</DetailsSheet>
+		{#if bookingName}
+			{#await import('./BookingNameGroup.svelte')}
+				<p role="status">Loading booking group…</p>
+			{:then { default: BookingNameGroup }}
+				<BookingNameGroup surface="history" name={bookingName} onclose={() => bookingName = undefined} />
+			{:catch}
+				<p role="alert">Could not open the booking group. Reload to try again.</p>
+			{/await}
+		{/if}
 	{/if}
 </div>
 
