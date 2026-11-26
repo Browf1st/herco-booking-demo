@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { demoHistory } from '../src/lib/demo/booking-history.ts';
 import { bookingWasUpdated, editRights, expectedCentavos, historyLine, parsePesos, parseReason } from '../src/lib/shared/booking-changes.ts';
 
 // 2026-11-24 07:10 UTC = 3:10 PM in the Philippines.
@@ -104,28 +103,6 @@ test('bookingWasUpdated stays quiet when nothing was edited or totals are hidden
 	assert.equal(bookingWasUpdated({ originalTotal: 1000, currentTotal: 1000, originalCodes: ['b', 'a'], currentCodes: ['a', 'b'] }), false);
 });
 
-const line = (label, subtotal) => ({ label, subtotal, discount: 0 });
-const demoBooking = {
-	status: 'done', createdAt: '2026-11-20T02:00:00Z', approvedAt: '2026-11-21T02:00:00Z', completedAt: '2026-11-25T02:00:00Z',
-	serviceChanges: [
-		{ at, actor: 'Demo admin', reason: 'Extra corrosion found', before: { estimate: { lines: [line('Ceramic', 1799), line('Powder', 500)] } }, after: { estimate: { lines: [line('Ceramic', 2300), line('Helmet', 299)] } } }
-	]
-};
-
-test('demo history: price change with reason, added and removed lines, then status entries, newest first', () => {
-	const kinds = demoHistory(demoBooking, true).map((entry) => entry.kind);
-	assert.deepEqual(kinds, ['completed', 'price_changed', 'service_added', 'service_removed', 'approved', 'booked']);
-	const price = demoHistory(demoBooking, true).find((entry) => entry.kind === 'price_changed');
-	assert.deepEqual([price.from_centavos, price.to_centavos, price.reason, price.actor], [179900, 230000, 'Extra corrosion found', 'Demo admin']);
-});
-
-test('demo history: amounts are removed without the income permission, and a cancelled booking is not shown as completed', () => {
-	for (const entry of demoHistory(demoBooking, false)) assert.ok(!('from_centavos' in entry) && !('to_centavos' in entry));
-	const cancelled = demoHistory({ status: 'cancelled', createdAt: at, cancelledAt: '2026-11-25T00:00:00Z', completedAt: at }, true).map((entry) => entry.kind);
-	assert.deepEqual(cancelled, ['cancelled', 'booked']);
-	assert.deepEqual(demoHistory({ status: 'pending' }, true), []);
-});
-
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('screens use the shared pieces: editor in both popups, Changes lists, and the customer note', async () => {
@@ -140,9 +117,9 @@ test('screens use the shared pieces: editor in both popups, Changes lists, and t
 	assert.match(await read('../src/lib/live/ServerStaffBookings.svelte'), /import\('\.\/ServerBookingPopup\.svelte'\)/);
 	// The Complete form is created only when opened, so it starts from the latest (possibly edited) price.
 	assert.match(popup, /\{#if completeOpen\}<ServerCompletionForm/);
-	assert.match(await read('../src/lib/demo/AdminReports.svelte'), /DemoServiceEdits[\s\S]*DemoBookingChanges/);
+
 	assert.match(await read('../src/lib/live/ServerBookingHistory.svelte'), /Updated by the shop after inspection/);
-	assert.match(await read('../src/lib/demo/CustomerBooking.svelte'), /Updated by the shop after inspection/);
+
 	const editor = await read('../src/lib/shared/ServiceLinesEditor.svelte');
 	assert.match(editor, /Edit price/);
 	assert.match(editor, /role="alert"/);

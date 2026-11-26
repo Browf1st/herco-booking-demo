@@ -10,7 +10,6 @@
 	import ShowcaseLightbox from '#lib/shared/ShowcaseLightbox.svelte';
 	import { powderShowcase, showcaseCategories } from '#lib/shared/powder-showcase.ts';
 	import { countByCategory, distributeColumns, filterPhotos, shownCount } from '#lib/shared/showcase-gallery.ts';
-	import { features } from '#lib/demo/store.svelte.ts';
 
 	const counts = countByCategory(powderShowcase);
 	const filters = [{ id: 'all', label: 'All' }, ...showcaseCategories];
@@ -83,15 +82,14 @@
 			<h1>Real work from<br />the HERCO shop</h1>
 			<p class="muted description">High-durability powder coating, mirror-finish ceramic paint restoration, and precision surface detailing built to conquer street, track, and weather.</p>
 		</div>
-		{#if import.meta.env.MODE === 'worker' || features().preview}
+
 			<a class="btn showcase-book" href={resolve(activeTab === 'ceramic' ? '/book?service=ceramic' : '/book?service=wheel-colour')}>
 				<ActionIcon name="calendar" />
 				{activeTab === 'ceramic' ? 'Book ceramic coating' : 'Book powder coating'}
 			</a>
-		{/if}
+
 	</div>
 
-	{#if import.meta.env.MODE === 'worker' || features().preview}
 		<div class="tabs" role="tablist" aria-label="Coating showcases">
 			{#each tabs as tab (tab.id)}
 				<button type="button" role="tab" id="showcase-tab-{tab.id}" aria-controls="showcase-{tab.id}"
@@ -144,9 +142,7 @@
 				</div>
 			{/if}
 		</div>
-	{:else}
-		<p class="muted">The showcase is part of the Pro package. Switch the demo to Pro in the footer to see it.</p>
-	{/if}
+
 </section>
 
 <style>

@@ -21,7 +21,7 @@
  async function saveItem(e:SubmitEvent){e.preventDefault();const details={name,unit,category,minimum,supplier,storage_location:location,unit_cost:unitCost??null,billing_rate:billingRate??null,capacity:capacity??null,...(editing?{revision:editing.revision}:{quantity})};if(await write({operation:editing?'edit':'create',stockId:newId,details}))itemDialog.close();}
  async function saveStock(e:SubmitEvent){e.preventDefault();if(moving&&await write({operation:'move',stockId:moving.id,details:{delta:stockMode==='add'?adjustment:-adjustment,reason:reason.trim()|| (stockMode==='add'?'Supplier delivery':'Workshop usage')}}))stockDialog.close();}
  async function saveOption(e:SubmitEvent){e.preventDefault();if(await write({operation:'option',kind:optionKind,previous:renaming?previousOption:null,name:optionName}))optionDialog.close();}
- onMount(()=>{if(import.meta.env.MODE==='worker')void load();else loading=false;});
+ onMount(()=>{void load();});
 </script>
 <svelte:head><title>Inventory | HERCO</title></svelte:head>
 {#snippet stateBadge(item: Stock)}

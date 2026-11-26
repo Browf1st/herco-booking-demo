@@ -10,7 +10,6 @@
 		staff: boolean; canRequest: boolean; canSign: boolean; signedAt: string | null; signerName: string | null;
 		form: { version: string; title: string; body: string; method: 'typed_name' } | null;
 	};
-	const enabled = import.meta.env.MODE === 'worker';
 	const api = resolve('/api/walk-in-intake');
 	const dateAndTime = new Intl.DateTimeFormat('en-PH', {
 		dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila'
@@ -103,7 +102,7 @@
 	}
 
 	onMount(() => {
-		if (!enabled) return;
+
 		reference = page.url.searchParams.get('booking') ?? '';
 		if (reference) void run(load);
 	});
@@ -112,9 +111,7 @@
 <svelte:head><title>Walk-in intake | HERCO</title></svelte:head>
 <section class="wrap section stack">
 	<h1>Walk-in intake</h1>
-	{#if !enabled}
-		<p>Walk-in intake is available in the server-backed app.</p>
-	{:else}
+
 		<form class="card stack" onsubmit={openBooking}>
 			<label>Booking reference <input bind:value={reference} maxlength="36" required disabled={busy} /></label>
 			<div><button class="btn ghost" type="submit" disabled={busy}>{busy ? 'Checking…' : 'Open intake'}</button></div>
@@ -162,7 +159,7 @@
 				{/if}
 			</section>
 		{/if}
-	{/if}
+
 </section>
 
 <style>

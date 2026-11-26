@@ -4,7 +4,6 @@
 	import { page } from '$app/state';
 	// The link in the reminder email is /reminders/unsubscribe?token=... Opening it only shows a button, so link
 	// scanners in email apps cannot unsubscribe anyone by accident. Only the button sends the token.
-	const enabled = import.meta.env.MODE === 'worker';
 	type Step = 'loading' | 'missing' | 'confirm' | 'busy' | 'done' | 'invalid' | 'error';
 	let step = $state<Step>('loading');
 	let token = '';
@@ -25,7 +24,7 @@
 	}
 
 	onMount(() => {
-		if (!enabled) return;
+
 		token = page.url.searchParams.get('token') ?? '';
 		step = token ? 'confirm' : 'missing';
 	});
@@ -34,9 +33,7 @@
 <svelte:head><title>Maintenance reminders | HERCO</title></svelte:head>
 <section class="wrap section stack">
 	<h1>Maintenance reminders</h1>
-	{#if !enabled}
-		<p>Reminder emails and unsubscribing work in the server-backed app.</p>
-	{:else if step === 'loading'}
+	{#if step === 'loading'}
 		<p role="status">Loading…</p>
 	{:else if step === 'missing'}
 		<p role="alert">This link is incomplete. Open the unsubscribe link from your reminder email again, or sign in to change reminder settings in your Account.</p>

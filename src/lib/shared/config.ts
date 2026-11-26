@@ -1,4 +1,4 @@
-// Visit details come from the supplied HERCO site. Booking settings are demo data.
+// Visit details come from the supplied HERCO site. Booking settings are starting defaults; live availability comes from the API.
 
 export type Size = 'small' | 'medium' | 'large';
 
@@ -92,13 +92,4 @@ export const rewardProgram = [
 	{ points: 3000, name: 'Free buffing', scope: 'Full unit' },
 	{ points: 4000, name: 'Free ceramic coating' },
 	{ points: 5000, name: 'Free powder coating', scope: 'Mags' }
-];
-
-export const demoFans = [
-	{ name: 'Marco Santos', points: 1280 },
-	{ name: 'Andrea Reyes', points: 960 },
-	{ name: 'Jolo Cruz', points: 740 },
-	{ name: 'Nicole Garcia', points: 520 },
-	{ name: 'Paolo Mendoza', points: 310 },
-	{ name: 'Trisha Ramos', points: 150 }
 ];

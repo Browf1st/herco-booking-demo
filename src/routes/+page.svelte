@@ -9,11 +9,9 @@
 	import { defaultSettings } from '#lib/shared/schedule-hours.ts';
 	import { formatClosedDays, formatShopHours } from '#lib/shared/shop-hours-text.ts';
 	import { liveShopHours, loadShopHours } from '#lib/live/shop-hours.svelte.ts';
-	import { db, dayStatus, features } from '#lib/demo/store.svelte.ts';
 
-	const demo = import.meta.env.MODE !== 'worker';
 	// Until the live hours arrive (or if they fail), show the starting hours.
-	const shopHours = $derived((demo ? db.hours : liveShopHours.value) ?? defaultSettings());
+	const shopHours = $derived(liveShopHours.value ?? defaultSettings());
 	const openHours = $derived(formatShopHours(shopHours));
 	const closedDays = $derived(formatClosedDays(shopHours.openWeekdays));
 	const directions = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shop.address)}`;
@@ -29,7 +27,7 @@
 	let calendarRequest = 0;
 
 	async function loadCalendar(from: string, through: string) {
-		if (demo) return;
+
 		const request = ++calendarRequest;
 		calendarIssue = '';
 		calendarSlots = [];
@@ -46,13 +44,13 @@
 	}
 
 	function calendarStatus(date: string) {
-		if (demo) return dayStatus(date);
+
 		const slots = calendarSlots.filter(slot => slot.visit_date === date);
 		return slots.some(slot => slot.status === 'open') ? 'open' : 'closed';
 	}
 
 	onMount(() => {
-		if (demo) return;
+
 		void loadShopHours();
 		const controller = new AbortController();
 		const query = new URLSearchParams({ from: days[0], to: days[days.length - 1] });
@@ -66,7 +64,7 @@
 	});
 
 	function scheduleStatus(date: string): keyof typeof statusLabels {
-		if (demo) return dayStatus(date);
+
 		const slots = serverSlots?.filter(slot => slot.visit_date === date) ?? [];
 		return slots.some(slot => slot.status === 'open') ? 'open' : 'closed';
 	}
@@ -131,7 +129,7 @@
 			</div>
 			{#if scheduleError}
 				<p role="alert">Availability is temporarily unavailable.</p>
-			{:else if !demo && !serverSlots}
+			{:else if !serverSlots}
 				<p role="status">Loading availability…</p>
 			{:else}
 			<ul class="schedule-days">
@@ -158,7 +156,7 @@
 			{#if calendarOpen}
 				{#if calendarLoading}<p role="status">Loading calendar…</p>{/if}
 				{#if calendarIssue}<p role="alert">{calendarIssue}</p>{/if}
-				<AvailabilityCalendar statusFor={calendarStatus} onmonth={loadCalendar} allows={date => demo || date <= addDays(today(),365)} />
+				<AvailabilityCalendar statusFor={calendarStatus} onmonth={loadCalendar} allows={date => date <= addDays(today(),365)} />
 			{/if}
 		</div>
 	</div>
@@ -199,15 +197,13 @@
 						</li>
 					{/each}
 				</ul>
-				{#if import.meta.env.MODE === 'worker' || features().preview}
+
 					<div class="finish-link"><a class="btn ghost" href={resolve(group.href)}><ActionIcon name="view" />View {group.title}</a></div>
-				{/if}
+
 			</div>
 		{/each}
 	</div>
 </section>
-
-
 
 <section class="section band" id="visit">
 	<div class="wrap cta">

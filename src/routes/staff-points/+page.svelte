@@ -5,7 +5,7 @@
  import RewardReceipt from '#lib/shared/RewardReceipt.svelte';
  import {rankMap,sortMembers} from '#lib/live/points-ranking.ts';
  import PageHeader from '#lib/shared/PageHeader.svelte';
- import type {RewardReceipt as ReceiptView} from '#lib/demo/operations.svelte.ts';
+ import type {RewardReceipt as ReceiptView} from '#lib/shared/reward-receipt.ts';
  type Member={id:string;name:string;email:string;phone:string;balance:number};
  type Receipt={id:string;reference:string;member_id:string;customer_name:string;customer_email:string;customer_phone:string;reward_label:string;reward_scope:string;cost:number;balance_after:number;created_at:string;approved_at:string|null;claimed_at:string|null;approved_name:string;claimed_name:string};
  type Reward={id:string;label:string;scope:string;cost:number;enabled:boolean};
@@ -35,7 +35,7 @@
  async function submit(payload:Record<string,unknown>){if(busy)return false;busy=true;failure=notice='';try{const r=await fetch(resolve('/api/staff-points'),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});if(!r.ok)throw Error((await r.json()).message??'Could not save.');await load();notice='Update saved.';return true;}catch(e){failure=e instanceof Error?e.message:'Could not save.';return false;}finally{busy=false;}}
  async function adjust(e:SubmitEvent){e.preventDefault();if(!member)return;const p={action:'adjust',member:member.id,delta,reason:correcting?reason.trim():'Manual points grant'};const k=JSON.stringify(p);const id=attempts.get(k)??crypto.randomUUID();attempts.set(k,id);if(await submit({...p,requestId:id})){attempts.delete(k);pointsDialog.close();}}
  async function saveReward(e:SubmitEvent){e.preventDefault();if(await submit({action:'saveReward',...draft}))rewardDialog.close();}
- onMount(()=>{if(import.meta.env.MODE==='worker')void load();else loading=false;});
+ onMount(()=>{void load();});
 </script>
 <svelte:head><title>HERCO Points | Staff</title></svelte:head>
 <section class="section wrap stack">

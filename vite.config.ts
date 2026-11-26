@@ -1,7 +1,6 @@
-import adapter from '@sveltejs/adapter-static';
 import cloudflare from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 
 export default defineConfig(({ mode }) => ({
 	plugins: [
@@ -12,8 +11,8 @@ export default defineConfig(({ mode }) => ({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			// GitHub Pages publishes the demo. The Worker build includes the server endpoints.
-			adapter: mode === 'worker' ? cloudflare() : adapter({ strict: false }),
+			// The live app uses Cloudflare Worker endpoints in every environment.
+			adapter: cloudflare(),
 
 			// Static pages receive a hashed CSP meta tag. The Worker adds HTTP-only
 			// framing protection in _headers and hooks.server.ts.
@@ -31,8 +30,8 @@ export default defineConfig(({ mode }) => ({
 				}
 			} } : {}),
 
-			// GitHub Pages serves the site under /<repo-name>, set through BASE_PATH in the deploy workflow.
-			paths: { base: (loadEnv(mode, '.', 'BASE_PATH').BASE_PATH ?? '') as `/${string}` | '' }
+			// The live app is served from the site root.
+			paths: { base: '' }
 		})
 	]
 }));

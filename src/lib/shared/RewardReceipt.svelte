@@ -1,7 +1,7 @@
 <script lang="ts">
 	import ActionIcon from '#lib/shared/ActionIcon.svelte';
 	import { asset } from '$app/paths';
-	import { rewardStatus, type RewardReceipt } from '../demo/operations.svelte';
+	import { rewardStatus, type RewardReceipt } from '../shared/reward-receipt';
 	let { receipt }: { receipt: RewardReceipt } = $props();
 	const logo = asset('photos/logo.png');
 	const date = (value: string) => new Date(value).toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true });

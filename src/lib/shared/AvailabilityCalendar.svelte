@@ -2,9 +2,8 @@
  import ActionIcon from '#lib/shared/ActionIcon.svelte';
  import { resolve } from '$app/paths';
  import { addDays, fmtDate, isBookableDate, today } from './dates';
- import { dayStatus } from '../demo/store.svelte';
 
- let { selected = '', onpick, allows = () => true, statusFor = dayStatus, onmonth }: { selected?: string; onpick?: (date: string) => void; allows?: (date: string) => boolean; statusFor?: (date: string) => string; onmonth?: (from: string, to: string) => void } = $props();
+ let { selected = '', onpick, allows = () => true, statusFor, onmonth }: { selected?: string; onpick?: (date: string) => void; allows?: (date: string) => boolean; statusFor: (date: string) => string; onmonth?: (from: string, to: string) => void } = $props();
  const currentMonth = today().slice(0, 7);
  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
  let browsedMonth = $state<string>();

@@ -51,11 +51,11 @@ test('other keys and an empty tab list do nothing', () => {
 
 const read = (path) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
-test('reward title and cost share one row on both Points screens', () => {
+test('reward title and cost share one row in the live Points screen', () => {
 	const heading = read('src/lib/shared/RewardHeading.svelte');
 	assert.match(heading, /-webkit-line-clamp: 2/);
 	assert.match(heading, /grid-template-columns: minmax\(0, 1fr\) auto/);
-	for (const page of ['src/lib/live/ServerPoints.svelte', 'src/routes/points/DemoPage.svelte']) {
+	for (const page of ['src/lib/live/ServerPoints.svelte']) {
 		const source = read(page);
 		assert.equal((source.match(/<RewardHeading /g) ?? []).length, 2, page);
 		assert.doesNotMatch(source, /<p class="eyebrow">\{reward\.points/, page);

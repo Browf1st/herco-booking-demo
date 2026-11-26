@@ -5,16 +5,9 @@ import { gzipSync } from 'node:zlib';
 const budgets = {
 	worker: {
 		directory: '.svelte-kit/cloudflare/client',
-		// Raised 2026-11-20 when the Worker screens adopted the demo UI (calendar, dialogs, cart);
-		// still well under the matching demo budgets below.
+		// Worker route limits retained when the separate static demo was retired.
 		javascript: { index: 60, book: 70, account: 60, 'my-bookings': 72, preview: 60, admin: 85, pricing: 65 },
 		styles: { index: 8, book: 9, account: 7, 'my-bookings': 8, preview: 7, admin: 12, pricing: 7 }
-	},
-	demo: {
-		directory: 'build',
-		// Admin includes the shared header, which now also carries the role-based staff menu.
-		javascript: { index: 76, book: 84, account: 73, 'my-bookings': 87, preview: 72, admin: 124, pricing: 72 },
-		styles: { index: 9, book: 11, account: 8, 'my-bookings': 11, preview: 8, admin: 18, pricing: 7 }
 	}
 };
 
@@ -46,7 +39,7 @@ const responsivePhotos = {
 const mode = process.argv[2];
 const budget = Object.hasOwn(budgets, mode) ? budgets[mode] : undefined;
 if (!budget || process.argv.length !== 3) {
-	console.error('Usage: node scripts/performance-budget.mjs <worker|demo>. Build that target first.');
+	console.error('Usage: node scripts/performance-budget.mjs worker. Build that target first.');
 	process.exit(2);
 }
 

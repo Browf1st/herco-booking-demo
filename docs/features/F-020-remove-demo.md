@@ -1,6 +1,6 @@
 # F-020: Remove the static demo, keep the live app
 
-**Status:** Ready (owner approved 2026-11-26) · **Milestone:** M2 · **Depends on:** none (do first)
+**Status:** Done locally (owner accepted 2026-11-26; hosted Pages removal pending) · **Milestone:** M2 · **Depends on:** none (do first)
 
 ## In one sentence
 Delete the old GitHub Pages demo (fake sign-in, browser storage) so the app has one code path — the live Supabase + Cloudflare Worker app — while keeping all shared UI and the live app fully working.
@@ -60,3 +60,21 @@ As the owner, I want one app to maintain, not two, so changes can't drift betwee
 - [x] Acceptance tests are written
 - [x] No open questions left
 - [x] **Owner approved:** 2026-11-26
+
+## Local implementation checkpoint — 2026-11-26
+
+- Implemented on `codex/f020-live-only`; owner checked the running app, said "all good", and requested Done and merge to local main on 2026-11-26. Local Vite on `http://localhost:5175` follows the current checkout.
+- Demo sources, route switches, static adapter/build and Pages deploy workflow removed; shared receipt helper extracted and live calendar status supplied explicitly. Legacy live pricing retained; no F-021+ implementation reused.
+- Baseline: 222 passing tests. Final QA: 222 passing, no skips (four obsolete demo-only tests retired with approval, four live-only regressions added); check 0 errors/0 warnings; Worker build and all budgets pass; diff whitespace check passes. Unchanged staff bookings CSS still emits its existing build warning.
+- No changes to API/server/database/contracts. No hosted migration, deployment, email, booking write or remote Git access performed. Personal Git credential email was not verified, so fetch was deferred.
+- Saved stash `4644604db4bea791a2b2d4f67a79daa0bcc961a4` and external demo backup retained. Newer F-008/F-014/F-016/F-026/F-027 decisions preserved. Reference audit/inventory archived under `docs/archive/demo`; no tracked screenshot files were present to move.
+- Source design review found no new presentation regressions. Local HTTP smoke returned 200 SPA shells for public/customer/staff page paths and 401 for an unauthenticated session; this does not prove browser rendering or signed-in workflows.
+
+### Remaining acceptance evidence
+- [ ] Desktop/mobile rendering and keyboard check of live screens and shared calendar/receipt (no connected browser was available in this session).
+- [ ] Fictional customer sign-in → booking → My Bookings and staff sign-in → Bookings/Reports end-to-end verification in an isolated environment; do not write to hosted business data without authorization.
+- [ ] Separate authorized release step: unpublish the existing GitHub Pages site. Removing the workflow alone does not take it down.
+
+Owner accepted the local implementation after checking the app and explicitly requested Done and merge to main. Outstanding checks above remain recorded limits; owner acceptance does not claim automated signed-in E2E or full desktop/mobile coverage. Hosted Pages removal remains a separate release step.
+
+Misuse review: no confirmed defect. Old `/Herco/admin` and `/demo` paths returned 404; fake demo/role/view parameters did not unlock protected APIs (401; Reports denied with 403 and private/no-store). Source review found browser storage cannot grant staff access. Browser storage injection and signed-in/Back/refresh interaction remain unverified.

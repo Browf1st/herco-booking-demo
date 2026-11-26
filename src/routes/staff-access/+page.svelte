@@ -14,7 +14,6 @@
 	// Roles are labels only: access comes from the ticked pages and actions. "Restricted Admin" was
 	// dropped (owner, 2026-11-23); existing accounts keep their grants and show and save as Admin.
 	const roleLabels: Record<Role, string> = { staff: 'Staff', admin: 'Admin', restricted_admin: 'Admin' };
-	const enabled = import.meta.env.MODE === 'worker';
 	const url = resolve('/api/staff-access');
 	const emptyDraft = (): Draft => ({ name: '', email: '', role: 'staff', enabled: true, pages: [], actions: [] });
 	let data = $state<StaffAccess>();
@@ -109,7 +108,7 @@
 		}
 	}
 
-	onMount(() => { if (enabled) void load(); });
+	onMount(() => { void load(); });
 </script>
 <svelte:head><title>Staff access | HERCO</title></svelte:head>
 <section class="wrap section stack"><PageHeader title="Staff Access" subtitle="Choose who can use each staff page and action.">{#if data}<button class="btn sm" onclick={()=>edit()}><ActionIcon name="add"/>Add account</button>{/if}</PageHeader>

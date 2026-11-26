@@ -3,7 +3,6 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import PageHeader from '#lib/shared/PageHeader.svelte';
-	const worker = import.meta.env.MODE === 'worker';
 	const booking = $derived(page.url.searchParams.get('booking') ?? '');
 	const url = resolve('/api/booking-prices');
 	const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
@@ -61,7 +60,7 @@
 		return line.max_centavos == null ? minimum : minimum + '–' + money.format(line.max_centavos / 100);
 	}
 
-	onMount(() => { if (worker && booking) void load(); });
+	onMount(() => { if (booking) void load(); });
 </script>
 
 <svelte:head><title>Booking prices | HERCO</title></svelte:head>

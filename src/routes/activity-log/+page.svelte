@@ -8,12 +8,11 @@
 	import { addDays, today } from '#lib/shared/dates.ts';
 
 	type Entry = { recorded_at: string; area: string; action: string; actor: string; actor_label?: string; reference: string };
-	const worker = import.meta.env.MODE === 'worker';
 	const stamp = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'medium' });
 	let from = $state('');
 	let through = $state('');
 	let entries = $state<Entry[]>();
-	let loading = $state(worker);
+	let loading = $state(true);
 	let failure = $state('');
 	let selectedModule = $state('');
 	let search = $state('');
@@ -56,7 +55,7 @@
 	}
 
 	onMount(() => {
-		if (!worker) return;
+
 		through = today();
 		from = addDays(through, -6);
 		void load();
@@ -66,7 +65,7 @@
 <svelte:head><title>Activity log | HERCO</title></svelte:head>
 <section class="section wrap stack">
 	<PageHeader title="Activity log" subtitle="Who changed what in the staff workspace, newest first." timezone />
-	{#if worker}
+
 		<section class="card stack" aria-label="Activity entries">
 			<form class="cols activity-dates" onsubmit={load}>
 				<label>From<input type="date" bind:value={from} max={through || undefined} required /></label>
@@ -100,9 +99,7 @@
 				<Pager page={current} {pages} label="Activity log" onchange={(next) => (logPage = next)} />
 			{/if}
 		</section>
-	{:else}
-		<p>The activity log is available in the server build.</p>
-	{/if}
+
 </section>
 
 <style>

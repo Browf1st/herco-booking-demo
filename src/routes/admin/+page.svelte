@@ -1,5 +1,5 @@
 <script lang="ts">
- import DemoPage from './DemoPage.svelte';
+
  import ServerStaffBookings from '#lib/live/ServerStaffBookings.svelte';
  import ServerStaffRequests from '#lib/live/ServerStaffRequests.svelte';
  import { resolve } from '$app/paths';
@@ -13,10 +13,9 @@
    access = response.ok ? await response.json() : undefined;
   } catch { access = undefined; }
  }
- onMount(() => { if (import.meta.env.MODE === 'worker') void loadAccess(); });
+ onMount(() => { void loadAccess(); });
 </script>
 
-{#if import.meta.env.MODE === 'worker'}
  {#if changes}
   <ServerStaffRequests />
  {:else}
@@ -24,6 +23,3 @@
    canAdjustPrices={access?.actions.includes('adjustPrices') ?? false} actions={access?.actions} pages={access?.pages}
    canRequestIntake={access?.pages.includes('Bookings') === true && access.actions.includes('createBooking')} />
  {/if}
-{:else}
- <DemoPage />
-{/if}

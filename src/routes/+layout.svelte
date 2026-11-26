@@ -3,15 +3,12 @@
 	import { afterNavigate, goto } from '$app/navigation';
 	import '../app.css';
 	import { onMount } from 'svelte';
-	import { syncBookings } from '#lib/demo/store.svelte.ts';
-	import { saveFanProfile, syncOperations } from '#lib/demo/operations.svelte.ts';
-	import { account, signOut as signOutDemoCustomer } from '#lib/demo/account.svelte.ts';
+
 	import { asset, resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { photos, shop } from '#lib/shared/config.ts';
 	import type { LayoutProps } from './$types';
-	import { adminNavigation, adminPath } from '#lib/demo/adminNavigation.ts';
-	import { staffAccess, switchStaffSession, syncStaffAccess } from '#lib/demo/staffAccess.svelte.ts';
+
 	import { parseWorkspaceAccess, workspaceLanding, workspaceGroups, workspaceLinks, type WorkspaceAccess } from '#lib/shared/workspace-navigation.ts';
 	import type { Component } from 'svelte';
 	import type { MenuUser } from '#lib/shared/account-menu.ts';
@@ -37,15 +34,10 @@
 		if (bookMenu) bookMenu.open = false;
 		const open = openOwnerMenu();
 		if (open) open.open = false;
-		if (!demo) void refreshWorkerNavigation();
+		void refreshWorkerNavigation();
 	});
-	const activeAdmin = $derived(adminNavigation(page.url.searchParams));
-	const ownerLinks = [{ tab: 'Reports', label: 'Reports' }, { tab: 'Staff Access', label: 'Accounts' }, { tab: 'Activity log', label: 'Activity Log' }] as const;
-	const moreTabs = ['Booking', 'Customers', 'HERCO Points', 'Inventory', 'Pricing'] as const;
-	const demo = import.meta.env.MODE !== 'worker';
 	// The footer shows the starting hours until the real ones load.
 	let ShopHoursText = $state<Component>();
-	let sessionError = $state('');
 	const customerOnlyRoutes = new Set(['/', '/book', '/points', '/my-bookings', '/preview', '/walk-in']);
 	const staffOnlyRoutes = new Set(['/admin', '/booking-history', '/reports', '/customers', '/staff-points', '/inventory',
 		'/pricing', '/activity-log', '/staff-access', '/manual-booking', '/complete-booking', '/booking-services', '/booking-prices']);
@@ -131,17 +123,6 @@
 		} finally { signingOut = false; }
 	}
 
-	function selectDemoView(event: MouseEvent, view: 'admin' | 'owner') {
-		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-		sessionError = '';
-		try {
-			switchStaffSession(view);
-		} catch (error) {
-			event.preventDefault();
-			sessionError = error instanceof Error ? error.message : 'Could not change the demo session.';
-		}
-	}
-
 	// Who is signed in, for the header Account menu (the Worker build asks the server who the signed-in user is).
 	async function loadProfile() {
 		try {
@@ -150,13 +131,8 @@
 			profile = data ? { name: data.name || String(data.email).split('@')[0], email: String(data.email) } : null;
 		} catch { profile = null; }
 	}
-	// Demo: staff views only on the admin pages, otherwise the demo customer account.
-	const menuUser = $derived<MenuUser | null>(demo
-		? (page.route.id === '/admin'
-			? (staffAccess.owner || staffAccess.admin || staffAccess.current ? { name: staffAccess.current?.name ?? 'Demo ' + (staffAccess.owner ? 'owner' : 'admin'), email: staffAccess.current?.email ?? '', role: staffAccess.owner ? 'Owner' : staffAccess.current?.role ?? 'Admin' } : null)
-			: account.current ? { name: account.current.name, email: account.current.email, role: 'Customer' } : null)
-		: profile ? { ...profile, role: workerAccess?.role.replace('restricted_', '') ?? 'Customer' } : null);
-	const signOutMenu = () => demo ? (page.route.id === '/admin' ? switchStaffSession(null) : (signOutDemoCustomer(), goto(resolve('/account')))) : signOutWorker();
+	const menuUser = $derived<MenuUser | null>(profile ? { ...profile, role: workerAccess?.role.replace('restricted_', '') ?? 'Customer' } : null);
+	const signOutMenu = () => signOutWorker();
 
 	onMount(() => {
 		void import('#lib/shared/AccountMenu.svelte').then((module) => { AccountMenu = module.default; });
@@ -167,7 +143,7 @@
 			else delete document.documentElement.dataset.theme;
 		};
 		window.addEventListener('storage', onThemeStorage);
-		if (!demo) {
+		{
 			void loadProfile();
 			const refresh = () => { void refreshWorkerNavigation(); void loadProfile(); };
 			window.addEventListener('herco-account-changed', refresh);
@@ -178,16 +154,6 @@
 				window.removeEventListener('focus', refresh);
 			};
 		}
-		const stopOperations = syncOperations();
-		if (account.current) saveFanProfile(account.current);
-		const stopBookings = syncBookings();
-		const stopStaffAccess = syncStaffAccess();
-		return () => {
-			window.removeEventListener('storage', onThemeStorage);
-			stopOperations();
-			stopBookings();
-			stopStaffAccess();
-		};
 	});
 </script>
 
@@ -220,27 +186,16 @@
 	}
 }} />
 
-{#if demo || sessionError}<div class="demo-switch">
-	<div class="wrap">
-		{#if demo}<nav class="view-switch" aria-label="Demo views">
-			<a href={resolve('/')} aria-current={page.route.id !== '/admin' ? 'true' : undefined}>User view</a>
-			<a href={resolve('/admin')} aria-current={page.route.id === '/admin' && !activeAdmin.owner ? 'true' : undefined} onclick={(event) => selectDemoView(event, 'admin')}>Admin view</a>
-			<a href={resolve(adminPath('Booking'))} aria-current={page.route.id === '/admin' && activeAdmin.owner ? 'true' : undefined} onclick={(event) => selectDemoView(event, 'owner')}>Owner view</a>
-		</nav>{/if}
-	</div>
-	{#if sessionError}<p class="wrap error small" role="alert">{sessionError}</p>{/if}
-</div>{/if}
-
 <header bind:this={header}>
-	<div class="wrap row" class:admin-header={demo ? page.route.id === '/admin' : Boolean(workerAccess)} class:owner-header={demo ? page.route.id === '/admin' && activeAdmin.owner : workerAccess?.role === 'owner' || workerAccess?.role === 'superadmin'}>
-		<a class="logo" href={!demo && workerAccess ? resolve(workspaceLanding(workerAccess) as '/admin') : resolve('/')}>
+	<div class="wrap row" class:admin-header={Boolean(workerAccess)} class:owner-header={workerAccess?.role === 'owner' || workerAccess?.role === 'superadmin'}>
+		<a class="logo" href={workerAccess ? resolve(workspaceLanding(workerAccess) as '/admin') : resolve('/')}>
 			<img class="mark" src={asset(photos.logo)} alt="" />
 			<span><b>Herco</b><small>Detailing Garage</small></span>
 		</a>
 		<button class="menu-trigger" type="button" bind:this={menuTrigger} aria-expanded={menuOpen} aria-controls="header-navigation" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'} onclick={() => menuOpen = !menuOpen}>
 			<ActionIcon name={menuOpen ? 'close' : 'menu'} />
 		</button>
-		{#if !demo && (workerAccess || workerNavigation === 'error' || (workerNavigation === 'loading' && !customerOnlyRoutes.has(page.url.pathname)))}
+		{#if (workerAccess || workerNavigation === 'error' || (workerNavigation === 'loading' && !customerOnlyRoutes.has(page.url.pathname)))}
 		<nav id="header-navigation" class="admin-sections main-nav staff-main-nav" class:owner-sections={workerAccess?.role === 'owner' || workerAccess?.role === 'superadmin'} class:menu-open={menuOpen} aria-label="Staff navigation">
 			{#if workerNavigation === 'error'}
 				<button class="navigation-retry" type="button" onclick={() => refreshWorkerNavigation()}><ActionIcon name="reset" />Retry navigation</button>
@@ -260,7 +215,7 @@
 				{/each}
 			{/if}
 		</nav>
-		{:else if !demo || page.route.id !== '/admin'}
+		{:else}
 		<nav id="header-navigation" class="row main-nav" class:menu-open={menuOpen} aria-label="Customer navigation">
 			<a class="link" href={resolve('/#services')} aria-current={page.route.id === '/' && page.url.hash === '#services' ? 'location' : undefined}>Services</a>
 			<a class="link" href={resolve('/preview')} aria-current={page.route.id === '/preview' ? 'page' : undefined}>Showcase</a>
@@ -270,32 +225,9 @@
 				<summary class="btn sm" class:booking-current={page.route.id === '/book'}><ActionIcon name="calendar" />Book <span aria-hidden="true">▾</span></summary>
 				<div class="book-options">
 					<a href={resolve('/book')} data-sveltekit-reload aria-current={page.route.id === '/book' && !page.url.searchParams.has('walk-in') ? 'page' : undefined}>Online</a>
-					<a href={demo ? resolve('/book?walk-in=1') : resolve('/walk-in')} data-sveltekit-reload aria-current={(demo ? page.route.id === '/book' && page.url.searchParams.has('walk-in') : page.route.id === '/walk-in') ? 'page' : undefined}>Walk-in</a>
+					<a href={resolve('/walk-in')} data-sveltekit-reload aria-current={(page.route.id === '/walk-in') ? 'page' : undefined}>Walk-in</a>
 				</div>
 			</details>
-		</nav>
-		{:else}
-		<nav id="header-navigation" class="admin-sections main-nav" class:owner-sections={activeAdmin.owner} class:menu-open={menuOpen} aria-label="Admin sections">
-			{#if activeAdmin.owner}
-				{#each ownerLinks as { tab, label } (tab)}
-					<a href={resolve(adminPath(tab))} aria-current={activeAdmin.allowed && activeAdmin.tab === tab ? 'page' : undefined}>{label}</a>
-				{/each}
-				<details class="owner-group" class:group-current={activeAdmin.allowed && moreTabs.some(tab => tab === activeAdmin.tab)}>
-					<summary>More <span class="owner-caret" aria-hidden="true"></span></summary>
-					<div class="owner-options">
-						{#each moreTabs as tab (tab)}
-							<a href={resolve(adminPath(tab))} aria-current={activeAdmin.allowed && activeAdmin.tab === tab ? 'page' : undefined}>{tab}</a>
-						{/each}
-					</div>
-				</details>
-			{:else}
-			{#each activeAdmin.tabs as tab (tab)}
-				<a
-					href={resolve(adminPath(tab))}
-					aria-current={activeAdmin.allowed && activeAdmin.tab === tab ? 'page' : undefined}
-				>{tab}</a>
-			{/each}
-			{/if}
 		</nav>
 		{/if}
 		<div class="account-slot">{#if AccountMenu}<AccountMenu user={menuUser} settingsHref={resolve('/account')} {signingOut} onsignout={signOutMenu} />{/if}</div>
@@ -319,29 +251,6 @@
 </footer>
 
 <style>
-	.demo-switch {
-		position: relative;
-		z-index: 11;
-		border-bottom: 1px solid var(--line);
-		background: var(--panel-2);
-	}
-
-	.demo-switch .wrap {
-		display: flex;
-		justify-content: flex-end;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: .25rem .9rem;
-		padding-block: .2rem;
-	}
-
-
-	.view-switch { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: .45rem; background: var(--panel); }
-	.view-switch a { padding: .3rem .55rem; border-radius: .29rem; color: var(--muted); font-size: .77rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
-	.view-switch a:hover:not([aria-current]) { background: var(--panel-2); color: var(--text); }
-	.view-switch a[aria-current] { background: var(--accent-fill); color: var(--accent-ink); }
-	.view-switch a:focus-visible { outline-offset: -2px; outline-color: currentColor; }
-
 
 	.admin-sections {
 		display: flex;
@@ -421,7 +330,7 @@
 	.account-slot { display: flex; align-items: center; justify-content: flex-end; flex: none; width: 6.5rem; min-height: 44px; margin-inline-start: .5rem; }
 	/* Tabs and the Account button sit together on the right; the logo stays on the left. */
 	.main-nav { margin-inline-start: auto; }
-	/* Staff header reuses the demo admin tabs; dropdowns need visible overflow to open below the bar. */
+	/* Staff header groups the permitted workspace tabs; dropdowns need visible overflow to open below the bar. */
 	.staff-main-nav { overflow: visible; flex-wrap: wrap; justify-content: flex-end; gap: 0 clamp(.75rem, 2vw, 1.5rem); }
 	.owner-options a { display: flex; align-items: center; gap: .5rem; white-space: nowrap; }
 	.owner-options .option-label { flex: 1; }
@@ -521,7 +430,6 @@
 			padding-block: 8px;
 		}
 
-		
 		.logo { order: 1; }
 		.account-slot { order: 2; margin-inline-start: auto; width: 5.5rem; }
 

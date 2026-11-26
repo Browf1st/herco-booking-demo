@@ -29,14 +29,9 @@ test('the live reports search is sent to the server after a pause and reloads fr
 	assert.match(table, /setTimeout\(\(\) => \{ search = text; onsearch\?\.\(\); \}, 300\)/);
 });
 
-test('the demo reports search filters the demo records and goes back to page 1', async () => {
-	const screen = await read('src/lib/demo/AdminReports.svelte');
-	assert.match(screen, /bind:search=\{filters\.search\}/);
-	assert.match(screen, /onsearch=\{\(\) => recordPage = 1\}/);
-});
 
-test('reports no longer show the removed labels in either build', async () => {
-	for (const path of ['src/lib/live/ServerStaffRecords.svelte', 'src/lib/demo/AdminReports.svelte', 'src/lib/shared/ReportSummary.svelte', 'src/lib/shared/ReportTable.svelte']) {
+test('reports no longer show the removed labels in the live app', async () => {
+	for (const path of ['src/lib/live/ServerStaffRecords.svelte', 'src/lib/shared/ReportSummary.svelte', 'src/lib/shared/ReportTable.svelte']) {
 		const source = await read(path);
 		assert.doesNotMatch(source, /Workshop view|How these numbers|records? · Newest first|Total requests logged|Direct visits|Slot released/, path);
 	}

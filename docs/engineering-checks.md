@@ -16,8 +16,8 @@ Use the [OWASP Top 10:2025](https://top10.owasp.org/) to identify risks and [ASV
 | Risk area | Verify in HERCO |
 | --- | --- |
 | A01 Access control | A verified customer can only read or change their own bookings and contact details. Staff operations require verified email, an enabled membership, and the relevant grants. Password sign-in is sufficient; MFA is not required by the approved policy. Test the route and database RPC independently, including revocation. |
-| A02 Configuration | Verify CSP, framing protection, private caching, provider callback allowlists, CORS/origin behavior, and separation of demo and Worker environments. Check headers on both rendered and prerendered responses. |
-| A03 Software supply chain | Install with the lockfile in CI, audit runtime and development dependencies, and review dependency changes before release. Pin application and Pages workflow actions to verified commits. |
+| A02 Configuration | Verify CSP, framing protection, private caching, provider callback allowlists, CORS/origin behavior, and the Worker environment. Check headers on both rendered and prerendered responses. |
+| A03 Software supply chain | Install with the lockfile in CI, audit runtime and development dependencies, and review dependency changes before release. Pin application workflow actions to verified commits. |
 | A04 Cryptography | Use HTTPS, secure session cookies, private Storage and encrypted backups. Review secret placement and ensure production credentials differ from staging credentials. |
 | A05 Injection | Validate product data, contact fields, upload type and size, and JSON body size. Bind SQL parameters and verify escaping in CSV, logging, email and other downstream consumers. |
 | A06 Insecure design | Recalculate quote totals, capacity and balances on the server. Check booking races, stale estimates, replay and concurrent staff edits. |
@@ -39,18 +39,16 @@ Use the [OWASP Top 10:2025](https://top10.owasp.org/) to identify risks and [ASV
 npm ci
 npm run check
 npm test
-npm run build
-node scripts/performance-budget.mjs demo
 npm run build:worker
 node scripts/performance-budget.mjs worker
 npm audit --audit-level=high
 ```
 
-The [Engineering checks workflow](../.github/workflows/engineering-checks.yml) applies every migration to a fresh PostgreSQL service and runs [database policy assertions](../tests/database/security.sql). The fixture models the required Supabase roles and Storage tables. Verify the hosted Auth and Storage behavior separately before release. Set `BASE_PATH` to the demo repository path when reproducing GitHub Pages locally.
+The [Engineering checks workflow](../.github/workflows/engineering-checks.yml) applies every migration to a fresh PostgreSQL service and runs [database policy assertions](../tests/database/security.sql). The fixture models the required Supabase roles and Storage tables. Verify the hosted Auth and Storage behavior separately before release. The retired demo has no build or deployment workflow.
 
 ### Controls that still need staging evidence
 
-- Verify the actual private `herco-completion` bucket, file limit, content types and direct access denial. Verify the served Worker headers. GitHub Pages supplies its own HTTP headers and HERCO sets a CSP meta policy in the static demo.
+- Verify the actual private `herco-completion` bucket, file limit, content types and direct access denial. Verify the served Worker headers.
 - Confirm Supabase email confirmation, signup and reset abuse limits, and the approved per-account booking limits that can be enforced even for direct Supabase RPC calls.
 - Verify that completion-only staff can record the finalized service total and that a different final charge requires the separate price adjustment grant. Check the private completion record and authorized reports.
 - Verify provider delivery, alert routing, storage and database recovery, and production-like mobile and load performance. Use fictional data and the isolated staging account.

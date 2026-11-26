@@ -4,7 +4,7 @@
  import { onMount } from 'svelte';
  import RewardReceipt from '../shared/RewardReceipt.svelte';
  import RewardHeading from '../shared/RewardHeading.svelte';
- import { rewardStatus, type RewardReceipt as Receipt } from '../demo/operations.svelte';
+ import { rewardStatus, type RewardReceipt as Receipt } from '../shared/reward-receipt';
  type Reward = {id:string;label:string;scope:string;cost:number};
  type Points = {memberId:string;memberName:string;balance:number;ownRank:number;ranking:{position:number;name:string;balance:number;isCurrent:boolean}[];rewards:Reward[];ledger:{id:number;amount:number;reason:string;created_at:string}[];receipts:{id:string;reference:string;reward_label:string;reward_scope:string;cost:number;balance_after:number;member_name:string;created_at:string;approved_at:string|null;claimed_at:string|null}[]};
  let points=$state<Points>(); let previewRewards=$state<Reward[]>([]); let loading=$state(true); let error=$state(''); let notice=$state('');

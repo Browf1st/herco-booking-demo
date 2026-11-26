@@ -5,10 +5,6 @@
 	const fromStaff = $derived(page.url.searchParams.get('from') === 'staff');
 </script>
 
-{#if import.meta.env.MODE === 'worker'}
 	{#key bookingId}
 		<BookingServiceEditor {bookingId} {fromStaff} />
 	{/key}
-{:else}
-	<section class="section wrap stack"><h1>Booking services</h1><p>Open a booking in the demo to view its services.</p></section>
-{/if}

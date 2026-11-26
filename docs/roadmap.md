@@ -57,13 +57,13 @@ Follow-up fixes (2026-11-23): the booking card "⋯" menu closes on a tap elsewh
 | F-016 | Staging hardening, monitoring, analytics and production release | Blocked: hosting, domain, alerts and owners not confirmed (Q-17) | all M2 | [spec](features/F-016-release-monitoring.md) |
 | F-017 | 6-month maintenance reminder email | Testing: built 2026-11-23; migration applied 2026-11-24; needs `HERCO_REMINDER_TOKEN_SECRET` and `HERCO_SITE_URL` | F-002, F-007, F-014 | [spec](features/F-017-maintenance-reminder.md) |
 
-### Approved feature plans — not implemented on main
+### Approved feature batch
 
-Owner requested that `main` contain the existing guest-booking commit `57c697f` and the feature specifications only. The local F-020–F-023 implementation and other unfinished work are preserved separately, not included in this checkout. These plans are approved; their implementations must be reviewed and integrated separately.
+F-020 was implemented and accepted by the owner on 2026-11-26 for merge to local main. F-021 onward remain approved plans awaiting implementation. Earlier unfinished work remains preserved separately for selective reuse.
 
 | ID | Planned feature | Status on main | Spec |
 |---|---|---|---|
-| F-020 | Remove the static demo, keep the live app | Ready; not implemented | [spec](features/F-020-remove-demo.md) |
+| F-020 | Remove the static demo, keep the live app | Done locally; owner checked and accepted 2026-11-26; hosted Pages removal pending | [spec](features/F-020-remove-demo.md) |
 | F-021 | Unified powder pricing and staff Pricing editor | Ready; not implemented | [spec](features/F-021-powder-pricing-model.md) |
 | F-022 | Powder booking screen | Ready; not implemented | [spec](features/F-022-powder-booking-screen.md) |
 | F-023 | Ceramic booking revamp | Ready; not implemented | [spec](features/F-023-ceramic-fixes.md) |
@@ -120,6 +120,7 @@ Enter secret values only in the provider's settings or ignored local files, neve
 - [ ] Staging evidence: live sign-in and cross-device test, concurrent booking and points tests on hosted PostgreSQL, real-phone review, email delivery test, restore drill, production speed traces, then a written release go-ahead.
 
 ## Done log
+- 2026-11-26 F-020 accepted by owner after checking the running app; requested Done and merge to local main. QA: 222 tests, check 0 errors/warnings, Worker build and budgets pass; design/source and misuse reviews found no new defect. Full browser/signed-in E2E coverage remains unverified; hosted Pages takedown pending. No deployment authorized.
 - 2026-11-17 M1 Performance and security pass on the demo: images 86% smaller, safer storage parsing, CSP, theme and keyboard fixes.
 - 2026-11-17 F-007 Booking history filters (date, status, search) and pagination in the demo.
 - 2026-11-19 Production plan updated; password-staff migration written.

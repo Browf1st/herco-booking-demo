@@ -11,15 +11,13 @@
 	type Pricing = { canEditServices: boolean; canEditPromotion: boolean; services: Service[]; promotion: Promotion };
 	type ServiceDraft = Setting & { pesos?: number; maximum?: number; quoteRequired?: boolean; days: number[] };
 	type PromotionDraft = Setting & { percent?: number };
-
-	const worker = import.meta.env.MODE === 'worker';
 	const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 	const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
 	const attempts = new Map<string, string>();
 	let pricing = $state<Pricing>();
 	let draft = $state<ServiceDraft>();
 	let promotionDraft = $state<PromotionDraft>();
-	let loading = $state(worker);
+	let loading = $state(true);
 	let busy = $state(false);
 	let failure = $state('');
 	let notice = $state('');
@@ -105,15 +103,13 @@
 		void write({ ...setting, enabled: percent > 0, operation: 'promotion', discountBps: Math.round(percent * 100) });
 	}
 
-	onMount(() => { if (worker) void load(); });
+	onMount(() => { void load(); });
 </script>
 
 <svelte:head><title>Staff pricing | HERCO</title></svelte:head>
 <section class="section wrap stack">
 	<PageHeader title="Pricing" subtitle="Service prices, coating price rules and booking promotions." />
-	{#if !worker}
-		<p>Use the staff workspace to manage demo prices.</p>
-	{:else if loading}
+	{#if loading}
 		<p role="status">Loading pricing…</p>
 	{:else if pricing}
 		<p>Changes apply to new bookings. Saved bookings keep their original prices.</p>

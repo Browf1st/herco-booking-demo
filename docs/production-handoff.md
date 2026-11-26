@@ -2,6 +2,12 @@
 
 See [production-plan.md](production-plan.md) for the current implementation boundary, Supabase/Brevo sequence, source references and asset measurements. Existing workflow coverage remains in [requirements-coverage.md](requirements-coverage.md).
 
+## Current application — F-020 (2026-11-26)
+
+The app now has one Supabase-backed Cloudflare Worker code path. The static demo build, dependency and GitHub Pages deployment workflow are retired. Historical demo notes below describe past checks only. See [the archived parity audit](archive/demo/ui-parity-audit.md) and [reference inventory](archive/demo/README.md). No API, RPC or schema change is part of F-020.
+
+**Pending external release step:** take the published GitHub Pages site down. Removing its workflow does not unpublish an existing site. No hosted settings, migrations or deployments were changed by this local implementation.
+
 ## Completed locally
 
 Optimized gallery delivery, cached points aggregation, account restoration guards, static production CSP, referrer policy, responsive form/card constraints, theme-aware browser color and keyboard/reduced-motion improvements. Added migration comments at the demo account, store, operations and admin-navigation boundaries. CI now runs the existing Svelte/type check before building.
@@ -63,7 +69,7 @@ The [production roadmap](production-plan.md#production-implementation-checklist)
 
 ### Engineering checks
 
-Codex and Claude share [the repository guide](../AGENTS.md) and [the OWASP and performance checks](engineering-checks.md). The engineering workflow checks dependency advisories, Worker HTTP controls, static and Worker bundle budgets, and the migration chain with synthetic database roles. Production and staging provider setup remain separate.
+Codex and Claude share [the repository guide](../AGENTS.md) and [the OWASP and performance checks](engineering-checks.md). The engineering workflow checks dependency advisories, Worker HTTP controls, Worker bundle budgets, and the migration chain with synthetic database roles. Production and staging provider setup remain separate.
 
 The Worker limits JSON payloads, blocks framing, and guards private API responses against shared caching. The database blocks direct browser access to completion objects and requires private bucket settings for authorized uploads and reads. Completion-only staff can record the finalized service total. A different final charge requires the price adjustment grant.
 
@@ -124,7 +130,7 @@ Verification: zero Svelte/type errors or warnings; static and Worker builds pass
 
 ### UI parity audit — 2026-11-20
 
-Maintainer rejected the simplified Worker presentation and requested a complete comparison before corrections. Produced `docs/ui-parity-audit.md` with 89 comparison units across all customer and staff UI areas plus `docs/ui-parity-file-inventory.txt`. Confirmed preserved demo copies and shared global styling, and traced the main drift to separately rendered Server components. Browser comparison confirmed the demo calendar/tiles/modal layout versus the simplified Worker cards. Audit-only after this instruction; no further UI correction performed. The recent role navigation work remains in the uncommitted working tree; Owner redirect to Reports and permitted staff main navigation were observed, but fresh password-login routing still needs end-to-end validation. Questions about navigation grouping, modal interactions and customer-visible/data-model differences remain open.
+Maintainer rejected the simplified Worker presentation and requested a complete comparison before corrections. Produced `docs/archive/demo/ui-parity-audit.md` with 89 comparison units across all customer and staff UI areas plus `docs/archive/demo/ui-parity-file-inventory.txt`. Confirmed preserved demo copies and shared global styling, and traced the main drift to separately rendered Server components. Browser comparison confirmed the demo calendar/tiles/modal layout versus the simplified Worker cards. Audit-only after this instruction; no further UI correction performed. The recent role navigation work remains in the uncommitted working tree; Owner redirect to Reports and permitted staff main navigation were observed, but fresh password-login routing still needs end-to-end validation. Questions about navigation grouping, modal interactions and customer-visible/data-model differences remain open.
 
 ### UI parity continuation — 2026-11-20 (Claude)
 

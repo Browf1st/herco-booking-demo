@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
-	const worker = import.meta.env.MODE === 'worker';
 	let settings = $state<{ enabled: boolean; status: 'on' | 'off' | 'unset' }>();
 	let message = $state('');
 	let notice = $state('');
@@ -26,7 +25,7 @@
 		} catch { message = 'Could not save your preference. Please try again.'; }
 		finally { busy = false; }
 	}
-	onMount(() => { if (worker) void load(); });
+	onMount(() => { void load(); });
 </script>
 
 <svelte:head><title>Privacy preferences | HERCO</title></svelte:head>
@@ -37,7 +36,7 @@
 		<p>Analytics are {settings.status === 'on' ? 'on' : 'off'} for this browser.</p>
 		<div class="row"><button class="btn sm" disabled={busy} onclick={() => choose('allow')}>Allow analytics</button>
 			<button class="btn sm ghost" disabled={busy} onclick={() => choose('decline')}>Turn analytics off</button></div>
-	{:else if settings || !worker}
+	{:else if settings}
 		<p>Analytics are currently off.</p>
 	{:else if !message}
 		<p role="status">Loading preferences…</p>

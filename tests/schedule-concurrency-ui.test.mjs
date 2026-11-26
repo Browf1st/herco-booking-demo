@@ -35,10 +35,6 @@ test('the live screen sends version, confirmedOutsideCount and turns schedule_ch
 	assert.match(live, /saveSchedule\('POST', '\/api\/staff\/bookings', \{ \.\.\.action, date, \.\.\.confirmation\(confirmOutside, count\) \}\)/);
 });
 
-test('the demo ignores the version and the confirmed count', async () => {
-	const demo = await read('src/lib/demo/schedule.ts');
-	assert.doesNotMatch(demo, /\.version|version:|confirmedCount|confirmedOutsideCount/);
-});
 
 test('the unsubscribe done state links to the Account page', async () => {
 	const page = await read('src/routes/reminders/unsubscribe/+page.svelte');

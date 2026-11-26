@@ -11,8 +11,6 @@
 	type Visit = { id: string; reference: string; visit_date: string; visit_hour: number | null; status: Status; bike: string; services: string[]; source: 'online' | 'walk-in' };
 	type History = { visits: Visit[]; hasMore: boolean };
 	type Lookup = { operation: 'directory'; term: string; cursor: string | null } | { operation: 'visits'; customer: string; page: number };
-
-	const worker = import.meta.env.MODE === 'worker';
 	const pageSize = 20;
 	const statusLabels: Record<Status, string> = { pending: 'Pending', confirmed: 'Booked', done: 'Completed', cancelled: 'Cancelled' };
 	let search = $state('');
@@ -20,7 +18,7 @@
 	let directory = $state<Directory>();
 	let cursors = $state<(string | null)[]>([null]);
 	let directoryPage = $state(0);
-	let loading = $state(worker);
+	let loading = $state(true);
 	let notice = $state('');
 	let showNameGroups = $state(false);
 	let histories = $state<Record<string, { state: 'loading' | 'ready' | 'failed'; page: number; data?: History; message?: string }>>({});
@@ -89,7 +87,7 @@
 	const offset = $derived(directoryPage * pageSize);
 
 	onMount(() => {
-		if (worker) void loadDirectory('', 0, null);
+		void loadDirectory('', 0, null);
 		return () => { directoryRequest?.abort(); clearTimeout(searchTimer); };
 	});
 </script>
@@ -97,7 +95,7 @@
 <svelte:head><title>Customers | HERCO</title></svelte:head>
 <section class="section wrap stack customers-page">
 	<PageHeader title="Customers" subtitle="Find a customer and see their past visits." />
-	{#if worker}
+
 		<details class="card" ontoggle={(event) => showNameGroups = event.currentTarget.open}>
 			<summary>Browse bookings by recorded name</summary>
 			{#if showNameGroups}
@@ -172,9 +170,7 @@
 				</div>
 			{/if}
 		{/if}
-	{:else}
-		<p>Open Customers from the demo staff workspace.</p>
-	{/if}
+
 </section>
 
 <style>

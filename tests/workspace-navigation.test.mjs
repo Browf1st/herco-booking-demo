@@ -32,7 +32,7 @@ test('rejects malformed or unrecognized account permissions', () => {
 		{ role: 'owner', pages: ['Reports'], actions: ['viewIncome'] });
 });
 
-test('keeps role-specific demo grouping in the main menu without granting extra sections', () => {
+test('keeps role-specific grouping in the main menu without granting extra sections', () => {
 	const owner = { role: 'owner', pages: ['Reports','Staff Access','Bookings','Inventory'], actions: ['manageStaff'] };
 	assert.deepEqual(workspaceGroups(owner).map(group => group.label), ['Reports','Accounts','More']);
 	assert.deepEqual(workspaceGroups({ ...owner, pages: [...owner.pages, 'Activity log'] }).map(group => group.label),
