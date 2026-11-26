@@ -57,6 +57,22 @@ Follow-up fixes (2026-11-23): the booking card "⋯" menu closes on a tap elsewh
 | F-016 | Staging hardening, monitoring, analytics and production release | Blocked: hosting, domain, alerts and owners not confirmed (Q-17) | all M2 | [spec](features/F-016-release-monitoring.md) |
 | F-017 | 6-month maintenance reminder email | Testing: built 2026-11-23; migration applied 2026-11-24; needs `HERCO_REMINDER_TOKEN_SECRET` and `HERCO_SITE_URL` | F-002, F-007, F-014 | [spec](features/F-017-maintenance-reminder.md) |
 
+### Approved feature plans — not implemented on main
+
+Owner requested that `main` contain the existing guest-booking commit `57c697f` and the feature specifications only. The local F-020–F-023 implementation and other unfinished work are preserved separately, not included in this checkout. These plans are approved; their implementations must be reviewed and integrated separately.
+
+| ID | Planned feature | Status on main | Spec |
+|---|---|---|---|
+| F-020 | Remove the static demo, keep the live app | Ready; not implemented | [spec](features/F-020-remove-demo.md) |
+| F-021 | Unified powder pricing and staff Pricing editor | Ready; not implemented | [spec](features/F-021-powder-pricing-model.md) |
+| F-022 | Powder booking screen | Ready; not implemented | [spec](features/F-022-powder-booking-screen.md) |
+| F-023 | Ceramic booking revamp | Ready; not implemented | [spec](features/F-023-ceramic-fixes.md) |
+| F-024 | My Bookings redesign | Ready; not implemented | [spec](features/F-024-my-bookings-redesign.md) |
+| F-026 | Staff booking revamp | Ready; not implemented | [spec](features/F-026-staff-booking-revamp.md) |
+| F-025 | App-wide design polish | Ready; not implemented | [spec](features/F-025-design-polish.md) |
+
+Build order: F-020 → F-021 → F-022 → F-023 → F-024 with F-026 → F-025. No hosted migrations, uploads or deployment are authorized by this documentation merge.
+
 ## Questions waiting for you
 - [x] Q-01 F-008: How do customers sign the walk-in form? Answered 2026-11-21: customers sign in to their own account to sign it (already built), with the typed full name plus tick box.
 - [ ] Q-02 F-008: Please supply the final form title, full text, version name and who approves it.
