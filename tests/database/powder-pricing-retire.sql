@@ -63,7 +63,7 @@ reset role;
 set local role authenticated;
 select set_config('test.uid','00000000-0000-4000-8000-000000000712',true);
 do $$
-declare r jsonb := public.herco_save_ui_pricing(gen_random_uuid(),(select revision from herco_private.ui_pricing where singleton),public.herco_staff_ui_pricing()->'config');
+declare r jsonb := public.herco_save_ui_pricing(gen_random_uuid(),(public.herco_staff_ui_pricing()->>'revision')::int,public.herco_staff_ui_pricing()->'config');
 begin if r->'config'->'powderModel' is null then raise exception 'Save lost the powder model'; end if; end $$;
 reset role;
 

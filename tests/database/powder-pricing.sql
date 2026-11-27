@@ -200,7 +200,8 @@ select public.herco_test_bad(jsonb_set(public.herco_test_cfg(),'{powderModel,exc
 select public.herco_test_bad(jsonb_set(public.herco_test_cfg(),'{powderModel,exceptions}',jsonb_build_array(public.herco_test_ex('{"bikeKey":"Honda PCX160"}'))));
 select public.herco_test_bad(jsonb_set(public.herco_test_cfg(),'{powderModel,exceptions}',jsonb_build_array(public.herco_test_ex('{"bikeKey":""}'))));
 select public.herco_test_bad(jsonb_set(public.herco_test_cfg(),'{powderModel,exceptions}',jsonb_build_array(public.herco_test_ex('{"finish":"  "}'))));
-select public.herco_test_bad(jsonb_set(public.herco_test_cfg(),'{powderModel,exceptions}',jsonb_build_array(public.herco_test_ex('{"service":"ceramic"}'))));
+-- an unknown service is refused ('ceramic' became valid in migration 202611260004; see ceramic-exceptions.sql)
+select public.herco_test_bad(jsonb_set(public.herco_test_cfg(),'{powderModel,exceptions}',jsonb_build_array(public.herco_test_ex('{"service":"bogus"}'))));
 select public.herco_test_bad(jsonb_set(public.herco_test_cfg(),'{powderModel,exceptions}',jsonb_build_array(public.herco_test_ex('{"enabled":"yes"}'))));
 select public.herco_test_bad(jsonb_set(public.herco_test_cfg(),'{powderModel,exceptions}',jsonb_build_array(public.herco_test_ex(jsonb_build_object('note',repeat('x',201))))));
 select public.herco_test_bad(jsonb_set(public.herco_test_cfg(),'{powderModel,exceptions}',jsonb_build_array(public.herco_test_ex('{"unknown":1}'))));
@@ -273,12 +274,8 @@ select public.herco_test_refused($s$select public.herco_pricing_swatch_target('0
 select set_config('test.uid','00000000-0000-4000-8000-000000000703',true);
 select public.herco_test_refused($s$select public.herco_save_ui_pricing(gen_random_uuid(),public.herco_test_rev(),public.herco_test_cfg())$s$,'42501');
 select public.herco_test_refused($s$select public.herco_pricing_swatch_target('00000000-0000-4000-8000-0000000007c1')$s$,'42501');
--- The owner without MFA is refused too.
-select set_config('test.uid','00000000-0000-4000-8000-000000000701',true);
-select set_config('test.aal','aal1',true);
-select public.herco_test_refused($s$select public.herco_save_ui_pricing(gen_random_uuid(),public.herco_test_rev(),public.herco_test_cfg())$s$,'42501');
-select public.herco_test_refused($s$select public.herco_pricing_swatch_target('00000000-0000-4000-8000-0000000007c1')$s$,'42501');
-select set_config('test.aal','aal2',true);
+-- Pricing changes use the password_staff_access model (migration 202611190032): a verified staff session plus
+-- the Pricing page and changePricing grants. MFA (aal2) is not required for pricing, so no aal1 refusal here.
 reset role;
 set local role anon;
 select set_config('test.uid','',true);
