@@ -28,9 +28,10 @@ export const upcoming = () => Array.from({ length: shop.dateStripDays }, (_, i) 
 export const fmtDate = (d: string, options: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'long', day: 'numeric' }) =>
 	utc(d).toLocaleDateString('en-PH', { timeZone: 'UTC', ...options });
 
-// One drop-off slot per open hour, the last one an hour before closing.
+// One drop-off slot per open hour, the last one at the closing hour (F-026: closing hour is bookable).
+// Hour 24 (midnight close) is not a real slot — the server clamps the last slot to 23.
 export const slots = Array.from(
-	{ length: shop.closeHour - shop.openHour },
+	{ length: shop.closeHour > shop.openHour ? Math.min(shop.closeHour, 23) - shop.openHour + 1 : 0 },
 	(_, i) => `${String(shop.openHour + i).padStart(2, '0')}:00`
 );
 

@@ -24,7 +24,7 @@ test('guest contact asks for a name, allows an empty mobile, and omits account d
 	assert.equal(contactError('Test Guest', '+63 917 000 0000', false), '');
 });
 
-test('customer accounts and chronological history offer the same group browser through their own surfaces', async () => {
+test('the Customers directory offers the group browser, and chronological history no longer does', async () => {
 	const [customers, history, group] = await Promise.all([
 		read('src/routes/customers/+page.svelte'),
 		read('src/lib/live/ServerStaffRecords.svelte'),
@@ -32,7 +32,8 @@ test('customer accounts and chronological history offer the same group browser t
 	]);
 	assert.match(customers, /<BookingNameGroup surface="customers"\s*\/>/);
 	assert.match(customers, /\/api\/staff\/customers/);
-	assert.match(history, /<BookingNameGroup surface="history" name=\{bookingName\}/);
+	// F-026: the global same-name button is gone from Booking history; only the Customers directory keeps the group browser.
+	assert.doesNotMatch(history, /BookingNameGroup|same-name/);
 	assert.match(history, /Newest first/);
 	assert.match(group, /fetch\(resolve\('\/api\/staff\/booking-name-groups'\), \{\s*method: 'POST'/);
 	assert.match(group, /body: JSON.stringify\(\{ surface, page: next, \.\.\.\(name \? \{ name \} : \{ q: query \}\) \}\)/);

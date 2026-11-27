@@ -30,3 +30,16 @@ export function servicesLine(bike: string | undefined, count: number): string {
 	const services = count > 0 ? count + (count === 1 ? ' service' : ' services') : '';
 	return [bike?.trim(), services].filter(Boolean).join(' · ');
 }
+
+export type ServiceType = 'Ceramic' | 'Powder' | 'Ceramic + Powder';
+
+/**
+ * "Ceramic", "Powder" or "Ceramic + Powder" from a booking's service codes or labels, or '' when it has neither.
+ * Ceramic is the `ceramic` service; powder coating is the `wheel-colour` service ("Wheel colour" / "Powder coating" as a label).
+ */
+export function serviceTypeLabel(services: readonly (string | undefined | null)[] | null | undefined): ServiceType | '' {
+	const names = (services ?? []).map((service) => (service ?? '').toLowerCase());
+	const ceramic = names.some((name) => name.includes('ceramic'));
+	const powder = names.some((name) => /wheel[-\s]?colou?r|powder/.test(name));
+	return ceramic && powder ? 'Ceramic + Powder' : ceramic ? 'Ceramic' : powder ? 'Powder' : '';
+}

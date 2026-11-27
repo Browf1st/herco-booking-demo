@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
  import ServerBookingCatalog from './ServerBookingCatalog.svelte';
  import { selection,type Selection } from '../shared/coating';
- import { createCatalogOptions } from '../shared/bookingCatalog';
+ import { createCatalogOptions, type PowderCategory } from '../shared/bookingCatalog';
+ import { findColorEntry, powderSizeFromValue } from '../shared/powderPricing';
  import { uiCoatingSnapshot,type UiCatalogConfig } from './ui-catalog';
  import type {CoatingOptions} from './booking-coating';
 	import { resolve } from '$app/paths';
@@ -35,11 +36,19 @@
 	const choices = $derived(details ? [...details.current, ...catalog.filter(item => !details?.current.some(line =>
 		item.code === line.code) && item.appointment_days.includes(new Date(details?.date + 'T00:00:00Z').getUTCDay()))] : []);
 
+	/** Opens old bookings (old size labels, the prismatic flag, raider_sniper_confirmed) on the new size and colour group. */
+	function savedPowderChoice(c: CoatingOptions['ui_catalog']) {
+		const entry = findColorEntry(config.powderModel, c?.finish ?? '');
+		const category = (c?.powder_category as PowderCategory | undefined) || entry?.category || (c?.prismatic ? 'luminous-prismatic' : '');
+		return { wheelType: powderSizeFromValue(c?.wheel_type) || (c?.wheel_type ?? ''), powderCategory: category as PowderCategory | '',
+			colorId: entry?.id ?? c?.color_id ?? '', customNote: c?.custom_note ?? '', prismatic: c?.prismatic ?? false };
+	}
+
 	function show(result: Services) {
 		details = result;
 		checked = result.current.map(line => line.code);
  const c=result.options?.ui_catalog;
- rich={...selection(),ceramic:checked.includes('ceramic'),powder:checked.includes('wheel-colour'),powderParts:result.options?.powder_parts??[],finish:c?.finish??'',catalog:{...createCatalogOptions(),ceramicAddons:c?.ceramic_addons??[],wheelType:c?.wheel_type??'',wheelExtras:c?.wheel_extras??[],prismatic:c?.prismatic??false,bigBike:c?.big_bike??false,otherBigBike:c?.other_big_bike??false}};
+ rich={...selection(),ceramic:checked.includes('ceramic'),powder:checked.includes('wheel-colour'),powderParts:result.options?.powder_parts??[],finish:c?.finish??'',catalog:{...createCatalogOptions(),ceramicAddons:c?.ceramic_addons??[],...savedPowderChoice(c),wheelExtras:c?.wheel_extras??[],bigBike:c?.big_bike??false,otherBigBike:c?.other_big_bike??false}};
  formYear=c?.model_year;formNotes=c?.notes??'';
 	}
 

@@ -75,6 +75,12 @@ As staff, I want a clean, mobile-friendly Bookings screen where each time slot l
 - Q-P approved: use short Ceramic / Powder / Ceramic + Powder tags with an icon.
 - Q-Q approved: keep the Customers directory grouping; remove only the global same-name button.
 
+## Added scope — inclusive 5 PM last booking (owner approved 2026-11-27)
+- **Decision:** the owner confirmed the shop's closing hour (currently 5 PM) must itself be a bookable slot. Today availability stops at 4 PM (the last slot starts at `closeHour - 1`, so `closeHour = 17` yields a last slot of 16:00). After this change the last bookable slot is the closing hour itself (5 PM bookable when `closeHour = 17`).
+- **Not UI-only.** This changes slot generation on the server (availability RPC, staff day view `slots`, calendar `hours`, booking-hour validation "hour must be open", outside-hours counts, and the `GET /api/shop-hours` / `/api/availability` contract text that says "last slot starts at `closeHour - 1`"). Plan it as a deliberate, backward-compatible change with its own migration (e.g. `202611260006_inclusive_closing_slot.sql`) and `tests/database/` assertions. Existing bookings are unaffected; no booking is moved or re-priced.
+- **Must not break:** schedule-settings save, outside-hours warnings, blocked/past-slot handling, and existing availability for already-booked hours. Keep the admin's stored `openHour`/`closeHour` meaning intact (only the derived last-bookable-slot rule changes); confirm whether validated hour ranges (`9`–`16`) need to widen to include the closing hour.
+- The "finished-product proof panel" (F-009-tied) extension was **declined** for this round (owner 2026-11-27); not in scope.
+
 ## Ready checklist (no code until all are ticked and the owner approves)
 - [x] Every user step is written out
 - [x] Rules, limits and permissions are decided (Q-O–Q-Q defaults approved)

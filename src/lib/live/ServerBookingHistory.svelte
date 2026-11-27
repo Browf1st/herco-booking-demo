@@ -1,54 +1,26 @@
 <script lang="ts">
  import { onMount, tick } from 'svelte';
  import ActionIcon from '../shared/ActionIcon.svelte';
- import ServerSharedBookingDetails from './ServerSharedBookingDetails.svelte';
- import BookingServiceEditor from './BookingServiceEditor.svelte';
+ import BookingActionsMenu from './BookingActionsMenu.svelte';
+ import BookingCard, { type CardFact } from '../shared/BookingCard.svelte';
+ import { menuItems, type MenuItem } from './booking-menu';
+ import type { CustomerBooking as Booking, CustomerChangeRequest as Change } from './server-booking-types';
  import { resolve } from '$app/paths';
  import { replaceState } from '$app/navigation';
  import { fmtDate, fmtSlot, today } from '#lib/shared/dates.ts';
  import ServerCustomerChangeForm from '#lib/live/ServerCustomerChangeForm.svelte';
- import ServerBookingActivity from '#lib/live/ServerBookingActivity.svelte';
- import CoatingOptionSummary from './CoatingOptionSummary.svelte';
- import type { CoatingOptions } from './booking-coating';
 
- import { displayEstimate, displayServicePrice, type PricedService } from './service-estimate';
+ import { displayEstimate } from './service-estimate';
  import { bookingWasUpdated } from '../shared/booking-changes';
  import { bookingGroupEmpty, bookingGroupLabels, bookingGroupOrder, groupBookings, initialGroup, type BookingGroup } from './booking-groups';
- type Service = PricedService & { code: string; label: string;
-  promotion?: { label: string; base_price_centavos: number } | null };
- type Booking = {
-  id: string;
-  reference_no: number;
-  approved_at: string|null; completed_at:string|null;cancelled_at:string|null;
-  visit_date: string;
-  visit_hour: number | null;
-  bike: string;
-  status: 'pending' | 'confirmed' | 'done' | 'cancelled';
-  original_services: Service[];
-  original_total_centavos: number;
-  current_services: Service[] | null;
-  current_total_centavos: number | null;
-  shop_priced?: boolean;
-  coating_options?: CoatingOptions;
-  created_at: string;
- };
  const labels = { pending: 'Pending', confirmed: 'Booked', done: 'Completed', cancelled: 'Cancelled' };
- const price = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
- const stamp = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' });
- type Change = {
-  id: string;
-  booking_id: string;
-  kind: 'cancel' | 'reschedule';
-  reason: string;
-  state: 'pending' | 'approved' | 'declined' | 'withdrawn';
-  target_date: string | null;
-  target_hour: number | null;
- };
  let bookings = $state<Booking[]>([]);
  let changes = $state<Change[]>([]);
  let changeStatus = $state<'loading' | 'ready' | 'failed'>('loading');
  let requestDialog=$state<HTMLDialogElement>();
- let opened=$state<Set<string>>(new Set());
+ // The booking whose details popup is open.
+ let viewingId = $state<string>();
+ const viewing = $derived(bookings.find(booking => booking.id === viewingId));
  async function openRequest(id:string,kind:Change['kind']){activeForm={id,kind};await tick();requestDialog?.showModal();}
  let activeForm = $state<{ id: string; kind: Change['kind'] }>();
  let changeNotice = $state('');
@@ -159,6 +131,23 @@
   }
  }
 
+ function cardFacts(booking: Booking, services: Booking['original_services']): CardFact[] {
+  const count = services.length;
+  return [
+   { icon: 'clock', label: 'Time', value: (booking.visit_hour === null ? 'Walk-in' : fmtSlot(booking.visit_hour + ':00')) + ' · Philippine time' },
+   { icon: 'finish', label: 'Bike', value: booking.bike || 'Not provided' },
+   { icon: 'menu', label: 'Services', value: count + (count === 1 ? ' service' : ' services') },
+   { icon: 'box', label: 'Reference', value: booking.reference_no ? 'HG-' + booking.reference_no : 'Pending' },
+   { icon: 'adjust', label: 'Estimate', value: displayEstimate(services, booking.current_total_centavos ?? booking.original_total_centavos) }
+  ];
+ }
+
+ function pick(booking: Booking, item: MenuItem, pending?: Change) {
+  if (item === 'details') viewingId = booking.id;
+  else if (item === 'withdraw') { if (pending && confirm('Withdraw this request? Your booking stays as it is.')) void withdraw(pending); }
+  else void openRequest(booking.id, item);
+ }
+
  function upcoming(booking: Booking) {
   if (booking.visit_hour === null) return booking.visit_date === today();
   const hour = String(booking.visit_hour).padStart(2, '0');
@@ -211,64 +200,18 @@
    {@const pending = requests.find(change => change.state === 'pending')}
    {@const services = booking.current_services ?? booking.original_services}
    {@const updated = bookingWasUpdated({ originalTotal: booking.original_total_centavos, currentTotal: booking.current_total_centavos, originalCodes: booking.original_services.map(service => service.code), currentCodes: booking.current_services?.map(service => service.code) })}
-   <article class="card stack booking-card" data-status={booking.status} class:just-submitted={booking.id === submittedId}>
-    <div class="card-top">
-     <div class="when">
-      <h2>{fmtDate(booking.visit_date)}</h2>
-      <p class="small muted">{booking.visit_hour === null ? 'Walk-in' : fmtSlot(booking.visit_hour + ':00')} · Philippine time</p>
-     </div>
-     <span class="badge" data-status={booking.status === 'confirmed' ? 'booked' : booking.status}>{labels[booking.status]}</span>
-    </div>
-    <p class="what"><strong>{services.map(service => service.label).join(' · ')}</strong> · {booking.bike}</p>
-    <p class="small muted">{booking.reference_no ? 'HG-' + booking.reference_no + ' · ' : ''}Estimated {#if updated}<s><span class="sr-only">Original total </span>{displayEstimate(booking.original_services, booking.original_total_centavos)}</s> {/if}<strong>{displayEstimate(services, booking.current_total_centavos ?? booking.original_total_centavos)}</strong></p>
+   {@const facts = cardFacts(booking, services)}
+   <article class="card stack booking-article" data-status={booking.status} class:just-submitted={booking.id === submittedId}>
+    <BookingCard when={fmtDate(booking.visit_date)} status={booking.status} {facts} services={services.map(service => service.code)} detailsButton={false} onDetails={() => viewingId = booking.id}>
+     {#snippet actions()}
+      <BookingActionsMenu id={booking.id} busy={!!withdrawing} items={menuItems({ status: booking.status, visitHour: booking.visit_hour, future: upcoming(booking), requestsReady: changeStatus === 'ready', hasOpenRequest: !!pending })} onpick={item => pick(booking, item, pending)} />
+     {/snippet}
+    </BookingCard>
     {#if updated}<p class="small updated-note">Updated by the shop after inspection</p>{/if}
     {#if booking.visit_hour === null && (booking.status === 'pending' || booking.status === 'confirmed')}<p class="small muted">Ask the shop if you need to change or cancel this walk-in.</p>{/if}
     {#if pending}
-     <div class="request-note">
-      <p class="small">{pending.kind === 'cancel' ? 'Cancellation' : 'Reschedule'} request pending{pending.kind === 'reschedule' && pending.target_date && pending.target_hour !== null ? ' (to ' + fmtDate(pending.target_date) + ' at ' + fmtSlot(pending.target_hour + ':00') + ')' : ''}. Your current slot stays booked.</p>
-      <button class="btn sm ghost" disabled={!!withdrawing} onclick={() => withdraw(pending)}>Withdraw request</button>
-     </div>
+     <p class="small request-warning">{pending.kind === 'cancel' ? 'Cancellation' : 'Reschedule'} request pending{pending.kind === 'reschedule' && pending.target_date && pending.target_hour !== null ? ' (to ' + fmtDate(pending.target_date) + ' at ' + fmtSlot(pending.target_hour + ':00') + ')' : ''}. Your current slot stays booked. Use Actions to withdraw it.</p>
     {/if}
-    {#if booking.visit_hour !== null && changeStatus === 'ready' && !pending && upcoming(booking) && (booking.status === 'pending' || booking.status === 'confirmed')}
-     <div class="row actions">
-      <button class="btn sm ghost" onclick={() => openRequest(booking.id,'reschedule')}><ActionIcon name="calendar"/>Request rescheduling</button>
-      <button class="btn sm ghost" onclick={() => openRequest(booking.id,'cancel')}><ActionIcon name="block"/>Request cancellation</button>
-     </div>
-    {/if}
-    <details ontoggle={event=>{if(event.currentTarget.open)opened=new Set([...opened,booking.id]);}}>
-     <summary>{booking.status === 'pending' && upcoming(booking) && !booking.shop_priced ? 'View details or edit services' : 'View details'}</summary>
-     <div class="stack">
-      <p>Reference <strong>{booking.id}</strong></p>
-      <div class="cols" aria-label="Booking dates in Philippine time"><p><ActionIcon name="clock"/> <strong>Booked on</strong><br/>{stamp.format(new Date(booking.created_at))}</p><p><ActionIcon name="check"/> <strong>Approved</strong><br/>{booking.approved_at?stamp.format(new Date(booking.approved_at)):'Awaiting approval'}</p><p><ActionIcon name="finish"/> <strong>Completed</strong><br/>{booking.completed_at?stamp.format(new Date(booking.completed_at)):'Not completed'}</p></div>
-      <CoatingOptionSummary options={booking.coating_options} />
-      <ul>
-       {#each services as service (service.code)}
-        <li>
-         {service.label} · {displayServicePrice(service)}
-         {#if service.promotion}
-          <small class="muted">({service.promotion.label}, regular {price.format(service.promotion.base_price_centavos / 100)})</small>
-         {/if}
-        </li>
-       {/each}
-      </ul>
-      {#if opened.has(booking.id)}<BookingServiceEditor bookingId={booking.id} fromStaff={false} shopPriced={booking.shop_priced && (booking.status === 'pending' || booking.status === 'confirmed')} embedded/><ServerSharedBookingDetails bookingId={booking.id}/>{/if}
-      <ServerBookingActivity bookingId={booking.id} />
-      {#if requests.length}
-       <h3>Change requests</h3>
-       <ul>
-        {#each requests as request (request.id)}
-         <li>
-          {request.kind === 'cancel' ? 'Cancellation' : 'Rescheduling'} · {request.state}
-          {#if request.target_date && request.target_hour !== null}
-           · {fmtDate(request.target_date)} at {fmtSlot(request.target_hour + ':00')}
-          {/if}
-          {#if request.reason}<p class="small">{request.reason}</p>{/if}
-         </li>
-        {/each}
-       </ul>
-      {/if}
-     </div>
-    </details>
    </article>
   {:else}
    <p class="muted">{bookingGroupEmpty[activeGroup]}</p>
@@ -283,32 +226,27 @@
   </nav>
  {/if}
 </section>
+{#if viewing}
+ {#await import('./ServerCustomerBookingPopup.svelte') then { default: Popup }}
+  <Popup booking={viewing} requests={changes.filter(change => change.booking_id === viewing.id)} onclose={() => viewingId = undefined} />
+ {/await}
+{/if}
 <dialog bind:this={requestDialog} aria-label="Request a booking change">{#if activeForm}{#key activeForm.id+activeForm.kind}<ServerCustomerChangeForm bookingId={activeForm.id} kind={activeForm.kind} onSaved={changeSaved} onClose={()=>{requestDialog?.close();activeForm=undefined;}}/>{/key}{/if}</dialog>
 <style>
  /* Owner asked for smaller type here (2026-11-20). */
  h1 { font-size: clamp(2rem, 5vw, 2.5rem); line-height: 1.05; }
- h2 { font: 750 1.15rem/1.2 var(--body); font-style: normal; text-transform: none; }
- h3 { font-size: 1.05rem; }
  .group-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
  .group-tab { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--text); font: 650 .95rem var(--body); cursor: pointer; }
  .group-tab[aria-pressed='true'] { border-color: var(--accent); background: var(--accent); color: #fff; }
  .count { min-width: 1.5em; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 16%, transparent); font-size: .8rem; text-align: center; }
- .booking-card { border-inline-start: 5px solid var(--line); gap: .5rem; }
- .booking-card[data-status='pending'] { border-inline-start-color: var(--warn-line); }
- .booking-card[data-status='confirmed'] { border-inline-start-color: var(--info-line); }
- .booking-card[data-status='done'] { border-inline-start-color: var(--ok-line); }
- .booking-card[data-status='cancelled'] { border-inline-start-color: var(--line); opacity: .85; }
- .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
- .when p, .what { margin: 0; }
- .request-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); }
- .request-note p { margin: 0; }
- .actions { flex-wrap: wrap; }
- .request-warning { padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); }
+ .booking-article { border-inline-start: 5px solid var(--line); gap: .5rem; }
+ .booking-article[data-status='pending'] { border-inline-start-color: var(--warn-line); }
+ .booking-article[data-status='confirmed'] { border-inline-start-color: var(--info-line); }
+ .booking-article[data-status='done'] { border-inline-start-color: var(--ok-line); }
+ .booking-article[data-status='cancelled'] { border-inline-start-color: var(--line); opacity: .85; }
+ .request-warning { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); }
  .updated-note { margin: 0; padding: 6px 10px; border: 1px solid var(--info-line); border-radius: 8px; background: var(--panel-2); color: var(--text); font-weight: 650; }
- .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
- summary { cursor: pointer; font-weight: 650; }
  .submitted-notice { padding: .75rem 1rem; border: 1px solid var(--accent); border-radius: 8px; }
  .just-submitted { outline: 2px solid var(--accent); outline-offset: 2px; }
  dialog{width:min(570px,calc(100% - 24px));max-height:90dvh;padding:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text)}dialog::backdrop{background:#0009}
- details > div { margin-top: .75rem; overflow-wrap: anywhere; }
 </style>

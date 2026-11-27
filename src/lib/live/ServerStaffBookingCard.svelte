@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import ActionIcon from '../shared/ActionIcon.svelte';
-	import BookingCard from '../shared/BookingCard.svelte';
-	import { servicesLine } from '../shared/records-ui';
+	import BookingCard, { type CardFact } from '../shared/BookingCard.svelte';
 	import ServerCustomerChangeForm from './ServerCustomerChangeForm.svelte';
 	import type { StaffBooking, StaffBookingPermissions } from './server-booking-types';
 	import { fmtSlot, today } from '../shared/dates';
@@ -14,6 +13,14 @@
 	let issue = $state('');
 	let note = $state('');
 	let sharePhotos = $state(false);
+	// Labelled segments: bike, how many services and, only when the server sent amounts (viewIncome), the estimate.
+	const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
+	const facts = $derived<CardFact[]>([
+		{ icon: 'finish', label: 'Bike', value: booking.bike || 'Not provided' },
+		{ icon: 'menu', label: 'Services', value: booking.services.length + (booking.services.length === 1 ? ' service' : ' services') },
+		...(typeof booking.total_centavos === 'number' ? [{ icon: 'adjust', label: 'Estimate', value: peso.format(booking.total_centavos / 100) } as CardFact] : [])
+	]);
+	const serviceNames = $derived(booking.current_services?.length ? booking.current_services.map((line) => line.code) : booking.services);
 	const active = $derived(booking.status === 'pending' || booking.status === 'confirmed');
 	const past = $derived(booking.visit_date < today());
 	const canChange = $derived(active && !past && !booking.request_pending);
@@ -32,7 +39,7 @@
 		finally { busy = false; }
 	}
 </script>
-<BookingCard when={when ?? (booking.visit_hour === null ? 'Walk-in' : fmtSlot(booking.visit_hour + ':00'))} status={booking.status} name={booking.customer_name} meta={servicesLine(booking.bike, booking.services.length)} {onDetails}>
+<BookingCard when={when ?? (booking.visit_hour === null ? 'Walk-in' : fmtSlot(booking.visit_hour + ':00'))} status={booking.status} name={booking.customer_name} {facts} services={serviceNames} {onDetails}>
 	{#snippet actions()}
 		{#if booking.request_pending && Object.values(permissions).some(Boolean)}<a class="btn sm ghost" href={resolve('/admin') + '?view=requests'}><ActionIcon name="edit" />Review request</a>
 		{:else if canChange && booking.status === 'pending' && permissions.can_confirm}<button class="btn sm confirm-action" onclick={() => open('confirm')}><ActionIcon name="check" />Confirm booking</button>

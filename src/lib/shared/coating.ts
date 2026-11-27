@@ -1,4 +1,5 @@
 import type { Size } from './config';
+import type { PowderModel } from './powderPricing';
 import { catalogItems, powderParts, wheels, type CatalogOptions, type CeramicCatalogPricing } from './bookingCatalog';
 
 export const finishes = ['Stay Matte', 'Matte to Glossy', 'Enhance', 'Glossy Finish'] as const;
@@ -38,7 +39,7 @@ export function modelAdjustment(models: Record<string, number>, bike: string) {
  return Object.hasOwn(models, base) ? models[base] : 0;
 }
 export const selection = (powder = false, finish = ''): Selection => ({ ceramic: !powder, powder, ceramicFinish: 'Glossy Finish', red: false, powderParts: [], front: '', rear: '', finish });
-export type Pricing = { ceramic: Record<string, number>; powder: Record<string, number>; size: Record<Size, number>; models: Record<string, number>; promo: number; ceramicCatalog?: CeramicCatalogPricing };
+export type Pricing = { ceramic: Record<string, number>; powder: Record<string, number>; size: Record<Size, number>; models: Record<string, number>; promo: number; ceramicCatalog?: CeramicCatalogPricing; powderModel?: PowderModel };
 export const defaultPricing: Pricing = {
  ceramic: { 'Stay Matte': 1800, 'Matte to Glossy': 2200, Enhance: 2100, 'Glossy Finish': 1500 },
  powder: Object.fromEntries(parts.map((part, i) => [part, [2500,3000,1300,1600,400,500,700,700,700][i]])),
@@ -77,7 +78,7 @@ export function estimatePrice(estimate: Estimate) {
 
 export function quote(s: Selection, size: Size, bike: string, pricing: Pricing, saved: ServiceLine[] = [], year?: number): Estimate {
  if (s.catalog) {
-  const items = catalogItems(s, s.catalog, bike, year, pricing.ceramicCatalog);
+  const items = catalogItems(s, s.catalog, bike, year, pricing.ceramicCatalog, pricing.powderModel);
   if (s.powder) {
    for (const part of olderPowderParts(s.powderParts)) {
     const price = pricing.powder[part];
@@ -114,7 +115,6 @@ export function validateSelection(s: Selection, bike: string, allowedOlderParts:
  if (s.catalog) {
   if (s.powder && (!s.powderParts.length || s.powderParts.some(part => part !== wheels && !Object.hasOwn(powderParts, part) && !allowedOlderParts.includes(part)))) throw Error('Choose wheels or small parts for powder coating.');
   if (s.powder && s.powderParts.includes(wheels) && !s.catalog.wheelType) throw Error('Choose a wheel category.');
-  if (s.powder && s.powderParts.includes(wheels) && s.catalog.wheelType.startsWith('17') && !/Raider|Sniper/i.test(bike)) throw Error('The 17-inch mags price is for Raider and Sniper only. Check your motorcycle or choose another wheel category.');
   return;
  }
  if (s.ceramic && (!finishes.some(f => f === s.ceramicFinish) || (s.ceramicFinish === 'Enhance' && (!canEnhance(bike) || !s.red)))) throw Error('Enhance is for red Honda ADV or PCX 150/160 units.');

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
-	import CoatingRuleEditor from '#lib/live/CoatingRuleEditor.svelte';
 	import PageHeader from '#lib/shared/PageHeader.svelte';
+	import ActionIcon from '#lib/shared/ActionIcon.svelte';
  import ServerCatalogPricing from '#lib/live/ServerCatalogPricing.svelte';
 
 	type Setting = { code: string; label: string; enabled: boolean; revision: number };
@@ -116,7 +116,7 @@
 		<ServerCatalogPricing />
 <details class="card stack"><summary>Service availability and advanced catalog settings</summary><section class="stack" aria-labelledby="catalog-heading">
 			<div class="row between">
-				<h2 id="catalog-heading">Services</h2>
+				<h2 id="catalog-heading"><ActionIcon name="wheel" /> Services</h2>
 				{#if pricing.canEditServices}<button type="button" class="btn sm" onclick={() => edit()}>Add service</button>{/if}
 			</div>
 			{#if draft}
@@ -148,9 +148,11 @@
 				<article class="service row between">
 					<div>
 						<strong>{service.label}</strong>
-						<p>{service.quote_required ? 'Shop quote required' : money.format(service.price_centavos / 100) +
-							(service.max_centavos == null ? '' : '–' + money.format(service.max_centavos / 100))} ·
-							{service.enabled ? 'Available' : 'Disabled'} · {service.appointment_days.map(day => days[day]).join(', ')}</p>
+						<p class="row small meta">
+							<b>{service.quote_required ? 'Shop quote required' : money.format(service.price_centavos / 100) + (service.max_centavos == null ? '' : '–' + money.format(service.max_centavos / 100))}</b>
+							<span class:off={!service.enabled}><ActionIcon name={service.enabled ? 'check' : 'block'} /> {service.enabled ? 'Available' : 'Disabled'}</span>
+							<span class="muted"><ActionIcon name="calendar" /> {service.appointment_days.map(day => days[day]).join(', ')}</span>
+						</p>
 					</div>
 					{#if pricing.canEditServices}
 						<button class="btn sm ghost" type="button" aria-label={'Edit ' + service.label} disabled={busy} onclick={() => edit(service)}>Edit</button>
@@ -160,11 +162,11 @@
 				<p>No services are configured.</p>
 			{/each}
 		</section>
-		</details><details class="card"><summary>Advanced coating matching rules</summary><CoatingRuleEditor /></details>
+		</details>
 
 		{#if promotionDraft}
 			<section class="card stack" aria-labelledby="promotion-heading">
-				<h2 id="promotion-heading">Booking promotion</h2>
+				<h2 id="promotion-heading"><ActionIcon name="gift" /> Booking promotion</h2>
 				<p class="muted">Applies to ceramic and powder coating estimates. Set to 0% to turn it off.</p>
 				<form class="stack" onsubmit={savePromotion}>
 					<fieldset class="stack" disabled={!pricing.canEditPromotion || busy || stale}>
@@ -190,6 +192,8 @@
 
 <style>
 	h2 { font-size: 1.8rem; }
+	.meta { gap: .25rem .9rem; margin: 0; }
+	.off { color: var(--bad); }
 	.service { padding-block: .5rem; border-block-start: 1px solid var(--line); }
 	.check, .checks label { display: flex; align-items: center; gap: .45rem; }
 	.check input, .checks input { width: auto; }

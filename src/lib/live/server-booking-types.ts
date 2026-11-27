@@ -13,3 +13,18 @@ export type StaffBooking = {
 };
 export type StaffBookingPermissions = { can_confirm?: boolean; can_cancel?: boolean; can_reschedule?: boolean;
 	can_edit_services?: boolean; canComplete?: boolean; canRequestIntake?: boolean; canAdjustPrices?: boolean; past_date?: boolean };
+
+// One booking as the customer's own list returns it (GET /api/bookings). Never carries staff-only fields.
+export type CustomerService = { code: string; label: string; price_centavos: number; max_centavos?: number | null; quote_required?: boolean;
+	promotion?: { label: string; base_price_centavos: number } | null };
+export type CustomerBooking = {
+	id: string; reference_no: number; approved_at: string | null; completed_at: string | null; cancelled_at: string | null;
+	visit_date: string; visit_hour: number | null; bike: string; status: 'pending' | 'confirmed' | 'done' | 'cancelled';
+	original_services: CustomerService[]; original_total_centavos: number;
+	current_services: CustomerService[] | null; current_total_centavos: number | null;
+	shop_priced?: boolean; coating_options?: Record<string, unknown>; created_at: string;
+};
+export type CustomerChangeRequest = {
+	id: string; booking_id: string; kind: 'cancel' | 'reschedule'; reason: string; state: 'pending' | 'approved' | 'declined' | 'withdrawn';
+	target_date: string | null; target_hour: number | null;
+};

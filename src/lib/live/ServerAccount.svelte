@@ -290,7 +290,7 @@
   </header>
   {#key session.id}<ServerContactProfile /><StaffSecurity bind:busy />{/key}
   <section class="card stack" aria-labelledby="appearance-heading">
-   <h2 id="appearance-heading" class="section-title">Appearance</h2>
+   <h2 id="appearance-heading" class="section-title"><ActionIcon name="sun" /> Appearance</h2>
    <p class="small muted">Choose how HERCO looks on this device.</p>
    <div class="theme-options" role="radiogroup" aria-labelledby="appearance-heading">
     {#each themeOptions as option (option.value)}

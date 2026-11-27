@@ -10,7 +10,7 @@ The only thing screen code needs to know about the server. Update this first whe
 - **JSON body limit:** 32 KiB (`413 "This request is too large."`). Checked from `Content-Length` and while streaming. Malformed or non-UTF-8 JSON is read as empty, so the endpoint returns its normal `400`. Exceptions: `PUT /api/completion` (raw photo, 4 MB) and `/api/analytics` (plain text, 64 bytes).
 - **Caching / headers:** `/api/**` error responses and any response that sets a cookie are forced to `Cache-Control: private, no-store`; API responses with no cache header also get it. All responses carry `X-Frame-Options: DENY`, `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`.
 - **Idempotency:** most write endpoints take a client-generated `requestId` (UUID). Re-sending the same `requestId` is how the client safely retries after a `503`. The route only validates the UUID format; replay behaviour lives in the database function (unclear from code).
-- **IDs/dates:** `uuid` means a 36-character hex UUID. `date` means `YYYY-MM-DD`. Money is whole centavos (integers). Hours are integers `9` to `16` where validated.
+- **IDs/dates:** `uuid` means a 36-character hex UUID. `date` means `YYYY-MM-DD`. Money is whole centavos (integers). Hours are integers `0` to `23` where validated; a date's bookable hours run from its opening hour to its closing hour inclusive (a 9-17 shop books `9` to `17`; the closing hour itself is bookable, and a closing hour of 24 ends at `23`).
 - **Pagination:** `page` is 1-based; page size is 20 in the routes that paginate.
 
 Auth levels used below: **public** (no sign-in check in the route; the database may still limit what it returns), **signed-in** (route checks for a Supabase user, `401` if none), **verified customer** (signed in with a confirmed email; enforced by the database, reported as `403`), **staff + grant** (database-enforced, reported as `403`).
@@ -116,13 +116,13 @@ Six months after staff mark a booking Done, the customer gets one email at 9 AM 
 ### `GET /api/availability`
 - **Who:** public (no sign-in check in the route; the database function decides what is returned).
 - **Input (query):** `from` date, `to` date, both required.
-- **Success:** `200` array of `Availability` rows (see Shared types): only hours the shop can take, each `status: "open"`, plus `openHour`/`closeHour`/`closed` per date. Hours follow the admin's default hours and open weekdays, and each date's own hours or closed choice. Until the admin saves new hours the result is 9 AM-4 PM slots, Wednesday-Sunday. No `booked` status and no counts.
+- **Success:** `200` array of `Availability` rows (see Shared types): only hours the shop can take, each `status: "open"`, plus `openHour`/`closeHour`/`closed` per date. Hours follow the admin's default hours and open weekdays, and each date's own hours or closed choice. Until the admin saves new hours the result is 9 AM-5 PM slots, Wednesday-Sunday. The closing hour itself is bookable (a 9-17 shop lists hours 9 to 17; before the inclusive-closing change the last slot was 16). A closing hour of 24 still ends at 23:00. No `booked` status and no counts.
 - **Errors:** `400` missing or badly formatted dates, or range rejected ("up to 42 days within the booking calendar"); `503`.
 
 ### `GET /api/shop-hours`
 - **Who:** public, no sign-in needed. Same answer for everyone.
 - **Input:** none.
-- **Success:** `200 { openHour: number, closeHour: number, openWeekdays: number[] }`: the admin's current default hours (0-23 and 1-24, closing after opening; 9 and 17 until changed) and open weekdays (0 = Sunday ... 6 = Saturday, sorted; Wednesday-Sunday is `[0,3,4,5,6]` until changed). Dates with their own hours or a closed choice are not reflected (use `/api/availability`). No private data. `Cache-Control: public, max-age=60`.
+- **Success:** `200 { openHour: number, closeHour: number, openWeekdays: number[] }`: the admin's current default hours (0-23 and 1-24, closing after opening; 9 and 17 until changed; the closing hour itself is bookable, so the last slot starts at `closeHour`) and open weekdays (0 = Sunday ... 6 = Saturday, sorted; Wednesday-Sunday is `[0,3,4,5,6]` until changed). Dates with their own hours or a closed choice are not reflected (use `/api/availability`). No private data. `Cache-Control: public, max-age=60`.
 - **Errors:** `503` "Opening hours are temporarily unavailable." (not cached).
 
 ### `GET /api/catalog`
@@ -136,12 +136,16 @@ Six months after staff mark a booking Done, the customer gets one email at 9 AM 
 - **Input:** none.
 - **Success:** `200` booking-screen catalog JSON (shape unclear from code).
 - **Errors:** `403` "Sign in with a verified account."; `503`.
+- **F-021 note:** same client shape as before; powder wheel prices now resolve from `config.powderModel` (colour category x bike size, with exceptions). `custom` colours and `not-sure` size are quote only. The customer catalog hides exception notes and disabled exceptions.
 
 ### `POST /api/coating-estimate`
 - **Who:** verified customer (route has no explicit sign-in check; database reports `403`). Same-origin required.
 - **Input (JSON):** `bike` string, trimmed, 1-120, required; `services` array of 1-20 strings (each 1-64 chars), required; `coating` optional object (JSON length under 3000 chars; not an array).
 - **Success:** `200` price preview from the database (shape unclear from code; fields used elsewhere include a price fingerprint, see Shared types `PriceFingerprint`).
 - **Errors:** `400` invalid input, or the database rejected the configuration (message passed through); `403` "Verify your email before preparing a booking."; `503`.
+- **F-021 note:** same request and response shape; powder wheel lines now resolve via `config.powderModel` (custom or not-sure size = quote required).
+- **F-022 note (also applies to `POST /api/bookings` and `POST /api/booking-services`, which use the same `coating` options):** `coating.ui_catalog` now also accepts `powder_category` (`basic`, `special`, `luminous-prismatic`, `custom`, or empty), `color_id` (uuid or empty), `custom_note` (text, trimmed, cut to 300 chars; meant for `custom`) and `from_finish` (optional text up to 100). `wheel_type` also accepts the size keys `10-14`, `17`, `big-bike`, `not-sure`, in addition to the old labels. `raider_sniper_confirmed` is optional and ignored; the 15-17 in size (`17`) no longer needs a Raider or Sniper. Unknown keys are still refused (`400`). The server prices from its own colour list (matching `color_id`, else `finish` by id or name); `powder_category` is stored but never used to set a price. A finish that matches no colour, a `custom` colour, or size `not-sure` returns a quote.
+- **F-023 note:** for ceramic, `coating.ui_catalog.ceramic_addons` is an ARRAY of the selected add-on names (multi-select; up to the 7 known add-ons, each once). Staff per-bike ceramic prices come from `config.powderModel.exceptions` entries with `service: "ceramic"` (`bikeKey` lowercase and trimmed, `priceCentavos` or `quoteOnly: true`, `enabled`; `finish` optional and `fromFinish` not allowed for ceramic; one exception per bike). The ceramic line price is: enabled ceramic exception for the bike, else the existing `config.ceramic` tier price, else quote. Add-ons keep pricing from `config.ceramic`. Response shape unchanged.
 
 ---
 
@@ -158,6 +162,13 @@ Six months after staff mark a booking Done, the customer gets one email at 9 AM 
 - **Input (JSON):** `requestId` string (retry key); `date` string; `hour` integer 0-23 (the database refuses an hour that is not open for that date: `409`); `services` array of 1-20 strings (each up to 64); `bike` string; `name` string; `phone` string (may be empty: the mobile number is optional for a customer's own online booking; if not empty, the route requires 7-15 digits with only `+`, spaces, `()` and `-`, same rule as `/api/auth/contact`, else `400 "Enter a valid mobile number, or leave it blank."`; the database also caps it at 40 characters); `plate` optional string; `coating` optional object (under 3000 chars JSON); `priceFingerprint` optional 32 lowercase-hex string. Lengths of `bike`, `name`, `phone`, `plate` and the date/hour ranges are not checked in the route (database decides, unclear from code).
 - **Success:** `200` `{ id: uuid, status: string, totalCentavos: number, estimateOpen: boolean }`. `estimateOpen` is true when any service needs a quote or has a price range.
 - **Errors:** `400` invalid input; `401`; `403` verify your email; `409` slot unavailable, or `{ code: "price_changed", message }` when prices changed since the estimate; `503` retry using the same `requestId`.
+
+### `GET /api/bookings/history`
+- **Who:** signed-in customer who owns the booking (database-enforced). Not for staff: staff use `GET /api/staff/booking-history`.
+- **Input (query):** `booking` uuid, required.
+- **Success:** `200` `{ booking_id: uuid, entries: Entry[] }`, newest first, at most 200. Header `Cache-Control: private, no-store`. Each entry: `at` (ISO timestamp), `kind` (`price_changed`, `price_corrected`, `service_added`, `service_removed`, `booked`, `approved`, `completed`, `cancelled`, `rescheduled`), `actor` (`"you"` or `"shop"`), and for price and service kinds `service_label` plus `from_centavos` / `to_centavos` (a missing side means no previous or no new price). A booking with no changes returns `entries: []`.
+- **Never includes:** staff names, change reasons, private notes, phone numbers or emails. Amounts are the customer's own booking amounts.
+- **Errors:** `400` bad booking id; `401` not signed in; `403` the booking is not yours or does not exist (same answer for both); `404` reserved; `503`.
 
 ### `GET /api/booking-prices`
 - **Who:** route has no sign-in check; the database function returns `42501` (shown as `403`) if you may not see the booking (unclear from code who may read).
@@ -187,6 +198,7 @@ Six months after staff mark a booking Done, the customer gets one email at 9 AM 
 ### `POST /api/staff/line-price`
 - **Who:** staff with grants `adjustPrices` **and `viewIncome`** (database-enforced; page Bookings or Booking history). Without `viewIncome` the server refuses with `403` (the screen already hides Edit price then), so no amounts are ever returned to a caller without it. Signed-in check in the route (`401`). Same-origin required.
 - **When:** only while the booking is Pending or Booked. After Done use `POST /api/booking-prices`.
+- **F-026 UI note:** the staff price editor now shows two boxes — the **current** price (read-only, the line's `price_centavos`) sent back as `expectedCentavos`, beside the **proposed** new price sent as `pesos`. This is display-only; the request shape is unchanged. The same current→proposed change is shown in three places (staff Reports, staff booking history, and the customer booking history with the staff reason hidden).
 - **Input (JSON, all required):** `booking` uuid; `requestId` uuid (retry key: the same staff member re-sending the same request with the same values gets the saved result, even after the booking moved on); `service` string 1-100 (the line's `code`); `expectedCentavos` integer >= 0 or `null`: the line's current `price_centavos` exactly as read (a quote-only line is stored with 0 or no price: send `0` or `null`, both match); `pesos` integer 0 to 1,000,000 (whole pesos; the server stores centavos); `reason` string, 1-200 after trim. A new price equal to the current one is `400` "That is already the price." (a quote-only line may be priced at 0).
 - **Success:** `200` `{ revision: integer, status: "pending"|"confirmed", lines: ServiceLine[], totalCentavos: integer }`. `lines` are the booking's current lines (`current_services`), `totalCentavos` the new total (sum of the priced lines). The original snapshot (`original_services`, `original_total_centavos`) never changes. On the changed line `max_centavos`, `quote_required`, `details` and `promotion` are removed (they no longer add up); the full old line is kept in the private change log. The booking's `service_revision` goes up by one, so a stale `revision` on `POST /api/booking-services` is refused with `line_changed`.
 - **Errors:** `400` invalid input; `401`; `403` no `adjustPrices` grant; `404` booking not found; `409` `{ code: "booking_locked", message: "This booking can no longer be changed." }` (Done or Cancelled) or `{ code: "line_changed", message }` (the line's price is no longer `expectedCentavos`, or the service is no longer on the booking: reload); `503`.
@@ -278,7 +290,7 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
   - `open_date` (open with the default hours), `close_date` (closed): `date` required, no `hour`. Both also clear the date's own hours.
   - `restore_date`: `date` required, no `hour`. Removes the date's closed/open choice and own hours; manual blocks stay.
   - `block_slot`, `unblock_slot`: `date` and `hour` (0-23) required. Hours already past (Philippine time) are refused with `400`.
-  - `set_date_hours`: `date`, `openHour` (0-23), `closeHour` (1-24, greater than `openHour`), optional `confirmOutside` boolean (default `false`), optional `confirmedOutsideCount` integer 0 or more (the `outsideCount` the staff member was shown; only used with `confirmOutside: true`). Own hours for that date only.
+  - `set_date_hours`: `date`, `openHour` (0-23), `closeHour` (1-24, greater than `openHour`), optional `confirmOutside` boolean (default `false`), optional `confirmedOutsideCount` integer 0 or more (the `outsideCount` the staff member was shown; only used with `confirmOutside: true`). Own hours for that date only; the last slot starts at `closeHour` (inclusive).
   - All date actions refuse past dates (Philippine time) with `400`, and need the `manageSchedule` grant (`403` otherwise).
 - **Success:** `204`, except `set_date_hours`: `200 { outsideCount: number }`.
 - **`409` for `set_date_hours`:** `{ code: "bookings_outside_hours", bookings: [{ reference, date, hour }], outsideCount }` when future bookings (not cancelled, hour still ahead) on that date would fall outside the new own hours and `confirmOutside` is not `true`. The same `409` is returned when `confirmOutside` is `true` and `confirmedOutsideCount` is sent but the recomputed count is higher (more bookings appeared since the warning): the body carries the new list and count so the screen can warn again. `bookings` lists at most 100, no names. Nothing is saved. Send the same request with `confirmOutside: true` (and the `outsideCount` just shown as `confirmedOutsideCount`) to save anyway. Bookings are never moved or cancelled.
@@ -288,7 +300,7 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
 
 ### `GET /api/staff/schedule-settings`
 - **Who:** signed-in staff with a confirmed email and the Bookings page (the database checks it; the `manageSchedule` grant is not needed to read).
-- **Success:** `200 { openHour: 0-23, closeHour: 1-24, openWeekdays: number[] (0 = Sunday ... 6 = Saturday, sorted), canManage: boolean, version: string }`. `version` is the time the default hours were last saved (ISO string, opaque: send it back unchanged in the next `PUT`). Starting values: `9`, `17`, `[0,3,4,5,6]`. The last slot starts at `closeHour - 1`.
+- **Success:** `200 { openHour: 0-23, closeHour: 1-24, openWeekdays: number[] (0 = Sunday ... 6 = Saturday, sorted), canManage: boolean, version: string }`. `version` is the time the default hours were last saved (ISO string, opaque: send it back unchanged in the next `PUT`). Starting values: `9`, `17`, `[0,3,4,5,6]`. The last slot starts AT `closeHour` (inclusive; a 9-17 shop books 9:00 to 17:00). Before the inclusive-closing change it started at `closeHour - 1`. `closeHour` 24 ends at 23:00.
 - **Errors:** `401`; `403`; `503`.
 
 ### `PUT /api/staff/schedule-settings`
@@ -309,6 +321,7 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
 - **Errors:** `400`; `401`; `403` unconfirmed email or no permission; `404` no unique verified account matched / account no longer matches; `409` slot unavailable or `{ code: "price_changed", message }`; `503`.
 
 ### `POST /api/staff/booking-name-groups`
+- **F-026 note:** the `surface: "history"` path (the old "View same-name bookings" button on Booking history) is retired from the UI — no screen calls it any more, so the "booking groups are unavailable" error that only came from that path is unreachable. The RPC still accepts both surfaces; the `surface: "customers"` path still powers the Customers directory. A customer's previous bookings are now reached only through the per-customer, already-scoped `POST /api/staff/customers` `visits` operation.
 - **Who:** verified staff with Customers access for `surface: "customers"`, or Booking History access for `surface: "history"`. Same-origin required. Responses are private and never cached.
 - **Input (JSON):** `surface`, integer `page` (positive integer), optional `q` for directory search, and optional exact `name` to show bookings. History requires `name`. Text fields are limited to 120 characters. Case and extra spaces are ignored for matching.
 - **Success:** `{total, groups: [{name, total}]}` for directory results, or `{name, total, bookings: [{id, reference, date, hour, status, bike}]}` for visits. Pages contain up to 20 records.
@@ -384,6 +397,7 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
 - **Errors:** `400`; `403`; `409` pricing changed (reload); `503` retry the same change.
 
 ### `GET /api/pricing/coating-rules`
+- Retired in F-021: returns 410; the old per-bike rules now live in config.powderModel.exceptions (see /api/pricing/catalog). Both GET and POST return `410 { message: "Coating rules moved into the pricing catalog." }` (POST still requires same-origin). The original description below is kept for history.
 - **Who:** staff with pricing permission (database).
 - **Input:** none.
 - **Success:** `200` coating rules (shape unclear from code).
@@ -398,14 +412,36 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
 ### `GET /api/pricing/catalog`
 - **Who:** staff with pricing permission (database).
 - **Input:** none.
-- **Success:** `200` UI pricing configuration (shape unclear from code).
+- **Success:** `200` UI pricing configuration: `{ config, revision, canEdit }`. `config` keeps its existing `ceramic` and `powder` keys and adds `config.powderModel` (F-021, see below).
 - **Errors:** `403`; `503`.
 
+`config.powderModel` (powder wheel colour x bike size pricing; pesos are plain numbers, `null` means quote only):
+- `categories`: always `["basic","special","luminous-prismatic","custom"]`.
+- `baseTable`: `{ <category>: { "10-14", "17", "big-bike", "not-sure" } }` with a price or `null` per size. The `custom` row and every `not-sure` cell are always `null` (quote only).
+- `colorEntries[]`: `{ id (uuid), name (1-80), category, photoPath (null or "entry/<this entry's own id>.webp|jpg|png"), quoteOnly (boolean), pricesBySize? }`. `pricesBySize` is an optional per-size override; missing sizes use `baseTable[category][size]`. Category `custom` is always quote only.
+- `exceptions[]`: `{ id (uuid), service ("wheel-colour"), bikeKey (lowercase, up to 120), finish, fromFinish (null or text), priceCentavos (integer) or quoteOnly: true, enabled (boolean), note (up to 200) }`. Exceptions win over the base price. Duplicates (same service, bike, finish, fromFinish) are refused.
+- `bikeTiers`: `{ <bikeKey>: <size key> }` mapping a bike to its size.
+
 ### `POST /api/pricing/catalog`
-- **Who:** staff with pricing permission. Same-origin required.
-- **Input (JSON):** `requestId` uuid; `revision` safe integer >= 1; `config` object (not array, under 20,000 chars JSON).
+- **Who:** staff with pricing permission (and MFA, enforced by the database). Same-origin required.
+- **Input (JSON):** `requestId` uuid; `revision` safe integer >= 1; `config` object (not array, under 40,000 chars JSON; this is the limit for the whole config including `powderModel`).
 - **Success:** `200` saved configuration (shape unclear from code).
-- **Errors:** `400` "Check every rate and range."; `403`; `409` prices changed; `503`.
+- **Errors:** `400` "Check every rate and range." (database `22023` "Check the coating rates." for an invalid `powderModel`); `403` (database `42501`, no pricing permission or MFA); `409` prices changed (database `40001`, stale `revision`; reload and retry); `503`.
+- Existing saved bookings keep their original price snapshots; new prices apply to new or edited work only.
+
+### `PUT /api/pricing/color-photo?entry=<uuid>`
+- **Who:** staff with pricing permission (checked by the database function `herco_pricing_swatch_target`). Same-origin required.
+- **Input:** query `entry` = the colour entry id (uuid, already saved in `config.powderModel.colorEntries`). Body = the raw image bytes (not JSON), up to 4 MB, JPEG, PNG or WebP (checked by file contents, not by name).
+- **Success:** `201 { path: "entry/<uuid>.<webp|jpg|png>" }`. Re-uploading replaces the photo. The caller then stores `path` in that entry's `photoPath` and saves via `POST /api/pricing/catalog`.
+- **Errors:** `400` invalid `entry`, not an image, or "Save the colour before adding a photo."; `403` no pricing permission; `413` over 4 MB; `503` storage or database unavailable.
+- **Storage:** public bucket `herco-swatches` (separate from the private `herco-completion` bucket, which this endpoint never touches).
+
+### `GET /api/pricing/color-photo?entry=<uuid>`
+- **Who:** public (colour swatches are marketing images). No sign-in needed.
+- **Input:** query `entry` uuid.
+- **Success:** `200` the image with its `content-type`, `x-content-type-options: nosniff`, `cache-control: public, max-age=300`.
+- **Errors:** `400` invalid `entry`; `404` no photo for this colour; `503`.
+- Only the `entry/` folder of `herco-swatches` is read.
 
 ---
 
@@ -568,8 +604,8 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
 - **`PriceFingerprint`:** 32-character lowercase hex string from the price estimate; sent back on booking calls to detect price changes.
 - **`Coating`:** a free-form JSON object (not an array), under 3000 characters when serialised. Its inner fields are defined by the database (unclear from code).
 - **`Booking` (from `GET /api/bookings`):** `{ id, reference_no, visit_date, visit_hour, bike, status, original_services, original_total_centavos, current_services, current_total_centavos, coating_options, current_coating_options, created_at, approved_at, completed_at, cancelled_at, shop_priced }`. Statuses seen in code: `pending`, `confirmed`, `done`, `cancelled`. Service entries can include `quote_required` and `max_centavos`.
-- **`Availability`:** array from `GET /api/availability`, one row per open hour: `{ visit_date: "YYYY-MM-DD", visit_hour: 0-23, status: "open", openHour, closeHour, closed: false }`. `openHour`/`closeHour` are that date's first slot hour and closing hour (last slot starts at `closeHour - 1`). Only bookable hours are listed (past, blocked and out-of-hours hours are not). A date with no bookable hour returns one row `{ visit_date, visit_hour: null, status: "closed", openHour, closeHour, closed }`: `closed: true` (and `openHour`/`closeHour` null) when the shop is closed that date, `closed: false` when the date has hours but none left (all past or blocked). `booked` is never returned; any number of customers may share an hour.
-- **Staff day view (`GET /api/staff/bookings?date=`) additions:** `slots` now holds only the date's real hours: `[{ hour, status: "open"|"past"|"blocked", blocked: boolean, booked: number }]` (`booked` counts non-cancelled bookings in that hour). New keys: `closed` boolean, `open_hour`, `close_hour` (null when closed), `own_open_hour`, `own_close_hour` (the date's own hours, else null). `override` is unchanged (`true`/`false`/`null`). Each booking has `outside_hours: boolean`.
-- **Staff calendar (`GET /api/staff/calendar`) additions per date:** `closed` (follows the date's real hours), `open_hour`, `close_hour`, `outside_hours` (count of non-cancelled bookings outside the hours), `hours: [{ hour, booked }]` (non-cancelled bookings per hour). Existing keys `pending`, `booked` (confirmed only), `completed` are unchanged.
+- **`Availability`:** array from `GET /api/availability`, one row per open hour: `{ visit_date: "YYYY-MM-DD", visit_hour: 0-23, status: "open", openHour, closeHour, closed: false }`. `openHour`/`closeHour` are that date's first slot hour and closing hour (the last slot starts AT `closeHour`: a 9-17 shop lists hours 9 to 17; `closeHour` is the stored closing hour, 24 ends at 23). Only bookable hours are listed (past, blocked and out-of-hours hours are not). A date with no bookable hour returns one row `{ visit_date, visit_hour: null, status: "closed", openHour, closeHour, closed }`: `closed: true` (and `openHour`/`closeHour` null) when the shop is closed that date, `closed: false` when the date has hours but none left (all past or blocked). `booked` is never returned; any number of customers may share an hour.
+- **Staff day view (`GET /api/staff/bookings?date=`) additions:** `slots` now holds only the date's real hours: `[{ hour, status: "open"|"past"|"blocked", blocked: boolean, booked: number }]` (`booked` counts non-cancelled bookings in that hour). New keys: `closed` boolean, `open_hour`, `close_hour` (null when closed; the date's closing hour, and `slots` now include the closing hour itself, e.g. 9 to 17), `own_open_hour`, `own_close_hour` (the date's own hours, else null). `override` is unchanged (`true`/`false`/`null`). Each booking has `outside_hours: boolean`.
+- **Staff calendar (`GET /api/staff/calendar`) additions per date:** `closed` (follows the date's real hours), `open_hour`, `close_hour` (the closing hour, itself bookable), `outside_hours` (count of non-cancelled bookings outside the hours; a booking at the closing hour is inside), `hours: [{ hour, booked }]` (non-cancelled bookings per hour). Existing keys `pending`, `booked` (confirmed only), `completed` are unchanged.
 - **`WorkspaceAccess`:** permission object from `herco_workspace_permissions`, parsed by `parseWorkspaceAccess` in `src/lib/shared/workspace-navigation.ts` (not read for this document; shape unclear from code).
 - **`StaffAccessGrant` (staff-access):** roles `staff`, `admin`, `restricted_admin` (the screens no longer offer `restricted_admin` since 2026-11-23 but still accept and display it as Admin); `pages` and `actions` are arrays of grant-name strings (names defined in the database; unclear from code).

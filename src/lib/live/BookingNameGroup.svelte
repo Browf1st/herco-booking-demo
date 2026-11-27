@@ -10,7 +10,8 @@
 	type Group = { name: string; total: number };
 	type Booking = { id: string; reference: string; date: string; hour: number | null; status: RecordStatus; bike: string };
 	type Result = { total: number; groups?: Group[]; bookings?: Booking[] };
-	let { surface, name, onclose }: { surface: 'customers' | 'history'; name?: string; onclose?: () => void } = $props();
+	// Used only by the Customers directory. The old Booking history "same-name" surface is gone.
+	let { surface, name, onclose }: { surface: 'customers'; name?: string; onclose?: () => void } = $props();
 	const pageSize = 20;
 	let result = $state<Result>();
 	let page = $state(1);

@@ -28,10 +28,17 @@ export const hourRange = (openHour: number, closeHour: number) =>
 	Array.from({ length: Math.max(0, closeHour - openHour) }, (_, i) => openHour + i);
 export const openOptions = hourRange(0, 24);
 export const closeOptions = hourRange(1, 25);
+// Bookable slots now INCLUDE the closing hour (F-026: 5 PM bookable for a 9–17 shop).
+// Keep hourRange (exclusive) for the open/close dropdowns above; use slotHours for actual slots.
+export const slotHours = (openHour: number, closeHour: number) => {
+	// The closing hour is bookable, but hour 24 (midnight) is not a real slot — the server clamps to 23.
+	const last = Math.min(closeHour, 23);
+	return Array.from({ length: closeHour > openHour ? last - openHour + 1 : 0 }, (_, i) => openHour + i);
+};
 
-// "9 AM, 10 AM … 4 PM · 8 slots a day"
+// "9 AM, 10 AM … 5 PM · 9 slots a day"
 export function slotPreview(openHour: number, closeHour: number) {
-	const hours = hourRange(openHour, closeHour).map(hourText);
+	const hours = slotHours(openHour, closeHour).map(hourText);
 	if (!hours.length) return '';
 	const list = hours.length > 3 ? `${hours[0]}, ${hours[1]} … ${hours[hours.length - 1]}` : hours.join(', ');
 	return `${list} · ${hours.length} ${hours.length === 1 ? 'slot' : 'slots'} a day`;
@@ -56,5 +63,5 @@ export function hoursForDate(settings: ScheduleSettings, date: string, override:
 	const open = !override.closed && (own || override.open || settings.openWeekdays.includes(new Date(date + 'T00:00:00Z').getUTCDay()));
 	const openHour = own ? override.ownOpen! : settings.openHour;
 	const closeHour = own ? override.ownClose! : settings.closeHour;
-	return { closed: !open, openHour, closeHour, hours: open ? hourRange(openHour, closeHour) : [] };
+	return { closed: !open, openHour, closeHour, hours: open ? slotHours(openHour, closeHour) : [] };
 }

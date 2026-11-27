@@ -76,22 +76,22 @@
 				</div>
 				{#if receipts.length}
 					<div class="card stack">
-						<h3>Your reward ARs</h3>
+						<h3><ActionIcon name="gift" /> Your reward ARs</h3>
 						{#each receipts as receipt (receipt.id)}
 							<details><summary>{receipt.reward} · {receipt.cost.toLocaleString('en-PH')} points · {rewardStatus(receipt)}</summary><RewardReceipt {receipt} /></details>
 						{/each}
 					</div>
 				{/if}
 				<div class="card stack">
-					<h3>Your points activity</h3>
+					<h3><ActionIcon name="history" /> Your points activity</h3>
 					{#each ledger as entry (entry.id)}
-						<div class="ranking-row"><div>{entry.reason}<p class="muted small">{new Date(entry.at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' })}</p></div><b>{entry.amount > 0 ? '+' : ''}{entry.amount}</b></div>
+						<div class="ranking-row"><div>{entry.reason}<p class="muted small">{new Date(entry.at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' })}</p></div><b class:gain={entry.amount > 0}>{entry.amount > 0 ? "+" : ""}{entry.amount}</b></div>
 					{:else}<p class="muted">Your HERCO Points activity will appear here.</p>{/each}
 				</div>
 			{/if}
 		</div>
 		<aside class="card stack leaderboard" aria-labelledby="leaderboard-title">
-			<h3 id="leaderboard-title">Rewards ranking</h3>
+			<h3 id="leaderboard-title"><ActionIcon name="ranking" /> Rewards ranking</h3>
 			<p class="small muted">Ranked by current HERCO Points. Members choose whether to share their ranking name.</p>
 			{#each ranking.slice(0, topRankCount) as member, index (member.id)}
 				<div class="ranking-row" class:current={member.id === activeId}>
@@ -116,7 +116,7 @@
 			<div><a class="btn" href={resolve('/account')}><ActionIcon name="login" />Sign in to HERCO Points</a></div>
 		</div>
 		<aside class="card stack reward-preview" aria-labelledby="reward-preview-title">
-			<h2 id="reward-preview-title">Rewards to work toward</h2>
+			<h2 id="reward-preview-title"><ActionIcon name="gift" /> Rewards to work toward</h2>
 			<ul>
 				{#each rewardProgram.toSorted((a, b) => a.points - b.points) as reward (reward.id)}
 					<li><RewardHeading name={reward.name} points={reward.points} tag="span" />{#if reward.scope}<span class="small muted">{reward.scope}</span>{/if}</li>
@@ -157,6 +157,7 @@
 	.leaderboard .member-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.leaderboard strong { white-space: nowrap; }
 	.rank { color: var(--accent); }
+	.gain { color: var(--ok); }
 	.points { font: italic 800 1.8rem var(--display); }
 	.fan-account-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: .75rem; }
 	.fan-account-summary h2 { overflow-wrap: anywhere; }

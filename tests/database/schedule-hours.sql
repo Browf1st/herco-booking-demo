@@ -25,7 +25,7 @@ insert into herco_private.staff_memberships(user_id,role,page_grants,action_gran
   ('00000000-0000-4000-8000-000000000302','staff',array['Bookings'],array['rescheduleBooking']);
 update herco_private.services set enabled = true where code = 'ceramic';
 
--- 1. Defaults: nothing changes until staff save new hours (9 AM-5 PM, last slot 4 PM, Wednesday-Sunday).
+-- 1. Defaults: nothing changes until staff save new hours (9 AM-5 PM, last slot 5 PM: the closing hour is bookable, Wednesday-Sunday).
 do $$
 declare
   wed date := public.herco_test_wed();
@@ -33,14 +33,15 @@ declare
 begin
   if not exists (select 1 from herco_private.schedule_settings
     where open_hour = 9 and close_hour = 17 and open_weekdays = '{0,3,4,5,6}'::smallint[]) then raise exception 'Default settings changed'; end if;
-  if array(select h from herco_private.day_hours(wed) as h order by h) <> '{9,10,11,12,13,14,15,16}'::smallint[] then
-    raise exception 'Default Wednesday hours are not 9-16'; end if;
+  if array(select h from herco_private.day_hours(wed) as h order by h) <> '{9,10,11,12,13,14,15,16,17}'::smallint[] then
+    raise exception 'Default Wednesday hours are not 9-17'; end if;
   if exists (select 1 from herco_private.day_hours(wed - 2)) then raise exception 'Monday is open by default'; end if;
   if herco_private.slot_status(wed, 10::smallint, shop_now) <> 'open' then raise exception '10 AM not open'; end if;
   if herco_private.slot_status(wed, 8::smallint, shop_now) <> 'closed' then raise exception '8 AM not closed'; end if;
-  if herco_private.slot_status(wed, 17::smallint, shop_now) <> 'closed' then raise exception '5 PM not closed'; end if;
+  if herco_private.slot_status(wed, 17::smallint, shop_now) <> 'open' then raise exception '5 PM (the closing hour) not open'; end if;
+  if herco_private.slot_status(wed, 18::smallint, shop_now) <> 'closed' then raise exception '6 PM not closed'; end if;
   if herco_private.slot_status(wed - 2, 10::smallint, shop_now) <> 'closed' then raise exception 'Monday 10 AM not closed'; end if;
-  if (select count(*) from public.herco_availability(wed, wed) a where a.status = 'open' and a.visit_hour is not null) <> 8
+  if (select count(*) from public.herco_availability(wed, wed) a where a.status = 'open' and a.visit_hour is not null) <> 9
     or (select min(a.open_hour) from public.herco_availability(wed, wed) a) <> 9
     or (select max(a.close_hour) from public.herco_availability(wed, wed) a) <> 17 then raise exception 'Availability for a default day is wrong'; end if;
   if not exists (select 1 from public.herco_availability(wed - 2, wed - 2) a
@@ -90,7 +91,7 @@ end $$;
 
 -- 4. Saves outside the date's hours are refused by the database itself (called directly).
 select public.herco_test_refused(format($s$select herco_private.create_booking_for('00000000-0000-4000-8000-000000000304','00000000-0000-4000-8000-000000000304',false,gen_random_uuid(),%L,8::smallint,array['ceramic'],'Bike','Fixture Name','','')$s$, public.herco_test_wed()), '23P01');
-select public.herco_test_refused(format($s$select herco_private.create_booking_for('00000000-0000-4000-8000-000000000304','00000000-0000-4000-8000-000000000304',false,gen_random_uuid(),%L,17::smallint,array['ceramic'],'Bike','Fixture Name','','')$s$, public.herco_test_wed()), '23P01');
+select public.herco_test_refused(format($s$select herco_private.create_booking_for('00000000-0000-4000-8000-000000000304','00000000-0000-4000-8000-000000000304',false,gen_random_uuid(),%L,18::smallint,array['ceramic'],'Bike','Fixture Name','','')$s$, public.herco_test_wed()), '23P01');
 select public.herco_test_refused(format($s$select herco_private.create_booking_for('00000000-0000-4000-8000-000000000304','00000000-0000-4000-8000-000000000304',false,gen_random_uuid(),%L,10::smallint,array['ceramic'],'Bike','Fixture Name','','')$s$, public.herco_test_wed() - 2), '23P01');
 -- Staff manual booking path (same function, booked by staff).
 select public.herco_test_refused(format($s$select herco_private.create_booking_for('00000000-0000-4000-8000-000000000301','00000000-0000-4000-8000-000000000304',true,gen_random_uuid(),%L,20::smallint,array['ceramic'],'Bike','Fixture Name','0917 000 0000','')$s$, public.herco_test_wed()), '23P01');
@@ -106,7 +107,7 @@ declare
   day_view jsonb := public.herco_staff_booking_day_with_options(wed);
   cal jsonb := public.herco_staff_calendar(wed - 2, wed);
 begin
-  if jsonb_array_length(day_view->'slots') <> 8 or (day_view->>'closed')::boolean then raise exception 'Staff day slots are not the 8 default hours'; end if;
+  if jsonb_array_length(day_view->'slots') <> 9 or (day_view->>'closed')::boolean then raise exception 'Staff day slots are not the 9 default hours'; end if;
   if (select (s->>'booked')::int from jsonb_array_elements(day_view->'slots') s where (s->>'hour')::int = 10) <> 3 then raise exception 'Staff day view should count 3 booked'; end if;
   if exists (select 1 from jsonb_array_elements(day_view->'slots') s where s->>'status' = 'booked') then raise exception 'booked slot status returned'; end if;
   if (day_view->>'open_hour')::int <> 9 or (day_view->>'close_hour')::int <> 17 then raise exception 'Staff day hours wrong'; end if;
@@ -186,12 +187,12 @@ declare
   wed date := public.herco_test_wed();
   cust uuid := '00000000-0000-4000-8000-000000000304';
 begin
-  if array(select h from herco_private.day_hours(wed) as h order by h) <> '{8,9,10,11,12,13,14,15,16,17,18,19}'::smallint[] then raise exception 'Hours are not 8-19'; end if;
-  if (select count(*) from public.herco_availability(wed, wed) a where a.visit_hour is not null and a.status = 'open') <> 12 then raise exception '12 slots expected'; end if;
+  if array(select h from herco_private.day_hours(wed) as h order by h) <> '{8,9,10,11,12,13,14,15,16,17,18,19,20}'::smallint[] then raise exception 'Hours are not 8-20'; end if;
+  if (select count(*) from public.herco_availability(wed, wed) a where a.visit_hour is not null and a.status = 'open') <> 13 then raise exception '13 slots expected'; end if;
   perform herco_private.create_booking_for(cust, cust, false, gen_random_uuid(), wed, 19::smallint, array['ceramic'], 'Late bike', 'Fixture Name', '', '');
   perform herco_private.create_booking_for(cust, cust, false, gen_random_uuid(), wed, 8::smallint, array['ceramic'], 'Early bike', 'Fixture Name', '', '');
   begin
-    perform herco_private.create_booking_for(cust, cust, false, gen_random_uuid(), wed, 20::smallint, array['ceramic'], 'Too late', 'Fixture Name', '', '');
+    perform herco_private.create_booking_for(cust, cust, false, gen_random_uuid(), wed, 21::smallint, array['ceramic'], 'Too late', 'Fixture Name', '', '');
     raise exception 'A booking at the closing hour was accepted';
   exception when sqlstate '23P01' then null; end;
   if not exists (select 1 from herco_private.schedule_events where change = 'set_default_hours'
@@ -275,7 +276,7 @@ declare wed date := public.herco_test_wed();
 begin
   if exists (select 1 from herco_private.day_hours(wed)) then raise exception 'Wednesday should be closed'; end if;
   if exists (select 1 from herco_private.day_hours(wed + 14)) then raise exception 'Next-next Wednesday should be closed'; end if;
-  if array(select h from herco_private.day_hours(wed + 7) as h order by h) <> '{9,10,11,12,13,14,15,16}'::smallint[] then
+  if array(select h from herco_private.day_hours(wed + 7) as h order by h) <> '{9,10,11,12,13,14,15,16,17}'::smallint[] then
     raise exception 'A Wednesday set Open must use the default hours'; end if;
   if (select count(*) from public.herco_bookings where visit_date = wed and status = 'pending') <> 5 then raise exception 'Closing a weekday changed bookings'; end if;
 end $$;
@@ -298,14 +299,14 @@ declare
   cust uuid := '00000000-0000-4000-8000-000000000304';
   shop_now timestamp := clock_timestamp() at time zone 'Asia/Manila';
 begin
-  if array(select h from herco_private.day_hours(d) as h order by h) <> '{8,9,10,11}'::smallint[] then raise exception 'Own hours not 8-11'; end if;
-  if herco_private.slot_status(d, 11::smallint, shop_now) <> 'open' or herco_private.slot_status(d, 12::smallint, shop_now) <> 'closed' then
+  if array(select h from herco_private.day_hours(d) as h order by h) <> '{8,9,10,11,12}'::smallint[] then raise exception 'Own hours not 8-12'; end if;
+  if herco_private.slot_status(d, 12::smallint, shop_now) <> 'open' or herco_private.slot_status(d, 13::smallint, shop_now) <> 'closed' then
     raise exception 'Own-hours edge hours wrong'; end if;
   if (select count(*) from herco_private.schedule_events where change = 'set_date_hours' and visit_date = d) <> 1 then raise exception 'Own hours logged wrong number of times'; end if;
-  if (select count(*) from public.herco_availability(d, d) a where a.visit_hour is not null) <> 4 then raise exception 'Customers should see 4 slots'; end if;
+  if (select count(*) from public.herco_availability(d, d) a where a.visit_hour is not null) <> 5 then raise exception 'Customers should see 5 slots'; end if;
   perform herco_private.create_booking_for(cust, cust, false, gen_random_uuid(), d, 11::smallint, array['ceramic'], 'Own hours bike', 'Fixture Name', '', '');
   begin
-    perform herco_private.create_booking_for(cust, cust, false, gen_random_uuid(), d, 12::smallint, array['ceramic'], 'Too late', 'Fixture Name', '', '');
+    perform herco_private.create_booking_for(cust, cust, false, gen_random_uuid(), d, 13::smallint, array['ceramic'], 'Too late', 'Fixture Name', '', '');
     raise exception 'A booking after the own closing hour was accepted';
   exception when sqlstate '23P01' then null; end;
 end $$;

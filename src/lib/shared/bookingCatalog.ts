@@ -1,3 +1,5 @@
+import { powderSizeFromValue, wheelRate, type PowderModel } from './powderPricing.ts';
+
 export const ceramicModels = {
  1799: ['Yamaha Mio Gravis', 'Suzuki Skydrive Sports', 'Yamaha Mio Soul', 'Honda Click125', 'Yamaha Sniper 155', 'Yamaha Mio Gear', 'Yamaha NMAX', 'Yamaha Aerox', 'Suzuki Raider R150', 'Suzuki Burgman Street', 'Samurai 155', 'Honda Wave RSX'],
  1999: ['Honda Rebel', 'Honda AirBlade160', 'Honda ADV150', 'Honda ADV160', 'Honda Giorno+', 'Yamaha Mio Fazzio', 'Honda PCX150', 'Honda PCX160', 'Kawasaki Dominar 400', 'Honda Click160', 'Kymco Like 150i', 'Suzuki Gixxer 155', 'Suzuki Gixxer 250'],
@@ -50,25 +52,31 @@ export const powderParts = {
  'Crankcase (custom / two-tone)': [1700, 1700]
 } as const;
 
+export const powderCategories = ['basic', 'special', 'luminous-prismatic', 'custom'] as const;
+export type PowderCategory = (typeof powderCategories)[number];
+export const powderCategoryLabels: Record<PowderCategory, string> = {
+ basic: 'Basic', special: 'Special', 'luminous-prismatic': 'Luminous / Prismatic', custom: 'Custom'
+};
+export const powderSizes = ['10-14', '17', 'big-bike', 'not-sure'] as const;
+export type PowderSize = (typeof powderSizes)[number];
+export const powderSizeLabels: Record<PowderSize, string> = {
+ '10-14': '10–14 in', '17': '15–17 in', 'big-bike': 'Big bike', 'not-sure': 'Not sure'
+};
+/** Sizes that can carry a price (Not sure is always a quote). */
+export const pricedPowderSizes = ['10-14', '17', 'big-bike'] as const;
+
 export const wheels = 'Wheels / mags';
-export const wheelRates = {
- '10–14 inches': [2199, 2499],
- '17 inches (Raider / Sniper only)': [3199, 3499],
- 'Big bike / sports bike': [4499, 5499]
-} as const;
+export const customNoteLimit = 300;
 export const wheelExtras = ['Aftermarket mags', 'Previously powder-coated mags', 'Protective top coat'];
-export const basicColors = ['Snow White', 'Graphite Black', 'Matte Black', 'Crystal Black', 'Pristine White'];
-export const powderPhotos = [
- { name: 'Dry Bronze', file: 'booking-colors/dry-bronze.jpg' },
- { name: 'Pearl White', file: 'booking-colors/pearl-white.jpg' },
- { name: 'High Gloss Black', file: 'booking-colors/gloss-black.jpg' },
- { name: 'High Gloss White', file: 'booking-colors/gloss-white.jpg' },
- { name: 'Fire Blue', file: 'booking-colors/fire-blue.jpg' }
-] as const;
 
 export type CatalogOptions = {
  ceramicAddons: string[];
+ /** A size key ('10-14', '17', 'big-bike', 'not-sure'). Old bookings may hold an older label. */
  wheelType: string;
+ powderCategory: PowderCategory | '';
+ colorId: string;
+ customNote: string;
+ /** Old bookings only. The booking screen no longer sets it. */
  prismatic: boolean;
  wheelExtras: string[];
  bigBike: boolean;
@@ -77,7 +85,7 @@ export type CatalogOptions = {
 };
 
 export function createCatalogOptions(): CatalogOptions {
- return { ceramicAddons: [], wheelType: '', prismatic: false, wheelExtras: [], bigBike: false, otherBigBike: false };
+ return { ceramicAddons: [], wheelType: '', powderCategory: '', colorId: '', customNote: '', prismatic: false, wheelExtras: [], bigBike: false, otherBigBike: false };
 }
 
 type Range = readonly [number, number];
@@ -93,7 +101,8 @@ export function catalogItems(
  options: CatalogOptions,
  bike: string,
  year?: number,
- pricing = defaultCeramicCatalogPricing
+ pricing = defaultCeramicCatalogPricing,
+ powderModel?: PowderModel
 ) {
  const items = new Map<string, Range | undefined>();
  const tier = options.otherBigBike ? 2499 : ceramicTier(bike, options.bigBike);
@@ -117,10 +126,9 @@ export function catalogItems(
   const suffix = color ? ' · ' + color : '';
   for (const part of selection.powderParts) {
    if (part === wheels) {
-    const type = options.wheelType;
-    const rate = Object.hasOwn(wheelRates, type) ? wheelRates[type as keyof typeof wheelRates] : undefined;
-    const prismatic = type === '10–14 inches' ? 2999 : type === '17 inches (Raider / Sniper only)' ? 3999 : undefined;
-    items.set(wheels + (type ? ' · ' + type : '') + suffix, options.prismatic ? (prismatic ? [prismatic, prismatic] : undefined) : rate);
+    const size = powderSizeFromValue(options.wheelType);
+    const rate = powderModel ? wheelRate(powderModel, { bike, size, finish: selection.finish, prismatic: options.prismatic }) : undefined;
+    items.set(wheels + (size ? ' · ' + powderSizeLabels[size] : '') + suffix, rate === undefined ? undefined : [rate, rate]);
     for (const extra of options.wheelExtras) {
      if (wheelExtras.includes(extra)) items.set(extra, [499, 499]);
     }

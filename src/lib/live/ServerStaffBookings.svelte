@@ -174,6 +174,12 @@ import type { DateAction, DayHourRow, DayInfo, Needs, ScheduleSettings } from '.
 	onMount(() => { void load(); });
 </script>
 
+<!-- The slot filter closes on Esc (focus returns to it) or a tap outside, like the other menus. -->
+<svelte:window
+	onkeydown={(event) => { if (filterMenu?.open && event.key === 'Escape') { filterMenu.open = false; filterMenu.querySelector('summary')?.focus(); } }}
+	onpointerdown={(event) => { if (filterMenu?.open && !filterMenu.contains(event.target as Node)) filterMenu.open = false; }}
+/>
+
 <svelte:head><title>Shop admin | HERCO Detailing Garage</title></svelte:head>
 <section class="section wrap stack booking-workspace staff-parity">
 	{#if access === 'loading'}<p role="status">Loading the booking schedule…</p>
@@ -185,7 +191,7 @@ import type { DateAction, DayHourRow, DayInfo, Needs, ScheduleSettings } from '.
 			<div class="row day-controls"><button class="btn sm ghost" onclick={openAvailability}><ActionIcon name="calendar" />Manage availability</button><div class="row" role="group" aria-label="Select booking day"><button class="btn sm ghost" aria-label="Previous day" disabled={busy} onclick={() => pickDate(addDays(date, -1))}><ActionIcon name="left" /></button><button class="btn sm ghost" aria-label="Next day" disabled={busy} onclick={() => pickDate(addDays(date, 1))}><ActionIcon name="right" /></button></div></div></div>
 		<div class="tiles"><div class="card pending-tile"><b class="display">{dayCount('pending')}</b><span class="small">Pending</span></div><div class="card booked-tile"><b class="display">{dayCount('confirmed')}</b><span class="small">Booked</span></div><div class="card completed-tile"><b class="display">{dayCount('done')}</b><span class="small">Completed</span></div></div>
 		<div class="booking-layout"><div class="stack booking-column"><ServerAdminCalendar value={date} onpick={pickDate} /></div><section class="stack booking-column" aria-labelledby="time-slots-heading">
-			<div class="card row between schedule-heading"><div><h3 id="time-slots-heading">Time slots</h3><p class="small muted">Philippine time</p></div><details class="slot-filter" bind:this={filterMenu}><summary><ActionIcon name="adjust" />{filters.find(item => item.id === filter)?.label}<span aria-hidden="true">▾</span></summary><div class="filter-options">{#each filters as item}<button type="button" aria-pressed={filter === item.id} onclick={() => { filter = item.id; if (filterMenu) filterMenu.open = false; }}>{item.label}<span>{item.count}</span></button>{/each}</div></details></div>
+			<div class="card row between schedule-heading"><div><h3 id="time-slots-heading">Time slots</h3><p class="small muted">Philippine time</p></div><details class="slot-filter" bind:this={filterMenu}><summary><ActionIcon name="adjust" /><span class="slot-filter-label">{filters.find(item => item.id === filter)?.label}</span><span class="slot-filter-arrow"><ActionIcon name="down" /></span></summary><div class="slot-filter-options">{#each filters as item}<button type="button" aria-pressed={filter === item.id} onclick={() => { filter = item.id; if (filterMenu) filterMenu.open = false; }}><span>{item.label}</span><span class="slot-filter-count">{item.count}</span></button>{/each}</div></details></div>
 			<label>Booking source<select bind:value={source}><option value="all">All sources</option><option value="online">Online</option><option value="walk-in">Walk-in</option></select></label>
 			{#if source !== 'online'}{#each day.bookings.filter(booking => booking.visit_hour === null && (filter === 'all' || booking.status === filter)) as booking (booking.id)}<article class="card slot-card"><ServerStaffBookingCard {booking} permissions={{ ...day, canComplete, canRequestIntake, canAdjustPrices }} onSaved={() => load()} onDetails={() => detail = booking} /></article>{/each}{/if}
 			{#each outsideHours as booking (booking.id)}<article class="card slot-card stack" data-slot-status={booking.status}><span class="badge">Outside hours</span><ServerStaffBookingCard {booking} permissions={{ ...day, canComplete, canRequestIntake, canAdjustPrices }} onSaved={() => load()} onDetails={() => detail = booking} /></article>{/each}
@@ -252,16 +258,17 @@ import type { DateAction, DayHourRow, DayInfo, Needs, ScheduleSettings } from '.
 	:global(.staff-parity .availability-dialog h3), :global(.staff-parity .schedule-heading h3) { font-size: 1.35rem; }
 	:global(.staff-parity .booking-layout) { display: grid; align-items: start; gap: .9rem; }
 	:global(.staff-parity .booking-column) { min-width: 0; }
-	:global(.staff-parity .slot-filter) { position: relative; min-width: 10rem; font-size: .85rem; }
-	:global(.staff-parity .slot-filter summary) { display: flex; align-items: center; gap: .5rem; min-height: 40px; padding: .32rem .6rem; list-style: none; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); font-weight: 700; cursor: pointer; }
+	:global(.staff-parity .slot-filter) { position: relative; flex: none; max-width: 100%; font-size: .85rem; }
+	:global(.staff-parity .slot-filter summary) { display: flex; align-items: center; gap: .45rem; min-height: 44px; padding: .32rem .6rem; list-style: none; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); font-weight: 700; white-space: nowrap; cursor: pointer; }
+	:global(.staff-parity .slot-filter-arrow) { display: inline-flex; margin-inline-start: auto; }
+	:global(.staff-parity .slot-filter[open] .slot-filter-arrow) { transform: rotate(180deg); }
 	:global(.staff-parity .slot-filter summary::-webkit-details-marker) { display: none; }
 	:global(.staff-parity .slot-filter[open] summary), :global(.staff-parity .slot-filter summary:hover) { border-color: var(--accent); }
-	:global(.staff-parity .slot-filter-chevron) { width: .44rem; height: .44rem; margin-inline: .1rem; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: translateY(-2px) rotate(45deg); }
-	:global(.staff-parity .slot-filter[open] .slot-filter-chevron) { transform: translateY(2px) rotate(225deg); }
-	:global(.staff-parity .slot-filter-options) { display: grid; position: absolute; inset: calc(100% + .3rem) auto auto 0; z-index: 2; min-width: max(100%, 9rem); gap: .15rem; padding: .25rem; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); box-shadow: 0 4px 14px var(--card-shadow); }
-	:global(.staff-parity .slot-filter-options button) { display: grid; grid-template-columns: 1em minmax(0, 1fr) auto; align-items: center; gap: .4rem; border: 0; border-radius: 4px; background: transparent; padding: .35rem .45rem; color: var(--text); font: inherit; text-align: start; cursor: pointer; }
-	:global(.staff-parity .slot-filter-options button:hover), :global(.staff-parity .slot-filter-options button[aria-pressed='true']) { background: var(--panel-2); }
-	:global(.staff-parity .slot-filter-check) { color: var(--accent); }
+	/* One dropdown block: as wide as its button (at least 9rem), never wider than the screen, aligned to the button's right edge. */
+	:global(.staff-parity .slot-filter-options) { display: grid; position: absolute; inset: calc(100% + .3rem) 0 auto auto; z-index: 5; width: max-content; min-width: 100%; max-width: min(15rem, calc(100vw - 2rem)); gap: .15rem; padding: .25rem; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); box-shadow: 0 4px 14px var(--card-shadow); }
+	:global(.staff-parity .slot-filter-options button) { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .6rem; min-height: 44px; border: 0; border-radius: 4px; background: transparent; padding: .35rem .5rem; color: var(--text); font: inherit; text-align: start; cursor: pointer; }
+	:global(.staff-parity .slot-filter-options button:hover) { background: var(--panel-2); }
+	:global(.staff-parity .slot-filter-options button[aria-pressed='true']) { background: var(--panel-2); color: var(--accent); font-weight: 700; }
 	:global(.staff-parity .slot-filter-count) { min-width: 1.3rem; padding-inline: .2rem; border-radius: .25rem; background: var(--bg); color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
 	:global(.staff-parity .schedule-heading) { padding: .75rem .85rem; }
 
@@ -294,5 +301,5 @@ import type { DateAction, DayHourRow, DayInfo, Needs, ScheduleSettings } from '.
 		:global(.staff-parity .booking-layout) { grid-template-columns: minmax(345px, 2fr) minmax(0, 4fr); }
 	}
 
-.slot-list{list-style:none;padding:0;margin:0}.filter-options{position:absolute;z-index:5;right:0;min-width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:.3rem;display:grid}.filter-options button{display:flex;justify-content:space-between;gap:1rem;padding:.5rem;border:0;background:transparent;color:var(--text);cursor:pointer}.filter-options button[aria-pressed=true]{color:var(--accent);background:var(--panel-2)}
+.slot-list{list-style:none;padding:0;margin:0}
 </style>

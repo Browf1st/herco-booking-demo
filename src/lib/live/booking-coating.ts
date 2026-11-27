@@ -13,7 +13,7 @@ export type CoatingDraft = {
 };
 
 export type CoatingOptions = {
-	ui_catalog?: {ceramic_addons?:string[];wheel_type?:string;prismatic?:boolean;wheel_extras?:string[];big_bike?:boolean;other_big_bike?:boolean;finish?:string;model_year?:number;notes?:string};
+	ui_catalog?: {ceramic_addons?:string[];wheel_type?:string;powder_category?:string;color_id?:string;custom_note?:string;raider_sniper_confirmed?:boolean;prismatic?:boolean;wheel_extras?:string[];big_bike?:boolean;other_big_bike?:boolean;finish?:string;model_year?:number;notes?:string};
 	ceramic_finish?: Exclude<CoatingDraft['ceramic'], ''>;
 	red_body?: boolean;
 	powder_parts?: string[];

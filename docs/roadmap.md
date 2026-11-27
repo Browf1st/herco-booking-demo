@@ -64,12 +64,12 @@ F-020 was implemented and accepted by the owner on 2026-11-26 for merge to local
 | ID | Planned feature | Status on main | Spec |
 |---|---|---|---|
 | F-020 | Remove the static demo, keep the live app | Done locally; owner checked and accepted 2026-11-26; hosted Pages removal pending | [spec](features/F-020-remove-demo.md) |
-| F-021 | Unified powder pricing and staff Pricing editor | Ready; not implemented | [spec](features/F-021-powder-pricing-model.md) |
-| F-022 | Powder booking screen | Ready; not implemented | [spec](features/F-022-powder-booking-screen.md) |
-| F-023 | Ceramic booking revamp | Ready; not implemented | [spec](features/F-023-ceramic-fixes.md) |
-| F-024 | My Bookings redesign | Ready; not implemented | [spec](features/F-024-my-bookings-redesign.md) |
-| F-026 | Staff booking revamp | Ready; not implemented | [spec](features/F-026-staff-booking-revamp.md) |
-| F-025 | App-wide design polish | Ready; not implemented | [spec](features/F-025-design-polish.md) |
+| F-021 | Unified powder pricing and staff Pricing editor | Built locally (checks pass; QA+security reviewed); migrations 202611260001-002 + public `herco-swatches` bucket + swatch seeding NOT applied to hosted | [spec](features/F-021-powder-pricing-model.md) |
+| F-022 | Powder booking screen | Built locally (checks pass; QA+misuse reviewed); migration 202611260003 not applied to hosted | [spec](features/F-022-powder-booking-screen.md) |
+| F-023 | Ceramic booking revamp | Built locally (checks pass); migration 202611260004 not applied to hosted | [spec](features/F-023-ceramic-fixes.md) |
+| F-024 | My Bookings redesign | Built locally (checks pass); migration 202611260005 (customer history) not applied to hosted | [spec](features/F-024-my-bookings-redesign.md) |
+| F-026 | Staff booking revamp (incl. owner-approved inclusive 5 PM slot) | Built locally (checks pass); migration 202611260006 (5 PM slot) not applied to hosted | [spec](features/F-026-staff-booking-revamp.md) |
+| F-025 | App-wide design polish | Built locally (checks pass; visual-only) | [spec](features/F-025-design-polish.md) |
 
 Build order: F-020 → F-021 → F-022 → F-023 → F-024 with F-026 → F-025. No hosted migrations, uploads or deployment are authorized by this documentation merge.
 
@@ -120,6 +120,7 @@ Enter secret values only in the provider's settings or ignored local files, neve
 - [ ] Staging evidence: live sign-in and cross-device test, concurrent booking and points tests on hosted PostgreSQL, real-phone review, email delivery test, restore drill, production speed traces, then a written release go-ahead.
 
 ## Done log
+- 2026-11-27 Specs F-021–F-026 + F-025 built locally in the Worker app (files only; nothing committed, nothing applied to hosted Supabase). One pricing source of truth with a staff Pricing tab (base table, colour manager with public swatch photos, bike tiers, per-bike/finish and per-bike ceramic exceptions; legacy `coating_price_rules` archived then dropped); powder booking screen with four categories + photo swatches, Custom=quote, Raider/Sniper 15–17" restriction removed; ceramic modern revamp with multi-select add-on cards; My Bookings + staff Bookings + staff history on one shared BookingCard/ReportDetails pattern (red Actions menu, Ceramic/Powder tags, Status badge, two-box price edit, edit-service summary, customer-safe change log, same-name feature removed); owner-approved inclusive 5 PM last-booking slot; app-wide design polish. New migrations 202611260001–202611260006 written and CI-tested (no local Postgres); QA, security and misuse reviews run and their blockers fixed. svelte-check 0 errors, 300 tests pass, Worker build + size budgets pass. Owner test guide: docs/features/specs-21-27-test-guide.md. Hosted apply of the six migrations + the public `herco-swatches` bucket + swatch seeding remain owner-authorized release steps (free plan: no backup; 202611260002 drops a table after archiving it). Open owner decisions: fromFinish conditional exceptions, MFA-vs-password for pricing changes, exception overriding "custom is always a quote".
 - 2026-11-26 F-020 accepted by owner after checking the running app; requested Done and merge to local main. QA: 222 tests, check 0 errors/warnings, Worker build and budgets pass; design/source and misuse reviews found no new defect. Full browser/signed-in E2E coverage remains unverified; hosted Pages takedown pending. No deployment authorized.
 - 2026-11-17 M1 Performance and security pass on the demo: images 86% smaller, safer storage parsing, CSP, theme and keyboard fixes.
 - 2026-11-17 F-007 Booking history filters (date, status, search) and pagination in the demo.

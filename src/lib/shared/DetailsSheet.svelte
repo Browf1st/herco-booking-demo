@@ -2,7 +2,7 @@
 	// One details popup for a whole list: a bottom sheet on phones, a side panel on desktop.
 	// The browser returns focus to the button that opened it when the dialog closes.
 	import type { Snippet } from 'svelte';
-	import { pushState } from '$app/navigation';
+	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 
 	let { title, open, onclose, children }: { title: string; open: boolean; onclose: () => void; children: Snippet } = $props();
@@ -11,8 +11,12 @@
 	// A history entry lets the phone Back button close the sheet instead of leaving the page.
 	$effect(() => {
 		const marked = page.state.detailsSheet;
-		if (open && !dialog?.open) dialog?.showModal(), pushState('', { detailsSheet: true });
-		else if (!(open && marked)) dialog?.close();
+		if (open && !dialog?.open) {
+			dialog?.showModal();
+			// Opened from an Actions menu: take over its history entry (no history.back() race; Back closes the sheet once).
+			if (page.state.actionsMenu) replaceState('', { detailsSheet: true });
+			else pushState('', { detailsSheet: true });
+		} else if (!(open && marked)) dialog?.close();
 	});
 </script>
 

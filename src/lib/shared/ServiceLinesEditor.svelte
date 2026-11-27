@@ -1,21 +1,23 @@
 <!-- Styles load together with this screen (not in the page's first stylesheet). -->
 <svelte:options css="injected" />
 <script module lang="ts">
-	export type EditableLine = { code: string; label: string; price?: string; currentPesos?: number; canEditPrice: boolean; parts?: { label: string; price?: string }[] };
-	export type AddOption = { code: string; label: string; price?: string };
+	export type EditableLine = { code: string; label: string; price?: string; /** The line's price in centavos (for the change summary). */ centavos?: number; currentPesos?: number; canEditPrice: boolean; parts?: { label: string; price?: string }[] };
+	export type AddOption = { code: string; label: string; price?: string; centavos?: number };
 	export type SaveResult = { ok: true } | { ok: false; message: string; reload?: boolean };
 </script>
 
 <script lang="ts">
-	// The service lines of one booking, with "Edit price", "Remove" and "Add service" for staff who may use them.
-	// It only draws the screen and checks what was typed. The live and demo screens do the saving (onsaveprice, onadd, onremove).
+	// The service lines of one booking, with "Edit price" (current price beside the proposed one) and "Edit services" (a popup with a summary) for staff who may use them.
+	// It only draws the screen and checks what was typed. The live screen does the saving (onsaveprice, onapply).
 	import { tick } from 'svelte';
-	import { parsePesos, parseReason } from './booking-changes';
+	import { formatCentavos, parsePesos, parseReason } from './booking-changes';
+	import ServiceChangeDialog from './ServiceChangeDialog.svelte';
 
-	let { lines, canAdd = false, canRemove = false, addOptions = [], onsaveprice, onadd, onremove, onreload }: {
+	let { lines, canAdd = false, canRemove = false, addOptions = [], onsaveprice, onapply, onreload }: {
 		lines: EditableLine[]; canAdd?: boolean; canRemove?: boolean; addOptions?: AddOption[];
 		onsaveprice: (code: string, pesos: number, reason: string) => Promise<SaveResult>;
-		onadd?: (code: string) => Promise<SaveResult>; onremove?: (code: string) => Promise<SaveResult>; onreload?: () => Promise<void>;
+		/** Gets every service code wanted after the change. */
+		onapply?: (wanted: string[]) => Promise<SaveResult>; onreload?: () => Promise<void>;
 	} = $props();
 	const id = $props.id();
 	let editing = $state<string>();
@@ -23,23 +25,22 @@
 	let reasonText = $state('');
 	let fieldError = $state('');
 	let priceInput = $state<HTMLInputElement>();
-	let adding = $state(false);
-	let pick = $state('');
-	let addError = $state('');
+	let root = $state<HTMLDivElement>();
+	let serviceDialog = $state<{ open: () => Promise<void> }>();
 	let issue = $state('');
 	let canReload = $state(false);
 	let notice = $state('');
 	let busy = $state(false);
 
-	function clearMessages() { fieldError = addError = issue = notice = ''; canReload = false; }
+	function clearMessages() { fieldError = issue = notice = ''; canReload = false; }
 	async function startEdit(line: EditableLine) {
-		clearMessages(); adding = false;
+		clearMessages();
 		editing = line.code; priceText = reasonText = '';
 		await tick();
 		priceInput?.focus();
 	}
-	function failed(result: Extract<SaveResult, { ok: false }>, where: 'field' | 'add' | 'line') {
-		if (where === 'field') fieldError = result.message; else if (where === 'add') addError = result.message; else issue = result.message;
+	function failed(result: Extract<SaveResult, { ok: false }>) {
+		fieldError = result.message;
 		canReload = Boolean(result.reload && onreload);
 	}
 	async function savePrice(event: SubmitEvent, line: EditableLine) {
@@ -54,29 +55,14 @@
 		busy = true;
 		const result = await onsaveprice(line.code, price.pesos, reason.reason);
 		busy = false;
-		if (result.ok) { editing = undefined; notice = 'Price saved for ' + line.label + '.'; } else failed(result, 'field');
+		if (result.ok) { editing = undefined; notice = 'Price saved for ' + line.label + '.'; } else failed(result);
 	}
-	// "Remove" first asks "Remove X? Yes / No" on the line; only Yes removes it.
-	let confirming = $state<string>();
-	function askRemove(line: EditableLine) { clearMessages(); editing = undefined; confirming = line.code; }
-	async function remove(line: EditableLine) {
-		if (busy || !onremove) return;
-		confirming = undefined;
-		clearMessages(); editing = undefined; busy = true;
-		const result = await onremove(line.code);
-		busy = false;
-		if (result.ok) notice = 'Removed ' + line.label + '.'; else failed(result, 'line');
-	}
-	async function add(event: SubmitEvent) {
-		event.preventDefault();
-		if (busy || !onadd) return;
-		clearMessages();
-		if (!pick) { addError = 'Choose a service to add.'; return; }
-		const label = addOptions.find((option) => option.code === pick)?.label ?? 'service';
-		busy = true;
-		const result = await onadd(pick);
-		busy = false;
-		if (result.ok) { adding = false; pick = ''; notice = 'Added ' + label + '.'; } else failed(result, 'add');
+	// Edit services: the popup shows a summary first, then calls this with every code wanted.
+	async function apply(wanted: string[]) {
+		clearMessages(); editing = undefined;
+		const result = await onapply?.(wanted) ?? { ok: false as const, message: 'Editing services is not available.' };
+		if (result.ok) notice = 'Services updated.'; else canReload = Boolean(result.reload && onreload);
+		return result;
 	}
 	async function reload() {
 		busy = true;
@@ -84,33 +70,37 @@
 		busy = false;
 		clearMessages(); editing = undefined;
 	}
-	function openAdd() { clearMessages(); editing = undefined; pick = ''; adding = true; }
+	/** The top-right Edit price / Edit service buttons call this: scroll here, then open the right editor. */
+	export async function reveal(mode: 'price' | 'service') {
+		root?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+		if (mode === 'service') { await serviceDialog?.open(); return; }
+		const editable = lines.filter((line) => line.canEditPrice);
+		if (editable.length === 1) await startEdit(editable[0]);
+		else root?.querySelector<HTMLButtonElement>('button[data-edit-price]')?.focus();
+	}
+	const canEditServices = $derived((canAdd || canRemove) && Boolean(onapply));
 </script>
 
-<div class="editor">
+<div class="editor" bind:this={root}>
 	{#if lines.length}
 		<ul>{#each lines as line (line.code)}
 			<li>
 				<span class="line"><span>{line.label}</span>{#if line.price}<b>{line.price}</b>{/if}</span>
 				{#if line.parts?.length}<ul class="parts">{#each line.parts as part}<li class="line"><span>{part.label}</span>{#if part.price}<span>{part.price}</span>{/if}</li>{/each}</ul>{/if}
-				{#if confirming === line.code}
-						<span class="tools confirm" role="group" aria-label={'Remove ' + line.label + '?'}>
-							<span class="small">Remove {line.label}?</span>
-							<button type="button" class="btn sm ghost danger" disabled={busy} onclick={() => remove(line)}>Yes</button>
-							<button type="button" class="btn sm ghost" disabled={busy} onclick={() => confirming = undefined}>No</button>
-						</span>
-					{:else if editing !== line.code && (line.canEditPrice || (canRemove && lines.length > 1))}
-					<span class="tools">
-						{#if line.canEditPrice}<button type="button" class="btn sm ghost" disabled={busy} aria-label={'Edit price for ' + line.label} onclick={() => startEdit(line)}>Edit price</button>{/if}
-						{#if canRemove && lines.length > 1}<button type="button" class="btn sm ghost danger" disabled={busy} aria-label={'Remove ' + line.label} onclick={() => askRemove(line)}>Remove</button>{/if}
-					</span>
+				{#if line.canEditPrice && editing !== line.code}
+					<span class="tools"><button type="button" class="btn sm ghost" data-edit-price disabled={busy} aria-label={'Edit price for ' + line.label} onclick={() => startEdit(line)}>Edit price</button></span>
 				{/if}
 				{#if editing === line.code}
 					<form class="inline" onsubmit={(event) => savePrice(event, line)} aria-label={'Edit price for ' + line.label}>
-						<label>New price (₱)
-							<input bind:this={priceInput} bind:value={priceText} type="text" inputmode="numeric" autocomplete="off" disabled={busy} aria-invalid={fieldError ? 'true' : undefined} aria-describedby={fieldError ? id + '-error' : undefined} />
-						</label>
-						<label>Reason
+						<div class="two-boxes">
+							<label>Current price
+								<input type="text" value={typeof line.currentPesos === 'number' ? formatCentavos(line.currentPesos * 100) : line.price ?? ''} readonly tabindex="-1" aria-readonly="true" />
+							</label>
+							<label>Proposed new price (₱)
+								<input bind:this={priceInput} bind:value={priceText} type="text" inputmode="numeric" autocomplete="off" disabled={busy} aria-invalid={fieldError ? 'true' : undefined} aria-describedby={fieldError ? id + '-error' : undefined} />
+							</label>
+						</div>
+						<label>Reason <span class="muted">(staff only, the customer does not see it)</span>
 							<input bind:value={reasonText} type="text" maxlength="200" autocomplete="off" placeholder="For example: Extra corrosion found" disabled={busy} aria-invalid={fieldError ? 'true' : undefined} aria-describedby={fieldError ? id + '-error' : undefined} />
 						</label>
 						{#if fieldError}<p class="error small" id={id + '-error'} role="alert">{fieldError}</p>{/if}
@@ -122,31 +112,17 @@
 		{/each}</ul>
 	{:else}<p class="muted small">No services listed.</p>{/if}
 
-	{#if canAdd}
-		{#if adding}
-			<form class="inline" onsubmit={add} aria-label="Add service">
-				{#if addOptions.length}
-					<label>Service to add
-						<select bind:value={pick} disabled={busy} aria-invalid={addError ? 'true' : undefined} aria-describedby={addError ? id + '-add-error' : undefined}>
-							<option value="">Choose a service</option>
-							{#each addOptions as option (option.code)}<option value={option.code}>{option.label}{option.price ? ' · ' + option.price : ''}</option>{/each}
-						</select>
-					</label>
-				{:else}<p class="muted small">No other services are available for this visit.</p>{/if}
-				{#if addError}<p class="error small" id={id + '-add-error'} role="alert">{addError}</p>{/if}
-				{#if canReload && !editing}<div><button type="button" class="btn sm ghost" disabled={busy} onclick={reload}>Reload</button></div>{/if}
-				<div class="row">{#if addOptions.length}<button class="btn sm" disabled={busy}>{busy ? 'Adding…' : 'Add'}</button>{/if}<button type="button" class="btn sm ghost" disabled={busy} onclick={() => { adding = false; clearMessages(); }}>Cancel</button></div>
-			</form>
-		{:else}
-			<div><button type="button" class="btn sm ghost" disabled={busy} onclick={openAdd}>Add service</button></div>
-		{/if}
+	{#if canEditServices}
+		<div><button type="button" class="btn sm ghost" disabled={busy} onclick={() => serviceDialog?.open()}>Edit services</button></div>
+		<ServiceChangeDialog bind:this={serviceDialog} {lines} {addOptions} {canAdd} {canRemove} onapply={apply} />
 	{/if}
 
 	{#if issue}
 		<p class="error small" role="alert">{issue}</p>
-		{#if canReload && !adding}<div><button type="button" class="btn sm ghost" disabled={busy} onclick={reload}>Reload</button></div>{/if}
+		{#if canReload}<div><button type="button" class="btn sm ghost" disabled={busy} onclick={reload}>Reload</button></div>{/if}
 	{/if}
 	{#if notice}<p class="small ok" role="status">{notice}</p>{/if}
+	{#if canReload && !editing && !issue}<div><button type="button" class="btn sm ghost" disabled={busy} onclick={reload}>Reload</button></div>{/if}
 </div>
 
 <style>
@@ -157,10 +133,10 @@
 	li > .line { font-weight: 700; }
 	.parts { margin: .1rem 0 0 .6rem; padding-left: .8rem; border-left: 2px solid var(--line); color: var(--muted); font-size: .85rem; }
 	.tools { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
-	.confirm button { min-width: 2.75rem; }
+	.two-boxes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+	input[readonly] { background: var(--panel); color: var(--muted); border-style: dashed; }
 	.inline { display: grid; gap: .5rem; padding: .7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
 	.inline label { display: grid; gap: .25rem; font-size: .85rem; font-weight: 700; }
-	.danger { color: var(--bad); border-color: var(--bad-line); }
 	.ok { color: var(--ok); }
 	p { margin: 0; }
 	button { min-height: 2.75rem; }

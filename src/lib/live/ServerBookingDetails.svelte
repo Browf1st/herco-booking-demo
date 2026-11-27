@@ -24,7 +24,13 @@
 </script>
 
 <div class="stack">
-	<p class="row"><StatusBadge status={booking.status} /><span class="small muted">{booking.reference ?? booking.id}{booking.source === 'walk-in' ? ' · Walk-in' : ''}</span></p>
+	<div class="head">
+		<p class="visit"><span>Visit scheduled</span><b>{fmtDate(booking.visit_date)} · {booking.visit_hour === null ? 'Walk-in' : fmtSlot(booking.visit_hour + ':00')}</b></p>
+		<div class="status-box">
+			<p class="top"><StatusBadge status={booking.status} /><span class="ref">Ref: {booking.reference ?? booking.id}</span>{#if booking.source === 'walk-in'}<span class="walk">Walk-in</span>{/if}</p>
+			<dl class="stamps" aria-label="Dates in Philippine time"><div><dt>Booked</dt><dd>{stamp(booking.created_at)}</dd></div><div><dt>Approved</dt><dd>{stamp(booking.approved_at)}</dd></div><div><dt>Completed</dt><dd>{stamp(booking.completed_at)}</dd></div></dl>
+		</div>
+	</div>
 	<section class="stack" aria-label="Services">
 		<h4>Services</h4>
 		{#if editable && lines}
@@ -42,18 +48,12 @@
 		<p>{booking.customer_name}{#if phone} · <a href={'tel:' + phone}>{booking.customer_phone}</a>{/if}</p>
 		{#if booking.customer_email}<p><a href={'mailto:' + booking.customer_email}>{booking.customer_email}</a></p>{/if}
 	</section>
-	<section class="cols" aria-label="Dates in Philippine time">
-		<p><strong>Visit</strong><br />{fmtDate(booking.visit_date)} · {booking.visit_hour === null ? 'Walk-in' : fmtSlot(booking.visit_hour + ':00')}</p>
-		<p><strong>Booked on</strong><br />{stamp(booking.created_at)}</p>
-		<p><strong>Approved</strong><br />{stamp(booking.approved_at)}</p>
-		<p><strong>Completed</strong><br />{stamp(booking.completed_at)}</p>
-	</section>
 	{#if booking.approval_note || booking.private_completion_note || booking.shared_note || booking.shared_photos}
 		<section class="stack" aria-label="Notes">
 			<h4>Notes</h4>
-			{#if booking.approval_note}<p><strong>Private approval note</strong>: {booking.approval_note}</p>{/if}
-			{#if booking.private_completion_note}<p><strong>Private completion note</strong>: {booking.private_completion_note}</p>{/if}
-			{#if booking.shared_note}<p><strong>Note shared with customer</strong>: {booking.shared_note}</p>{/if}
+			{#if booking.approval_note}<p><strong>Private approval note</strong>{booking.approval_note}</p>{/if}
+			{#if booking.private_completion_note}<p><strong>Private completion note</strong>{booking.private_completion_note}</p>{/if}
+			{#if booking.shared_note}<p><strong>Note shared with customer</strong>{booking.shared_note}</p>{/if}
 			{#if booking.shared_photos}<p>{booking.shared_photos} completion photos explicitly shared with customer.</p>{/if}
 		</section>
 	{/if}
@@ -64,4 +64,16 @@
 	h4 { margin: 0; font-size: 1rem; }
 	p { margin: 0; }
 	ul { margin: 0; padding-left: 1.3rem; }
+	.head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+	.visit { display: grid; gap: .1rem; padding: .55rem .75rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); font-size: .9rem; }
+	.visit span { color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+	.status-box { display: grid; gap: .35rem; margin-inline-start: auto; justify-items: end; }
+	.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .5rem; }
+	.ref { padding: .1rem .55rem; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); font-size: .8rem; font-weight: 700; }
+	.walk { color: light-dark(#6b21a8, #d8b4fe); font-size: .8rem; font-weight: 700; }
+	section[aria-label="Notes"] strong { display: block; color: var(--muted); font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; }
+	.stamps { display: grid; gap: .1rem; margin: 0; color: var(--muted); font-size: .72rem; text-align: end; }
+	.stamps div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .3rem; }
+	.stamps dt::after { content: ':'; }
+	.stamps dd { margin: 0; }
 </style>

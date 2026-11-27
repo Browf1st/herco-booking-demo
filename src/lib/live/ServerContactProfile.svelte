@@ -61,7 +61,7 @@
 </script>
 
 <section class="card stack" aria-labelledby="profile-heading">
-	<h2 id="profile-heading">Profile</h2>
+	<h2 id="profile-heading"><ActionIcon name="user" /> Profile</h2>
 	{#if message}<p role="alert">{message}</p>{/if}
 	{#if notice}<p role="status">{notice}</p>{/if}
 	{#if ready}

@@ -3,7 +3,6 @@
 	import { resolve } from '$app/paths';
 	import { addDays, fmtDate, fmtSlot, today } from '../shared/dates';
 	import BookMenu from '../shared/BookMenu.svelte';
-	import DetailsSheet from '../shared/DetailsSheet.svelte';
 	import PageHeader from '../shared/PageHeader.svelte';
 	import Pager from '../shared/Pager.svelte';
 	import RecordFilterBar from '../shared/RecordFilterBar.svelte';
@@ -16,7 +15,6 @@
 	import { rangeIssue, servicesLine, statusLabels, type RecordFilters } from '../shared/records-ui';
 	import { manilaStamp, reportPrice, type ReportRow, type ReportSort } from '../shared/report-ui';
 	import { parseWorkspaceAccess, type WorkspaceAccess } from '../shared/workspace-navigation';
-	import ServerBookingDetails from './ServerBookingDetails.svelte';
 	import ServerStaffBookingCard from './ServerStaffBookingCard.svelte';
 	import type { StaffBooking } from './server-booking-types';
 	let { report = false }: { report?: boolean } = $props();
@@ -27,7 +25,6 @@
 	// The sort the staff member asked for. The server sorts all records; `result.sort` is the sort that really ran.
 	let sort = $state<ReportSort>('date');
 	let loading = $state(true); let issue = $state(''); let request = 0; let detail = $state<StaffBooking>();
-	let bookingName = $state<string>();
 	// Reports only: what this staff member may do (for the Book menu and the popup buttons). The server still checks every action.
 	let access = $state<WorkspaceAccess | null>(null);
 	const money = (cents?: number | null) => cents == null ? '—' : new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(cents / 100);
@@ -108,9 +105,6 @@
 						{#each result.records as booking (booking.id)}
 							<article class="card stack">
 								<ServerStaffBookingCard {booking} when={fmtDate(booking.visit_date, { month: 'short', day: 'numeric' }) + ', ' + visitTime(booking)} onDetails={() => detail = booking} />
-								{#if booking.customer_name?.trim()}
-									<div><button type="button" class="btn sm ghost" onclick={() => bookingName = booking.customer_name}>View same-name bookings</button></div>
-								{/if}
 							</article>
 						{/each}
 					</div>
@@ -123,15 +117,12 @@
 		<!-- Reports are read-only: booking actions and price/service edits live in the Bookings tab. -->
 		{#if popup && detail}<ReportDetails detail={popup} onclose={() => detail = undefined} changes={access ? changeList : undefined} />{/if}
 	{:else}
-		<DetailsSheet title={detail ? 'Details for ' + detail.customer_name : 'Booking details'} open={Boolean(detail)} onclose={() => detail = undefined}>{#if detail}<ServerBookingDetails booking={detail} actions={access?.actions} pages={access?.pages} onchanged={() => void load(page)} onreload={reloadDetail} />{/if}</DetailsSheet>
-		{#if bookingName}
-			{#await import('./BookingNameGroup.svelte')}
-				<p role="status">Loading booking group…</p>
-			{:then { default: BookingNameGroup }}
-				<BookingNameGroup surface="history" name={bookingName} onclose={() => bookingName = undefined} />
-			{:catch}
-				<p role="alert">Could not open the booking group. Reload to try again.</p>
-			{/await}
+		<!-- Same popup as the Bookings tab, with the price and service editors and the Changes list but no approve/cancel buttons.
+		     Until the staff member's grants load it is the read-only version; the server checks every edit anyway. -->
+		{#if detail}
+			{#if access}
+				{#await import('./ServerBookingPopup.svelte') then { default: Popup }}<Popup booking={detail} grants={access.actions} pages={access.pages} withActions={false} onclose={() => detail = undefined} onsaved={() => void load(page)} onreload={reloadDetail} />{/await}
+			{:else if popup}<ReportDetails detail={popup} onclose={() => detail = undefined} />{/if}
 		{/if}
 	{/if}
 </div>

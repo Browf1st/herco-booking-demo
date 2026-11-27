@@ -101,11 +101,11 @@
 		{#each requests as request (request.id)}
 			<article class="card stack">
 				<div class="row between"><p><strong>{request.customer_name}</strong> · {request.booking?.reference ?? request.booking_id} · {appointment(request.original_date, request.original_hour)}</p>{#if request.can_review}<button class="btn sm" onclick={() => { selected = request; reviewDialog?.showModal(); }}><ActionIcon name="edit" />Review {request.kind === 'cancel' ? 'cancellation' : 'reschedule'}</button>{/if}</div>
-				<p>Current visit · {appointment(request.original_date, request.original_hour)}</p>
+				<p class="fact"><span class="muted"><ActionIcon name="calendar" /> Current visit</span><b>{appointment(request.original_date, request.original_hour)}</b></p>
 				{#if request.target_date && request.target_hour !== null}
-					<p>Requested visit · {appointment(request.target_date, request.target_hour)}</p>
+					<p class="fact"><span class="muted"><ActionIcon name="clock" /> Requested visit</span><b>{appointment(request.target_date, request.target_hour)}</b></p>
 				{/if}
-				{#if request.reason}<p>Customer reason · {request.reason}</p>{/if}
+				{#if request.reason}<p class="fact"><span class="muted"><ActionIcon name="user" /> Customer reason</span><b>{request.reason}</b></p>{/if}
 				{#if request.booking}{@const booking = request.booking}<ServerStaffBookingCard {booking} when={fmtDate(booking.visit_date)} onDetails={() => detail = booking} />{/if}
 			</article>
 		{/each}
@@ -122,4 +122,4 @@
 	{#if notice}<p role="status">{notice}</p>{/if}
 </section>
 <dialog bind:this={reviewDialog} aria-label="Review booking request">{#if selected}<div class="stack"><h3>{selected.kind === 'cancel' ? 'Cancellation request' : 'Reschedule request'}</h3><p>Current visit: {appointment(selected.original_date, selected.original_hour)}</p>{#if selected.target_date && selected.target_hour !== null}<p>Requested visit: {appointment(selected.target_date, selected.target_hour)}</p>{/if}{#if selected.reason}<p>Reason: {selected.reason}</p>{/if}{#if error}<p role="alert">{error}</p>{/if}<div class="row"><button class="btn sm" disabled={busy} onclick={async () => { await review(selected!.id, 'approved'); if (!error) reviewDialog?.close(); }}>Approve {selected.kind === 'cancel' ? 'cancellation' : 'reschedule'}</button><button class="btn sm danger" disabled={busy} onclick={async () => { await review(selected!.id, 'declined'); if (!error) reviewDialog?.close(); }}>Decline request</button><button class="btn sm ghost" disabled={busy} onclick={() => reviewDialog?.close()}>Go back</button></div></div>{/if}</dialog>
-<style>dialog{width:min(560px,calc(100% - 24px));max-height:90dvh;padding:1rem;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text)}dialog::backdrop{background:#0009}</style>
+<style>.fact{display:flex;flex-wrap:wrap;gap:.2rem .75rem;margin:0;padding:.45rem .7rem;border-radius:8px;background:var(--panel-2)}.fact b{overflow-wrap:anywhere}dialog{width:min(560px,calc(100% - 24px));max-height:90dvh;padding:1rem;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text)}dialog::backdrop{background:#0009}</style>
