@@ -46,6 +46,23 @@ test('line price request: injection text is only data and still length limited',
 	assert.equal(parseLinePriceRequest({ ...ok, service: 'a'.repeat(101) + "'; --" }), null);
 });
 
+test('line price request: per-part prices become centavos and set the line total to their sum', () => {
+	const parts = [{ label: 'Powder Coating', pesos: 2999 }, { label: 'Matte to Glossy', pesos: 8999 }];
+	const parsed = parseLinePriceRequest({ ...ok, parts });
+	assert.deepEqual(parsed?.parts, [{ label: 'Powder Coating', price_centavos: 299900 }, { label: 'Matte to Glossy', price_centavos: 899900 }]);
+	assert.equal(parsed?.centavos, 299900 + 899900);
+	// A single-part line is allowed; pesos is ignored when parts is present.
+	assert.equal(parseLinePriceRequest({ ...ok, parts: [{ label: 'Base', pesos: 0 }] })?.centavos, 0);
+});
+
+test('line price request: bad parts are refused', () => {
+	for (const parts of [[], Array.from({ length: 21 }, () => ({ label: 'x', pesos: 1 })), 'parts', {},
+		[{ label: '', pesos: 1 }], [{ label: 'x', pesos: -1 }], [{ label: 'x', pesos: 1.5 }],
+		[{ label: 'x', pesos: 1_000_001 }], [{ label: 'x', pesos: '1' }], [{ pesos: 1 }], [{ label: 'x' }]]) {
+		assert.equal(parseLinePriceRequest({ ...ok, parts }), null, JSON.stringify(parts));
+	}
+});
+
 test('line price failures: each database error becomes the documented answer', () => {
 	assert.equal(linePriceFailure('42501').status, 403);
 	assert.equal(linePriceFailure('P0002').status, 404);

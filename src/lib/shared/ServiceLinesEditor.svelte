@@ -1,7 +1,8 @@
 <!-- Styles load together with this screen (not in the page's first stylesheet). -->
 <svelte:options css="injected" />
 <script module lang="ts">
-	export type EditableLine = { code: string; label: string; price?: string; /** The line's price in centavos (for the change summary). */ centavos?: number; currentPesos?: number; canEditPrice: boolean; parts?: { label: string; price?: string }[] };
+	export type EditablePart = { label: string; price?: string; /** The part's current price in whole pesos, when it is a whole peso (for prefilling the edit box). */ currentPesos?: number };
+	export type EditableLine = { code: string; label: string; price?: string; /** The line's price in centavos (for the change summary). */ centavos?: number; currentPesos?: number; canEditPrice: boolean; parts?: EditablePart[] };
 	export type AddOption = { code: string; label: string; price?: string; centavos?: number };
 	export type SaveResult = { ok: true } | { ok: false; message: string; reload?: boolean };
 </script>
@@ -10,22 +11,33 @@
 	// The service lines of one booking, with "Edit price" (current price beside the proposed one) and "Edit services" (a popup with a summary) for staff who may use them.
 	// It only draws the screen and checks what was typed. The live screen does the saving (onsaveprice, onapply).
 	import { tick } from 'svelte';
-	import { formatCentavos, parsePesos, parseReason } from './booking-changes';
+	import { parsePesos, parseReason } from './booking-changes';
 	import ServiceChangeDialog from './ServiceChangeDialog.svelte';
 
 	let { lines, canAdd = false, canRemove = false, addOptions = [], onsaveprice, onapply, onreload }: {
 		lines: EditableLine[]; canAdd?: boolean; canRemove?: boolean; addOptions?: AddOption[];
-		onsaveprice: (code: string, pesos: number, reason: string) => Promise<SaveResult>;
+		/** Saves the new per-part prices of one line (base plus each option, in order). A line with no options sends one part. */
+		onsaveprice: (code: string, parts: { label: string; pesos: number }[], reason: string) => Promise<SaveResult>;
 		/** Gets every service code wanted after the change. */
 		onapply?: (wanted: string[]) => Promise<SaveResult>; onreload?: () => Promise<void>;
 	} = $props();
 	const id = $props.id();
 	let editing = $state<string>();
-	let priceText = $state('');
+	// One editable box per part of the line being edited (base plus each option).
+	let editParts = $state<{ label: string; current?: number; pesos: string }[]>([]);
 	let reasonText = $state('');
 	let fieldError = $state('');
-	let priceInput = $state<HTMLInputElement>();
 	let root = $state<HTMLDivElement>();
+	const peso = (value: number) => '₱' + value.toLocaleString('en-PH');
+	// The line's parts, or a single "base" part when it has no options.
+	function partsOf(line: EditableLine) {
+		return line.parts?.length ? line.parts.map((part) => ({ label: part.label, current: part.currentPesos }))
+			: [{ label: line.label, current: line.currentPesos }];
+	}
+	// Live total of the boxes while editing; undefined until every box holds a valid whole-peso amount.
+	const parsedParts = $derived(editParts.map((part) => parsePesos(part.pesos)));
+	const newTotal = $derived(parsedParts.every((result) => result.ok)
+		? parsedParts.reduce((sum, result) => sum + (result.ok ? result.pesos : 0), 0) : undefined);
 	let serviceDialog = $state<{ open: () => Promise<void> }>();
 	let issue = $state('');
 	let canReload = $state(false);
@@ -35,9 +47,10 @@
 	function clearMessages() { fieldError = issue = notice = ''; canReload = false; }
 	async function startEdit(line: EditableLine) {
 		clearMessages();
-		editing = line.code; priceText = reasonText = '';
+		editing = line.code; reasonText = '';
+		editParts = partsOf(line).map((part) => ({ label: part.label, current: part.current, pesos: part.current != null ? String(part.current) : '' }));
 		await tick();
-		priceInput?.focus();
+		root?.querySelector<HTMLInputElement>('.parts-edit input')?.focus();
 	}
 	function failed(result: Extract<SaveResult, { ok: false }>) {
 		fieldError = result.message;
@@ -47,13 +60,16 @@
 		event.preventDefault();
 		if (busy) return;
 		clearMessages();
-		const price = parsePesos(priceText);
-		if (!price.ok) { fieldError = price.message; return; }
-		if (price.pesos === line.currentPesos) { fieldError = 'That is already the price.'; return; }
+		const parsed = editParts.map((part) => ({ label: part.label, result: parsePesos(part.pesos) }));
+		const invalid = parsed.find((part) => !part.result.ok);
+		if (invalid && !invalid.result.ok) { fieldError = invalid.result.message; return; }
+		const parts = parsed.map((part) => ({ label: part.label, pesos: part.result.ok ? part.result.pesos : 0 }));
+		// Nothing changed: every box still holds the current price.
+		if (editParts.every((part, index) => part.current != null && parts[index].pesos === part.current)) { fieldError = 'That is already the price.'; return; }
 		const reason = parseReason(reasonText);
 		if (!reason.ok) { fieldError = reason.message; return; }
 		busy = true;
-		const result = await onsaveprice(line.code, price.pesos, reason.reason);
+		const result = await onsaveprice(line.code, parts, reason.reason);
 		busy = false;
 		if (result.ok) { editing = undefined; notice = 'Price saved for ' + line.label + '.'; } else failed(result);
 	}
@@ -92,14 +108,14 @@
 				{/if}
 				{#if editing === line.code}
 					<form class="inline" onsubmit={(event) => savePrice(event, line)} aria-label={'Edit price for ' + line.label}>
-						<div class="two-boxes">
-							<label>Current price
-								<input type="text" value={typeof line.currentPesos === 'number' ? formatCentavos(line.currentPesos * 100) : line.price ?? ''} readonly tabindex="-1" aria-readonly="true" />
-							</label>
-							<label>Proposed new price (₱)
-								<input bind:this={priceInput} bind:value={priceText} type="text" inputmode="numeric" autocomplete="off" disabled={busy} aria-invalid={fieldError ? 'true' : undefined} aria-describedby={fieldError ? id + '-error' : undefined} />
-							</label>
+						<div class="parts-edit">
+							{#each editParts as part, index (index)}
+								<label>{part.label}{#if part.current != null} <span class="muted">now {peso(part.current)}</span>{/if}
+									<input bind:value={editParts[index].pesos} type="text" inputmode="numeric" autocomplete="off" disabled={busy} aria-invalid={fieldError ? 'true' : undefined} aria-describedby={fieldError ? id + '-error' : undefined} />
+								</label>
+							{/each}
 						</div>
+						<p class="total"><span>New total</span><b>{newTotal != null ? peso(newTotal) : '—'}</b></p>
 						<label>Reason <span class="muted">(staff only, the customer does not see it)</span>
 							<input bind:value={reasonText} type="text" maxlength="200" autocomplete="off" placeholder="For example: Extra corrosion found" disabled={busy} aria-invalid={fieldError ? 'true' : undefined} aria-describedby={fieldError ? id + '-error' : undefined} />
 						</label>
@@ -133,8 +149,9 @@
 	li > .line { font-weight: 700; }
 	.parts { margin: .1rem 0 0 .6rem; padding-left: .8rem; border-left: 2px solid var(--line); color: var(--muted); font-size: .85rem; }
 	.tools { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
-	.two-boxes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
-	input[readonly] { background: var(--panel); color: var(--muted); border-style: dashed; }
+	.parts-edit { display: grid; gap: .5rem; }
+	.parts-edit label .muted { font-weight: 400; }
+	.total { display: flex; justify-content: space-between; gap: .75rem; align-items: baseline; margin: 0; font-weight: 700; }
 	.inline { display: grid; gap: .5rem; padding: .7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
 	.inline label { display: grid; gap: .25rem; font-size: .85rem; font-weight: 700; }
 	.ok { color: var(--ok); }

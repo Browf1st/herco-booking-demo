@@ -36,7 +36,8 @@
 		centavos: showMoney && !line.quote_required && (line.max_centavos == null || line.max_centavos === line.price_centavos) ? line.price_centavos : undefined,
 		currentPesos: typeof line.price_centavos === 'number' && line.price_centavos % 100 === 0 ? line.price_centavos / 100 : undefined,
 		canEditPrice: rights.price && showMoney && expectedCentavos(line) !== undefined,
-		parts: showMoney ? line.details?.map((part) => ({ label: part.label, price: formatCentavos(part.price_centavos) })) : undefined
+		parts: showMoney ? line.details?.map((part) => ({ label: part.label, price: formatCentavos(part.price_centavos),
+			currentPesos: part.price_centavos % 100 === 0 ? part.price_centavos / 100 : undefined })) : undefined
 	})));
 	const addOptions = $derived<AddOption[]>(catalog
 		.filter((item) => !codes.includes(item.code) && item.appointment_days.includes(new Date(visitDate + 'T00:00:00Z').getUTCDay()))
@@ -80,10 +81,11 @@
 		} catch (problem) { loadIssue = problem instanceof Error ? problem.message : 'Could not load the services for editing.'; }
 	}
 
-	async function savePrice(code: string, pesos: number, reason: string): Promise<SaveResult> {
+	async function savePrice(code: string, parts: { label: string; pesos: number }[], reason: string): Promise<SaveResult> {
 		const expected = expectedCentavos(lines.find((line) => line.code === code) ?? {});
 		if (expected === undefined) return { ok: false, message: 'The current price is not available, so it cannot be changed.' };
-		const body = { booking: bookingId, service: code, expectedCentavos: expected, pesos, reason };
+		// A line with options sends every part; a plain line sends its single base part.
+		const body = { booking: bookingId, service: code, expectedCentavos: expected, parts, reason };
 		try {
 			const response = await fetch(resolve('/api/staff/line-price'), { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ ...body, requestId: requestId(body) }) });
 			if (!response.ok) return await failure(response);

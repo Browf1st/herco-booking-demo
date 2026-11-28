@@ -56,3 +56,8 @@ Customers earn HERCO Points and redeem them for rewards, and staff award points 
 - [x] Acceptance tests are written
 - [ ] No open questions left
 - [ ] **Owner approved:**
+
+## Revisions — main environment (2026-11-28)
+Owner-requested changes to the staff HERCO Points workspace.
+- **No 500-member cap.** The members list returns up to 5,000 verified members (migration `202611280005`, was `limit 500`), so the fan ranking can be paged or shown in full. The helper text now reads "Showing N verified members" and the `#` is just the fan's points rank (no "outside the top 500").
+- **"Show all" and right-aligned pagers.** The ranking has a "Show all / Show pages" toggle; the ranking and redemptions pagers are aligned to the right.

@@ -41,6 +41,12 @@ Every booking keeps its original services and prices, and every later change is 
 - [ ] Applied promotion name shows on old bookings after the promotion changes.
 - [ ] Post-completion correction changes reports by the difference only.
 
+## Pricing preservation reminder — 2026-11-27
+
+- Catalog/category/bike/colour/promotion changes apply prospectively to new work. Existing Pending, Booked, Completed and Cancelled transaction snapshots, saved line prices, discounts and report history must not be recalculated from the current catalog on read or migration.
+- Unchanged existing service lines retain their saved amounts. A deliberate permitted booking-specific price/service adjustment is a separate audited action with old/new values, never a silent catalog-driven rewrite. Preserve original and completion snapshots.
+- Acceptance: edit category/base/exception/promotion prices, then reopen old customer/staff details and reports; old amounts stay unchanged. A new booking uses the changed prices; a separately authorized transaction correction has its own audit history.
+
 ## Ready checklist (no code until all are ticked and the owner approves)
 - [x] Every user step is written out
 - [x] Rules, limits and permissions are decided
@@ -50,3 +56,6 @@ Every booking keeps its original services and prices, and every later change is 
 - [x] Acceptance tests are written
 - [ ] No open questions left
 - [ ] **Owner approved:**
+
+## Revisions — main environment (2026-11-28)
+- **Staff can open full details per booking from a customer's history.** In the Customers directory, each booking in a customer's history is clickable and opens the same "More details" popup as Reports, including the per-part price breakdown and the Changes timeline. Backed by `herco_staff_booking_detail` / `GET /api/staff/booking-detail`. Details in F-026.

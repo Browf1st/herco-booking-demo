@@ -90,3 +90,9 @@ As staff, I want a clean, mobile-friendly Bookings screen where each time slot l
 - [x] Acceptance tests are written
 - [x] No open questions left (Q-O, Q-P, Q-Q defaults approved 2026-11-26)
 - [x] **Owner approved:** 2026-11-26
+
+## Revisions — main environment (2026-11-28)
+Owner-requested changes after switching to the main environment.
+- **"Browse bookings by recorded name" removed.** The surface, its `BookingNameGroup` component and the `POST /api/staff/booking-name-groups` endpoint are deleted (different people can share a recorded name). A customer's past bookings are reached through the per-customer Customers directory only. The `herco_staff_booking_name_groups` RPC is left in place but is now unused.
+- **Customer booking history on the staff view is clickable.** Each booking in a customer's history (Customers directory) opens the same "More details" popup Reports uses. New `herco_staff_booking_detail(booking)` (migration `202611280003`) + `GET /api/staff/booking-detail`, gated to staff with Customers/Bookings/Booking history/Reports, amounts following the `viewIncome` rule. Test `tests/database/booking-detail-one.sql`. (See also F-004.)
+- **Per-part price editing.** The staff price editor now shows one editable box per part of a line — the base service plus each chosen option (e.g. Powder Coating ₱1,999 and Matte to Glossy ₱599) — with a **New total** that auto-sums. The edited line keeps a `details` breakdown of the new per-part prices; a line with no options stays a single box. New 7-argument `herco_staff_set_line_price(..., parts jsonb)` (migration `202611280004`); the original 6-argument flat-price function is untouched. The breakdown shows wherever booking details appear (Reports, Booking history, Customers popup, customer history). `POST /api/staff/line-price` accepts `parts` (or the old `pesos`). Test `tests/database/line-part-prices.sql`.

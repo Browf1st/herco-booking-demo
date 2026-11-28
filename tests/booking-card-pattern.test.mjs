@@ -143,21 +143,21 @@ test('staff popup puts Edit price and Edit service top right only when the grant
 	assert.match(popup, /onEditService=\{canEditLines && servicesEditable/);
 });
 
-test('price edit shows the current price beside the proposed one, and the reason stays staff-only', async () => {
+test('price edit shows one box per part with a live total, and the reason stays staff-only', async () => {
 	const editor = await read('src/lib/shared/ServiceLinesEditor.svelte');
-	assert.match(editor, /Current price[\s\S]*readonly/);
-	assert.match(editor, /Proposed new price/);
+	// Owner decision 2026-11-28: each part (base plus each option) is its own editable box; the total auto-sums.
+	assert.match(editor, /class="parts-edit"/);
+	assert.match(editor, /New total/);
+	assert.match(editor, /now \{peso\(part\.current\)\}/);
 	assert.match(editor, /staff only/);
 	const edits = await read('src/lib/live/ServerServiceEdits.svelte');
-	assert.match(edits, /expectedCentavos: expected, pesos, reason/);
+	assert.match(edits, /expectedCentavos: expected, parts, reason/);
 });
 
-test('the same-name bookings feature is gone from Booking history', async () => {
+test('the recorded-name bookings feature is removed everywhere', async () => {
 	const records = await read('src/lib/live/ServerStaffRecords.svelte');
 	assert.doesNotMatch(records, /same-name|BookingNameGroup|bookingName/);
-	const group = await read('src/lib/live/BookingNameGroup.svelte');
-	assert.doesNotMatch(group, /'history'/);
-	assert.match(await read('src/routes/customers/+page.svelte'), /<BookingNameGroup surface="customers"/);
+	assert.doesNotMatch(await read('src/routes/customers/+page.svelte'), /BookingNameGroup/);
 });
 
 test('the slot filter is one contained control with the shared chevron and one options style', async () => {

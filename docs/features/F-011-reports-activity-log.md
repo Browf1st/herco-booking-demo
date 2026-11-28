@@ -79,3 +79,8 @@ Owner's words: follow the mockup's layout "from Booking Reports down", not its t
 - [x] Acceptance tests are written
 - [ ] No open questions left
 - [ ] **Owner approved:**
+
+## Revisions — main environment (2026-11-28)
+Owner-requested changes after switching to the main environment. Implemented with migrations `202611280001` (reports) and `202611280002` (activity detail); tests `tests/database/reports-owner-only.sql` and `tests/database/activity-log-detail.sql`.
+- **Reports is owner-only.** `report_mode` now requires role `owner`/`superadmin` in addition to the `Reports` page grant (database-enforced, `403` otherwise). A non-owner can still open Booking history. The Reports nav link is hidden from non-owners.
+- **Activity log shows what changed.** Bookings rows no longer show a generic event kind. A line-price edit reads `"<service> price ₱1,999 → ₱2,999"`, a completed-price correction `"Completed price corrected ₱x → ₱y"`, an added service `"Added <service> (₱n)"`, a removed service `"Removed <service>"`, and status changes read `Booked / Approved / Completed / Cancelled / Rescheduled`. The reference is the booking's `HG-n` (was a raw uuid). Peso figures show only for an owner who also holds `viewIncome`.

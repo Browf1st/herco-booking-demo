@@ -3,6 +3,8 @@
 	import { resolve } from '$app/paths';
 	import ActionIcon from '#lib/shared/ActionIcon.svelte';
 	import PageHeader from '#lib/shared/PageHeader.svelte';
+	import { detailOf } from '#lib/live/booking-detail.ts';
+	import type { StaffBooking } from '#lib/live/server-booking-types.ts';
 	import { fmtDate, fmtSlot } from '#lib/shared/dates.ts';
 
 	type Status = 'pending' | 'confirmed' | 'done' | 'cancelled';
@@ -20,10 +22,31 @@
 	let directoryPage = $state(0);
 	let loading = $state(true);
 	let notice = $state('');
-	let showNameGroups = $state(false);
 	let histories = $state<Record<string, { state: 'loading' | 'ready' | 'failed'; page: number; data?: History; message?: string }>>({});
 	let directoryRequest: AbortController | undefined;
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+	// Tap a booking to open the same "More details" popup Reports uses.
+	let detail = $state<(StaffBooking & { canViewIncome?: boolean })>();
+	let detailLoading = $state('');
+	let detailError = $state('');
+	let detailRequest: AbortController | undefined;
+	const popup = $derived(detail ? detailOf(detail, Boolean(detail.canViewIncome)) : undefined);
+	async function openDetail(id: string) {
+		detailRequest?.abort();
+		detailRequest = new AbortController();
+		detailLoading = id; detailError = '';
+		try {
+			const response = await fetch(resolve('/api/staff/booking-detail') + '?' + new URLSearchParams({ booking: id }),
+				{ headers: { accept: 'application/json' }, signal: detailRequest.signal });
+			const data = await response.json();
+			if (!response.ok) throw new Error(data?.message ?? 'Booking details are unavailable.');
+			detail = data;
+		} catch (error) {
+			if (error instanceof DOMException && error.name === 'AbortError') return;
+			detailError = error instanceof Error ? error.message : 'Booking details are unavailable.';
+		} finally { if (detailLoading === id) detailLoading = ''; }
+	}
 
 	async function lookup<T>(operation: Lookup, signal?: AbortSignal): Promise<T> {
 		const response = await fetch(resolve('/api/staff/customers'), {
@@ -96,18 +119,6 @@
 <section class="section wrap stack customers-page">
 	<PageHeader title="Customers" subtitle="Find a customer and see their past visits." />
 
-		<details class="card" ontoggle={(event) => showNameGroups = event.currentTarget.open}>
-			<summary>Browse bookings by recorded name</summary>
-			{#if showNameGroups}
-				{#await import('#lib/live/BookingNameGroup.svelte')}
-					<p role="status">Loading booking groups…</p>
-				{:then { default: BookingNameGroup }}
-					<BookingNameGroup surface="customers" />
-				{:catch}
-					<p role="alert">Could not open booking groups. Reload to try again.</p>
-				{/await}
-			{/if}
-		</details>
 		<div class="card customer-total"><span class="muted small">Total accounts</span><b>{directory ? directory.total.toLocaleString('en-PH') : '—'}</b></div>
 		<label>Search customers<input type="search" bind:value={search} oninput={searchChanged} placeholder="Name, email, mobile number or account ID" maxlength="254" autocomplete="off" /></label>
 		{#if loading && !directory}
@@ -140,11 +151,12 @@
 								<div><button class="btn sm ghost" type="button" onclick={() => loadVisits(customer, history.page)}><ActionIcon name="reset" />Try again</button></div>
 							{:else if history.data}
 								{#each history.data.visits as visit (visit.id)}
-									<div class="ledger">
-										<div><span class="badge" data-status={visit.status === 'confirmed' ? 'booked' : visit.status}>{statusLabels[visit.status]}</span> <b>{visit.services.join(' · ') || 'Service'}</b><p class="muted small">{visit.bike} · {visit.reference}{visit.source === 'walk-in' ? ' · Walk-in' : ''}</p></div>
-										<span class="small">{fmtDate(visit.visit_date, { month: 'short', day: 'numeric', year: 'numeric' })}{visit.visit_hour === null ? '' : ' · ' + fmtSlot(visit.visit_hour + ':00')}</span>
-									</div>
+									<button type="button" class="ledger ledger-button" aria-label={'See details for booking ' + visit.reference} disabled={detailLoading === visit.id} onclick={() => openDetail(visit.id)}>
+										<span><span class="badge" data-status={visit.status === 'confirmed' ? 'booked' : visit.status}>{statusLabels[visit.status]}</span> <b>{visit.services.join(' · ') || 'Service'}</b><span class="muted small ledger-sub">{visit.bike} · {visit.reference}{visit.source === 'walk-in' ? ' · Walk-in' : ''}</span></span>
+										<span class="small ledger-when">{fmtDate(visit.visit_date, { month: 'short', day: 'numeric', year: 'numeric' })}{visit.visit_hour === null ? '' : ' · ' + fmtSlot(visit.visit_hour + ':00')}{detailLoading === visit.id ? ' · Opening…' : ''}<ActionIcon name="right" /></span>
+									</button>
 								{:else}<p class="muted">No linked bookings yet.</p>{/each}
+								{#if detailError}<p class="error small" role="alert">{detailError}</p>{/if}
 								{#if history.page > 1 || history.data.hasMore}
 									<nav class="row" aria-label="Booking history pagination">
 										<button type="button" class="btn sm ghost" disabled={history.page <= 1} onclick={() => loadVisits(customer, history.page - 1)}><ActionIcon name="left" />Previous</button>
@@ -171,7 +183,15 @@
 			{/if}
 		{/if}
 
+		{#if popup && detail}
+			{#await import('#lib/shared/ReportDetails.svelte') then { default: ReportDetails }}
+				<ReportDetails detail={popup} onclose={() => detail = undefined} changes={changeList} />
+			{/await}
+		{/if}
+
 </section>
+
+{#snippet changeList()}{#if detail}{#await import('#lib/live/ServerBookingChanges.svelte') then { default: Changes }}<Changes bookingId={detail.id} version={0} />{/await}{/if}{/snippet}
 
 <style>
 	.customers-page h3 { overflow-wrap: anywhere; }
@@ -185,5 +205,9 @@
 	.customer-details { background: var(--bg); border: 1px solid var(--line); padding: .7rem; border-radius: 4px; }
 	.customer-details p { margin: 0; }
 	.ledger { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-block: 12px; border-bottom: 1px solid var(--line); }
-	.ledger p { margin: .15rem 0 0; }
+	.ledger-button { width: 100%; text-align: start; background: none; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; color: inherit; font: inherit; padding-inline: 4px; min-height: 2.75rem; }
+	.ledger-button:hover { background: var(--panel-2); }
+	.ledger-button:disabled { opacity: .6; cursor: progress; }
+	.ledger-sub { display: block; margin-top: .15rem; }
+	.ledger-when { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
 </style>

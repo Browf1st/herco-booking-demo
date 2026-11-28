@@ -7,7 +7,10 @@ const budgets = {
 		directory: '.svelte-kit/cloudflare/client',
 		// Worker route limits retained when the separate static demo was retired.
 		javascript: { index: 60, book: 70, account: 60, 'my-bookings': 72, preview: 60, admin: 85, pricing: 65 },
-		styles: { index: 8, book: 9, account: 7, 'my-bookings': 8, preview: 7, admin: 12, pricing: 7 }
+		// my-bookings CSS raised 8 -> 9 KiB on 2026-11-28: the Customers booking details popup now reuses the shared
+		// ReportDetails/StatusBadge components, so Vite splits StatusBadge into its own shared chunk (~0.1 KiB) that
+		// my-bookings also loads. The page was sitting exactly at 8.0 KiB, so this tipped it over; still well under 9.
+		styles: { index: 8, book: 9, account: 7, 'my-bookings': 9, preview: 7, admin: 12, pricing: 7 }
 	}
 };
 

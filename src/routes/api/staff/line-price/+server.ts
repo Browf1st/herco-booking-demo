@@ -18,7 +18,8 @@ export const POST: RequestHandler = async event => {
 	if (!user) error(401, 'Sign in to change prices.');
 	const { data, error: failure } = await client.rpc('herco_staff_set_line_price', {
 		booking: input.booking, request_id: input.requestId, service_code: input.service,
-		expected_price_centavos: input.expectedCentavos, new_price_centavos: input.centavos, reason: input.reason
+		expected_price_centavos: input.expectedCentavos, new_price_centavos: input.centavos, reason: input.reason,
+		parts: input.parts ?? null
 	});
 	if (failure) {
 		const answer = linePriceFailure(failure.code);

@@ -25,7 +25,6 @@ const kitHook = registerHooks({
 	}
 });
 const { POST: manual } = await import('../src/routes/api/staff/manual-booking/+server.ts');
-const { POST: groups } = await import('../src/routes/api/staff/booking-name-groups/+server.ts');
 hooks.deregister();
 kitHook.deregister();
 
@@ -83,17 +82,4 @@ test('verified manual bookings keep the account-based database path', async () =
 	await manual(event);
 	assert.equal(event.calls[0][0], 'herco_create_staff_booking_configured');
 	assert.equal(event.calls[0][1].customer_email, 'mara@example.test');
-});
-
-test('staff name groups use the requested surface and protect the lookup', async () => {
-	const event = request({ surface: 'history', name: 'Mara  Villanueva', page: 2 });
-	assert.equal((await groups(event)).status, 200);
-	assert.deepEqual(event.calls, [[
-		'herco_staff_booking_name_groups',
-		{ p_surface: 'history', p_name: 'Mara  Villanueva', p_query: '', p_page: 2 }
-	]]);
-	await assert.rejects(() => groups(request({ surface: 'history', page: 1 })), { status: 400 });
-	await assert.rejects(() => groups(request({ surface: 'customers', page: 0 })), { status: 400 });
-	await assert.rejects(() => groups(request({ surface: 'customers', page: 1 }, { failure: { code: '42501' } })), { status: 403 });
-	await assert.rejects(() => groups(request({ surface: 'customers', page: 1 }, { origin: 'http://outside.test' })), { status: 403 });
 });

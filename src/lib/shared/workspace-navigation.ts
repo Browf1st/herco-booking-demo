@@ -30,6 +30,7 @@ export function parseWorkspaceAccess(value: unknown): WorkspaceAccess | null {
 
 export function workspaceLinks(access: WorkspaceAccess): WorkspaceLink[] {
 	const links = sections.filter(section => access.pages.includes(section.page) &&
+		(section.page !== 'Reports' || ['owner', 'superadmin'].includes(access.role)) &&
 		(section.page !== 'Staff Access' || (['owner', 'superadmin'].includes(access.role) && access.actions.includes('manageStaff'))))
 		.map(({ label, href }) => ({ label, href }));
 	if (access.pages.includes('Bookings') && access.actions.includes('createBooking')) {
