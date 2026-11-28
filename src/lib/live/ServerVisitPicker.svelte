@@ -17,7 +17,7 @@
 </script>
 <div class="visit-picker">
  <div class="stack"><AvailabilityCalendar selected={date} {allows} {statusFor} onmonth={month} onpick={selected=>{if(!disabled){date=selected;hour='';}}}/></div>
- <div class="stack"><div><strong class="times-title">Available times</strong><p class="small muted">Philippine time{hours?' · '+hours:''}</p></div>
+ <div class="stack"><div><strong class="times-title">Available times</strong>{#if hours}<p class="small muted">{hours}</p>{/if}</div>
  {#if loading}<p role="status">Loading available visits…</p>{:else if issue}<p role="alert">{issue}</p>{:else if times.length}<div class="time-grid" role="group" aria-label={'Available times for '+fmtDate(date)}>{#each times as time(time.visit_hour)}<button type="button" class="time" {disabled} aria-pressed={hour===String(time.visit_hour)} onclick={()=>hour=String(time.visit_hour)}><ActionIcon name="clock"/>{fmtSlot(time.visit_hour+':00')}</button>{/each}</div>{:else if date&&info?.closed}<p class="error">Closed on this date. Please pick another day.</p>{:else if date}<p class="error">No times are available. Choose another date.</p>{:else}<p class="small muted">Choose a date to see available times.</p>{/if}
  </div>
 </div>

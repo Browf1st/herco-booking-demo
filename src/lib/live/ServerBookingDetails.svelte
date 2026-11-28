@@ -28,7 +28,7 @@
 		<p class="visit"><span>Visit scheduled</span><b>{fmtDate(booking.visit_date)} · {booking.visit_hour === null ? 'Walk-in' : fmtSlot(booking.visit_hour + ':00')}</b></p>
 		<div class="status-box">
 			<p class="top"><StatusBadge status={booking.status} /><span class="ref">Ref: {booking.reference ?? booking.id}</span>{#if booking.source === 'walk-in'}<span class="walk">Walk-in</span>{/if}</p>
-			<dl class="stamps" aria-label="Dates in Philippine time"><div><dt>Booked</dt><dd>{stamp(booking.created_at)}</dd></div><div><dt>Approved</dt><dd>{stamp(booking.approved_at)}</dd></div><div><dt>Completed</dt><dd>{stamp(booking.completed_at)}</dd></div></dl>
+			<dl class="stamps" aria-label="Dates"><div><dt>Booked</dt><dd>{stamp(booking.created_at)}</dd></div><div><dt>Approved</dt><dd>{stamp(booking.approved_at)}</dd></div><div><dt>Completed</dt><dd>{stamp(booking.completed_at)}</dd></div></dl>
 		</div>
 	</div>
 	<section class="stack" aria-label="Services">

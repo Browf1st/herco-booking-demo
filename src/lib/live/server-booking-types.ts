@@ -16,7 +16,9 @@ export type StaffBookingPermissions = { can_confirm?: boolean; can_cancel?: bool
 
 // One booking as the customer's own list returns it (GET /api/bookings). Never carries staff-only fields.
 export type CustomerService = { code: string; label: string; price_centavos: number; max_centavos?: number | null; quote_required?: boolean;
-	promotion?: { label: string; base_price_centavos: number } | null };
+	promotion?: { label: string; base_price_centavos: number } | null;
+	/** The priced breakdown of this line (e.g. the ceramic base plus each add-on). Absent on older bookings. */
+	details?: CustomerService[] };
 export type CustomerBooking = {
 	id: string; reference_no: number; approved_at: string | null; completed_at: string | null; cancelled_at: string | null;
 	visit_date: string; visit_hour: number | null; bike: string; status: 'pending' | 'confirmed' | 'done' | 'cancelled';

@@ -6,7 +6,7 @@
  import { menuItems, type MenuItem } from './booking-menu';
  import type { CustomerBooking as Booking, CustomerChangeRequest as Change } from './server-booking-types';
  import { resolve } from '$app/paths';
- import { replaceState } from '$app/navigation';
+ import { goto, replaceState } from '$app/navigation';
  import { fmtDate, fmtSlot, today } from '#lib/shared/dates.ts';
  import ServerCustomerChangeForm from '#lib/live/ServerCustomerChangeForm.svelte';
 
@@ -134,19 +134,22 @@
  function cardFacts(booking: Booking, services: Booking['original_services']): CardFact[] {
   const count = services.length;
   return [
-   { icon: 'clock', label: 'Time', value: (booking.visit_hour === null ? 'Walk-in' : fmtSlot(booking.visit_hour + ':00')) + ' · Philippine time' },
+   { icon: 'clock', label: 'Time', value: booking.visit_hour === null ? 'Walk-in' : fmtSlot(booking.visit_hour + ':00') },
    { icon: 'finish', label: 'Bike', value: booking.bike || 'Not provided' },
    { icon: 'menu', label: 'Services', value: count + (count === 1 ? ' service' : ' services') },
-   { icon: 'box', label: 'Reference', value: booking.reference_no ? 'HG-' + booking.reference_no : 'Pending' },
-   { icon: 'adjust', label: 'Estimate', value: displayEstimate(services, booking.current_total_centavos ?? booking.original_total_centavos) }
+   { icon: 'adjust', label: 'Price', value: displayEstimate(services, booking.current_total_centavos ?? booking.original_total_centavos) }
   ];
  }
 
  function pick(booking: Booking, item: MenuItem, pending?: Change) {
-  if (item === 'details') viewingId = booking.id;
+  if (item === 'edit-service') void goto(resolve('/book') + '?edit=' + encodeURIComponent(booking.id));
+  else if (item === 'view-service') editing = { id: booking.id, shopPriced: !!booking.shop_priced };
   else if (item === 'withdraw') { if (pending && confirm('Withdraw this request? Your booking stays as it is.')) void withdraw(pending); }
   else void openRequest(booking.id, item);
  }
+ // The booking whose read-only service view (View service) is open. Editing happens on /book?edit=.
+ let editing = $state<{ id: string; shopPriced: boolean }>();
+ function openModal(node: HTMLDialogElement) { node.showModal(); }
 
  function upcoming(booking: Booking) {
   if (booking.visit_hour === null) return booking.visit_date === today();
@@ -201,13 +204,14 @@
    {@const services = booking.current_services ?? booking.original_services}
    {@const updated = bookingWasUpdated({ originalTotal: booking.original_total_centavos, currentTotal: booking.current_total_centavos, originalCodes: booking.original_services.map(service => service.code), currentCodes: booking.current_services?.map(service => service.code) })}
    {@const facts = cardFacts(booking, services)}
+   {@const items = menuItems({ status: booking.status, visitHour: booking.visit_hour, future: upcoming(booking), requestsReady: changeStatus === 'ready', hasOpenRequest: !!pending, shopPriced: booking.shop_priced })}
    <article class="card stack booking-article" data-status={booking.status} class:just-submitted={booking.id === submittedId}>
-    <BookingCard when={fmtDate(booking.visit_date)} status={booking.status} {facts} services={services.map(service => service.code)} detailsButton={false} onDetails={() => viewingId = booking.id}>
+    <BookingCard when={fmtDate(booking.visit_date)} status={booking.status} {facts} services={services.map(service => service.code)} actionsTop onDetails={() => viewingId = booking.id}>
      {#snippet actions()}
-      <BookingActionsMenu id={booking.id} busy={!!withdrawing} items={menuItems({ status: booking.status, visitHour: booking.visit_hour, future: upcoming(booking), requestsReady: changeStatus === 'ready', hasOpenRequest: !!pending })} onpick={item => pick(booking, item, pending)} />
+      {#if items.length}<BookingActionsMenu id={booking.id} busy={!!withdrawing} {items} onpick={item => pick(booking, item, pending)} />{/if}
      {/snippet}
     </BookingCard>
-    {#if updated}<p class="small updated-note">Updated by the shop after inspection</p>{/if}
+    {#if updated && booking.shop_priced}<p class="small updated-note">Updated by the shop after inspection</p>{/if}
     {#if booking.visit_hour === null && (booking.status === 'pending' || booking.status === 'confirmed')}<p class="small muted">Ask the shop if you need to change or cancel this walk-in.</p>{/if}
     {#if pending}
      <p class="small request-warning">{pending.kind === 'cancel' ? 'Cancellation' : 'Reschedule'} request pending{pending.kind === 'reschedule' && pending.target_date && pending.target_hour !== null ? ' (to ' + fmtDate(pending.target_date) + ' at ' + fmtSlot(pending.target_hour + ':00') + ')' : ''}. Your current slot stays booked. Use Actions to withdraw it.</p>
@@ -232,6 +236,13 @@
  {/await}
 {/if}
 <dialog bind:this={requestDialog} aria-label="Request a booking change">{#if activeForm}{#key activeForm.id+activeForm.kind}<ServerCustomerChangeForm bookingId={activeForm.id} kind={activeForm.kind} onSaved={changeSaved} onClose={()=>{requestDialog?.close();activeForm=undefined;}}/>{/key}{/if}</dialog>
+{#if editing}
+ {@const ed = editing}
+ <dialog class="service-dialog" use:openModal onclose={() => editing = undefined} onclick={(event) => { if (event.target === event.currentTarget) editing = undefined; }}>
+  <header><h3>View service</h3><button type="button" class="close" aria-label="Close" onclick={() => editing = undefined}>×</button></header>
+  <div class="svc-body">{#await import('./BookingServiceEditor.svelte') then { default: Editor }}<Editor bookingId={ed.id} fromStaff={false} shopPriced={ed.shopPriced} readOnly embedded />{/await}</div>
+ </dialog>
+{/if}
 <style>
  /* Owner asked for smaller type here (2026-11-20). */
  h1 { font-size: clamp(2rem, 5vw, 2.5rem); line-height: 1.05; }
@@ -249,4 +260,12 @@
  .submitted-notice { padding: .75rem 1rem; border: 1px solid var(--accent); border-radius: 8px; }
  .just-submitted { outline: 2px solid var(--accent); outline-offset: 2px; }
  dialog{width:min(570px,calc(100% - 24px));max-height:90dvh;padding:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text)}dialog::backdrop{background:#0009}
+ .service-dialog { width: min(46rem, calc(100% - 24px)); overflow: hidden; display: flex; flex-direction: column; }
+ .service-dialog header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .9rem 1.1rem; background: light-dark(#1b2230, #0d1218); color: #fff; }
+ .service-dialog h3 { margin: 0; font-size: 1.2rem; }
+ .service-dialog .close { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; flex: none; padding: 0; border: 1px solid #ffffff44; border-radius: 8px; background: #ffffff1a; color: #fff; font: 400 1.6rem/1 var(--body); cursor: pointer; }
+ .service-dialog .close:hover { background: #ffffff2e; }
+ .service-dialog .close:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+ .svc-body { padding: 1rem 1.1rem 1.1rem; overflow-y: auto; }
+ @media (max-width: 640px) { .service-dialog { width: 100%; margin: auto 0 0; border-radius: 16px 16px 0 0; } }
 </style>

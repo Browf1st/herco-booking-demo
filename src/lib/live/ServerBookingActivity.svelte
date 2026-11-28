@@ -44,7 +44,7 @@
 		<ol>
 			{#each events as item (item.id)}
 				<li>
-					<strong>{labels[item.kind] ?? 'Booking updated'}</strong> · {time.format(new Date(item.created_at))} Philippine time
+					<strong>{labels[item.kind] ?? 'Booking updated'}</strong> · {time.format(new Date(item.created_at))}
 					{#if item.kind === 'walk_in_intake_requested'}
 						<div><a href={resolve('/walk-in-intake') + '?booking=' + encodeURIComponent(bookingId)}>View walk-in form</a></div>
 					{/if}

@@ -33,9 +33,12 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const phone = guest ? body.phone ?? '' : body.phone;
-	if ((guest ? body.walkIn !== undefined && body.walkIn !== false : body.action !== 'book' || typeof body.customerId !== 'string' || !idPattern.test(body.customerId)) ||
+	// Guests may leave the email empty; a given email must look complete.
+	const guestEmail = guest ? body.email ?? '' : '';
+	const guestEmailOk = typeof guestEmail === 'string' && (!guestEmail.trim() || (guestEmail.trim().length <= 254 && emailPattern.test(guestEmail.trim())));
+	if ((guest ? (body.walkIn !== undefined && typeof body.walkIn !== 'boolean') || !guestEmailOk : body.action !== 'book' || typeof body.customerId !== 'string' || !idPattern.test(body.customerId)) ||
 		typeof body.requestId !== 'string' || !idPattern.test(body.requestId) ||
-		typeof body.date !== 'string' || !datePattern.test(body.date) ||
+		(guest && body.walkIn === true && (body.date === undefined || body.date === null) ? false : typeof body.date !== 'string' || !datePattern.test(body.date)) ||
 		(body.walkIn === true ? body.hour !== null : !isVisitHour(body.hour)) ||
 		!Array.isArray(body.services) || !body.services.length || body.services.length > 20 ||
 		body.services.some((service: unknown) => typeof service !== 'string' || !service || service.length > 64) ||
@@ -48,12 +51,14 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const booking = {
-		request_id: body.requestId, visit_date: body.date, visit_hour: body.hour, service_codes: body.services,
+		request_id: body.requestId, visit_date: body.date ?? null, visit_hour: body.hour, service_codes: body.services,
 		bike: body.bike, customer_name: body.name, customer_phone: phone, plate_number: body.plate,
 		options: body.coating ?? {}, expected_price_fingerprint: body.priceFingerprint ?? null
 	};
 	const { data, error: failure } = guest
-		? await client.rpc('herco_create_staff_guest_booking', booking)
+		? await client.rpc('herco_create_staff_guest_booking', {
+			...booking, walk_in: body.walkIn === true, customer_email: guestEmailOk ? guestEmail.trim() : ''
+		})
 		: await client.rpc('herco_create_staff_booking_configured', {
 			...booking, customer: body.customerId, customer_email: body.email, walk_in: body.walkIn === true
 		});

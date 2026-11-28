@@ -49,6 +49,12 @@ The "Access preview" shown after **Preview access** on a staff account is plain 
 - [ ] Owner cannot grant permissions they lack or edit another Owner.
 - [ ] Non-staff cannot get workspace permissions (verified on hosted project).
 
+## Proof and protected-route reminder — 2026-11-27
+
+- F-009 proof is authorized staff/Admin/Owner only; role labels do not replace page/action and evidence-read checks. Customers, logged-out users, disabled staff and staff without access cannot retrieve proof or privileged workspace data by direct route/API/storage request.
+- Recheck verified session, enabled membership, grants and booking scope on every request, including after revocation. Define read-only proof grants for Reports/Customers without granting uploads or completion. Customer shared-photo behavior must be reconciled with the new staff-only rule before release.
+- Keep approved password-based staff policy; this documentation does not add mandatory MFA or grant new access.
+
 ## Ready checklist (no code until all are ticked and the owner approves)
 - [x] Every user step is written out
 - [ ] Rules, limits and permissions are decided

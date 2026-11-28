@@ -6,7 +6,8 @@
 	import { trackShopEvent } from './analytics';
 	import { canEnhance } from '../shared/coating';
 	import { wheels } from '../shared/bookingCatalog';
-	import { coatingSnapshot, type CoatingDraft } from './booking-coating';
+	import { coatingSnapshot, type CoatingDraft, type CoatingOptions } from './booking-coating';
+	import { prefillBike, prefillSelection } from './booking-prefill';
 	import ActionIcon from '../shared/ActionIcon.svelte';
  import ServerBookingCatalog from './ServerBookingCatalog.svelte';
  import ServerVisitPicker from './ServerVisitPicker.svelte';
@@ -31,8 +32,18 @@
 	type Intake = { version: string; title: string; body: string; method: 'typed_name'; date: string };
 	type EstimateLine = PricedService & { code: string; label: string; promotion?: { label: string } | null };
 	type Estimate = { lines: EstimateLine[]; totalCentavos: number; fingerprint: string };
-	let { walkIn = false, manualCustomer, manualGuest = false }: { walkIn?: boolean; manualCustomer?: { id: string; email: string }; manualGuest?: boolean } = $props();
+	type EditLine = { code: string };
+	type EditDetails = { revision: number; date: string; canEdit: boolean; bike: string; options?: CoatingOptions; current: EditLine[];
+		contact?: { name?: string; phone?: string; plate?: string } };
+	// editBookingId turns this screen into "edit my pending booking": the same form, prefilled, without the date step.
+	let { walkIn = false, manualCustomer, manualGuest = false, editBookingId = '' }: { walkIn?: boolean; manualCustomer?: { id: string; email: string }; manualGuest?: boolean; editBookingId?: string } = $props();
 	const staffBooking = $derived(Boolean(manualCustomer) || manualGuest);
+	// A guest walk-in has no HERCO account, so there is no digital intake to sign.
+	const guestWalkIn = $derived(manualGuest && walkIn);
+	const editMode = $derived(Boolean(editBookingId) && !staffBooking && !walkIn);
+	let editDetails = $state<EditDetails>();
+	// Set when the booking can't be saved (shop priced it, someone changed it, not pending). The form is replaced by this message.
+	let editBlocked = $state<{ message: string; reload: boolean }>();
 
 	let services = $state<Service[]>([]);
 	let slots = $state<Slot[]>([]);
@@ -160,10 +171,32 @@
 		return response.json();
 	}
 
+	/** Fills every field of the form from the saved booking. */
+	async function loadEditing() {
+		const response = await fetch(resolve('/api/booking-services') + '?' + new URLSearchParams({ booking: editBookingId }));
+		const result = await response.json().catch(() => null);
+		if (!response.ok || !result) throw new Error(typeof result?.message === 'string' ? result.message : 'Could not load your booking.');
+		editDetails = result;
+		if (!result.canEdit) {
+			editBlocked = { message: 'This booking can no longer be edited here. Only pending bookings the shop has not re-priced can be changed.', reload: false };
+			return;
+		}
+		const codes: string[] = result.current.map((line: EditLine) => line.code);
+		catalogSelection = prefillSelection(result.options, codes, catalogConfig);
+		additionalCodes = codes.filter(code => code !== 'ceramic' && code !== 'wheel-colour');
+		({ unit, custom, powderBike } = prefillBike(result.bike, catalogSelection.ceramic, result.options));
+		modelYear = result.options?.ui_catalog?.model_year;
+		notes = result.options?.ui_catalog?.notes ?? '';
+		name = result.contact?.name ?? '';
+		phone = result.contact?.phone ?? '';
+		plate = result.contact?.plate ?? '';
+	}
+
 	async function load() {
 		loading = true;
 		signedOut = false;
 		loadError = '';
+		editBlocked = undefined;
 		try {
 			const session = await fetch(resolve('/api/auth/session'));
 			if (session.status === 401) {
@@ -174,8 +207,8 @@
 
 			const [catalog, freshSlots, approvedForm, richCatalog] = await Promise.all([
 				fetch(resolve('/api/catalog')),
-				walkIn ? Promise.resolve([]) : availability(),
-				walkIn ? fetchIntake() : Promise.resolve(null),
+				walkIn || editMode ? Promise.resolve([]) : availability(),
+				walkIn && !guestWalkIn ? fetchIntake() : Promise.resolve(null),
  fetch(resolve('/api/booking-catalog'))
 			]);
 			if (!catalog.ok) throw new Error('Could not load services. Try again.');
@@ -183,6 +216,7 @@
 			services = await catalog.json();
  if(!richCatalog.ok)throw new Error('Could not load the service catalog. Try again.');
  catalogConfig=(await richCatalog.json()).config;
+ if(editMode){await loadEditing();return;}
  const service=page.url.searchParams.get('service');
  if(service==='ceramic')catalogSelection.ceramic=true;
  if(service==='wheel-colour'){catalogSelection.powder=true;catalogSelection.powderParts=['Wheels / mags'];}
@@ -217,19 +251,21 @@
 
 	function submit(event:SubmitEvent){event.preventDefault();submitError='';if(!currentEstimate)return;submitError=contactError(name,phone,phoneRequired);if(submitError)return;reviewDialog?.showModal();}
  async function confirmBooking() {
-		if (submitting || !selected.length || (walkIn ? !intake || (!manualCustomer&&!acknowledged) : !visitDate || !visitHour)) return;
+		if (editMode) return saveEdit();
+		if (submitting || !selected.length || (guestWalkIn ? false : walkIn ? !intake || (!manualCustomer&&!acknowledged) : !visitDate || !visitHour)) return;
 		const estimate = currentEstimate;
 		if (!estimate) return;
 		submitting = true;
 		submitError = '';
 		try {
 			const payload = {
-				...(walkIn && intake ? { date: intake.date, formVersion: intake.version, signerName: signerName.trim(), acknowledged,...(manualCustomer?{hour:null}:{}) }
+				...(guestWalkIn ? { hour: null }
+					: walkIn && intake ? { date: intake.date, formVersion: intake.version, signerName: signerName.trim(), acknowledged,...(manualCustomer?{hour:null}:{}) }
 					: { date: visitDate, hour: Number(visitHour) }),
 				services: [...selected].sort(),
 				bike: bike.trim(), name: name.trim(), phone: phone.trim(), plate: plate.trim(),
 				coating: configured,
-				...(manualGuest ? { action: 'book_guest' } : manualCustomer
+				...(manualGuest ? { action: 'book_guest', email: email.trim(), walkIn } : manualCustomer
 					? { action: 'book', customerId: manualCustomer.id, email: manualCustomer.email, walkIn }
 					: {})
 			};
@@ -282,13 +318,51 @@
 		}
 	}
 
+	/** Saves the edited booking (same request id on a retry, so a double click can't save twice). */
+	async function saveEdit() {
+		const estimate = currentEstimate;
+		if (submitting || !estimate || !editDetails || !selected.length) return;
+		submitting = true;
+		submitError = '';
+		try {
+			const payload = { bookingId: editBookingId, revision: editDetails.revision, bike: bike.trim(), name: name.trim(), phone: phone.trim(),
+				plate: plate.trim(), services: [...selected].sort(), coating: configured };
+			const fingerprint = JSON.stringify(payload);
+			const requestId = attempts.get(fingerprint) ?? crypto.randomUUID();
+			attempts.set(fingerprint, requestId);
+			const response = await fetch(resolve('/api/bookings/edit'), {
+				method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
+				body: JSON.stringify({ ...payload, requestId, priceFingerprint: estimate.fingerprint })
+			});
+			if (response.ok) {
+				reviewDialog?.close();
+				await goto(resolve('/my-bookings'));
+				return;
+			}
+			if (response.status === 401) signedOut = true;
+			const failure = await response.json().catch(() => null);
+			const message = typeof failure?.message === 'string' ? failure.message : 'Could not save your changes. Try again with the same details.';
+			if (response.status === 409 && failure?.code === 'price_changed') {
+				previewRevision += 1;
+				submitError = message;
+			} else if (response.status === 409) {
+				reviewDialog?.close();
+				editBlocked = { message, reload: failure?.code !== 'shop_priced' };
+			} else submitError = message;
+		} catch {
+			submitError = 'Could not save your changes. Retry with the same details or check My bookings.';
+		} finally {
+			submitting = false;
+		}
+	}
+
 	onMount(() => { void load(); });
 </script>
-<svelte:head><title>{staffBooking?'Manual booking':walkIn?'Walk-in intake':'Book a visit'} | HERCO</title></svelte:head>
+<svelte:head><title>{staffBooking?'Manual booking':walkIn?'Walk-in intake':editMode?'Edit booking':'Book a visit'} | HERCO</title></svelte:head>
 <section class="section wrap stack booking">
-<h1>{booked?'Booking submitted':walkIn?'Walk-in intake':'Book a visit'}</h1>
-{#if loading}<p role="status">Loading booking options…</p>{:else if signedOut}<p>Sign in to submit a booking and view it on any device.</p><div><a class="btn" href={resolve('/account')}><ActionIcon name="login" />Sign in</a></div>{:else if loadError}<p role="alert">{loadError}</p><div><button class="btn ghost" onclick={load}><ActionIcon name="reset" />Try again</button></div>{:else if booked}<p class="eyebrow">{manualGuest ? booked.reference ?? booked.id : booked.id}</p><p>The shop will review your request.</p><div class="card stack"><p><strong>{serviceLabel(catalogSelection)}</strong> · {bike}{modelYear?' · Model year '+modelYear:''}</p><p>{walkIn?'Walk-in today':fmtDate(visitDate)+' at '+fmtSlot(visitHour+':00')} · Philippine time</p><p>Estimated service price <strong>{currentEstimate?displayEstimate(currentEstimate.lines,currentEstimate.totalCentavos):prices.format(booked.totalCentavos/100)}</strong></p></div><div>{#if staffBooking}<a class="btn" href={resolve(walkIn?'/walk-in-intake':'/admin')+(walkIn?'?booking='+booked.id:'')}>{walkIn?'Open customer intake':'Back to bookings'}</a>{:else}<a class="btn" href={resolve('/my-bookings')}><ActionIcon name="calendar" />View my bookings</a>{/if}</div>{:else if walkIn&&!intake}<p>Walk-in booking is unavailable while the shop sets up its intake form.</p>{:else if !visibleServices.length}<p>Booking is unavailable while the shop enables its services.</p>{:else}
-{#if !manualGuest}<label class="booking-source">Booking source<select value={walkIn?'walk-in':'online'} onchange={event=>{if(manualCustomer){walkIn=event.currentTarget.value==='walk-in';void load();}else void goto(resolve(event.currentTarget.value==='walk-in'?'/walk-in':'/book'));}}><option value="online">Online</option><option value="walk-in">Walk-in</option></select></label>{/if}
+<h1>{booked?'Booking submitted':walkIn?'Walk-in intake':editMode?'Edit booking':'Book a visit'}</h1>
+{#if loading}<p role="status">Loading booking options…</p>{:else if signedOut}<p>Sign in to submit a booking and view it on any device.</p><div><a class="btn" href={resolve('/account')}><ActionIcon name="login" />Sign in</a></div>{:else if loadError}<p role="alert">{loadError}</p><div><button class="btn ghost" onclick={load}><ActionIcon name="reset" />Try again</button></div>{:else if booked}<p class="eyebrow">{manualGuest ? booked.reference ?? booked.id : booked.id}</p><p>The shop will review your request.</p><div class="card stack"><p><strong>{serviceLabel(catalogSelection)}</strong> · {bike}{modelYear?' · Model year '+modelYear:''}</p><p>{walkIn?'Walk-in today':fmtDate(visitDate)+' at '+fmtSlot(visitHour+':00')}</p><p>Estimated service price <strong>{currentEstimate?displayEstimate(currentEstimate.lines,currentEstimate.totalCentavos):prices.format(booked.totalCentavos/100)}</strong></p></div><div>{#if staffBooking}<a class="btn" href={resolve(walkIn?'/walk-in-intake':'/admin')+(walkIn?'?booking='+booked.id:'')}>{walkIn?'Open customer intake':'Back to bookings'}</a>{:else}<a class="btn" href={resolve('/my-bookings')}><ActionIcon name="calendar" />View my bookings</a>{/if}</div>{:else if walkIn&&!guestWalkIn&&!intake}<p>Walk-in booking is unavailable while the shop sets up its intake form.</p>{:else if !visibleServices.length}<p>Booking is unavailable while the shop enables its services.</p>{:else if editBlocked}<p role="alert">{editBlocked.message}</p><div class="row">{#if editBlocked.reload}<button class="btn ghost" onclick={load}><ActionIcon name="reset" />Reload booking</button>{/if}<a class="btn" href={resolve('/my-bookings')}><ActionIcon name="calendar" />Back to my bookings</a></div>{:else}
+{#if !manualGuest&&!editMode}<label class="booking-source">Booking source<select value={walkIn?'walk-in':'online'} onchange={event=>{if(manualCustomer){walkIn=event.currentTarget.value==='walk-in';void load();}else void goto(resolve(event.currentTarget.value==='walk-in'?'/walk-in':'/book'));}}><option value="online">Online</option><option value="walk-in">Walk-in</option></select></label>{/if}
   <form class="booking-layout" onsubmit={submit}>
    <div class="stack booking-steps">
    <fieldset class="card stack booking-panel">
@@ -359,7 +433,9 @@
     <div class="cols">
      <label>Full name <input bind:value={name} autocomplete="name" placeholder="e.g. Jamie Reyes" maxlength="70" required /></label>
      <label>Mobile number{phoneRequired ? '' : ' (optional)'} <input type="tel" bind:value={phone} autocomplete="tel" placeholder="e.g. 0917 000 0000" maxlength="20" required={phoneRequired} /></label>
-     {#if !manualGuest}<label>
+     {#if manualGuest}<label>Email (optional)
+      <input type="email" bind:value={email} autocomplete="email" placeholder="e.g. jamie@example.com" maxlength="254" />
+     </label>{:else}<label>
       <span>Email <span class:required-label={!walkIn}>{walkIn ? '(optional)' : '(required)'}</span></span>
       <input type="email" bind:value={email} readonly autocomplete="email" placeholder="e.g. jamie@example.com" maxlength="254" required={!walkIn} aria-describedby={walkIn ? undefined : 'booking-email-help'} />
       {#if !walkIn}<span id="booking-email-help" class="small muted email-help">Used for booking reminders.</span>{/if}
@@ -367,11 +443,19 @@
      <label>Plate number (optional) <input bind:value={plate} placeholder="e.g. ABC 1234" maxlength="20" /></label>
     </div>
    </fieldset>
+   {#if editMode}
+   <fieldset class="card stack booking-panel">
+    <legend><span>4</span> Visit date</legend>
+    <p><strong>{editDetails ? fmtDate(editDetails.date) : ''}</strong></p>
+    <p class="small muted">To change the date, use Reschedule from My bookings.</p>
+   </fieldset>
+   {:else}
    <fieldset class="card stack booking-panel">
     <legend><span>4</span> Preferred date and time</legend>
-    
+
     {#if !walkIn || false}<ServerVisitPicker bind:date={visitDate} bind:hour={visitHour} days={allowedDays} disabled={submitting} />{/if}
-    {#if walkIn && manualCustomer}<p>The customer must sign in to their own account and sign the intake before the shop can confirm this walk-in.</p>{:else if walkIn && intake}<p class="small muted">{intake.title} · {intake.version}</p><p class="intake-text">{intake.body}</p><label class="check"><input type="checkbox" bind:checked={acknowledged} required/>I read and agree to the form above.</label><label>Customer signature (type full name)<input bind:value={signerName} required/></label>{/if}   </fieldset>
+    {#if guestWalkIn}<p class="small muted">Walk-in today. No intake form is needed for a customer without an account.</p>{:else if walkIn && manualCustomer}<p>The customer must sign in to their own account and sign the intake before the shop can confirm this walk-in.</p>{:else if walkIn && intake}<p class="small muted">{intake.title} · {intake.version}</p><p class="intake-text">{intake.body}</p><label class="check"><input type="checkbox" bind:checked={acknowledged} required/>I read and agree to the form above.</label><label>Customer signature (type full name)<input bind:value={signerName} required/></label>{/if}   </fieldset>
+   {/if}
    {/if}
    {/if}
    </div>
@@ -379,6 +463,7 @@
     <div class="stack" aria-live="polite">
      <h2 class="cart-title">Booking cart</h2>
      {#if bike}<div class="cart-line"><span>Motorcycle</span><strong>{bike}</strong></div>{/if}
+     {#if editMode && editDetails}<div class="cart-line"><span>Visit date</span><strong>{fmtDate(editDetails.date)}</strong></div>{/if}
      {#if visitDate && visitHour}<div class="cart-line"><span>Preferred visit</span><strong>{fmtDate(visitDate)} · {fmtSlot(visitHour+':00')}</strong></div>{/if}
      {#each cartLines as line (line.label)}
       <div class="cart-line"><span>{line.label}</span><strong>{displayServicePrice(line)}</strong></div>
@@ -392,43 +477,77 @@
      {/if}
     </div>
     {#if submitError}<p class="submitError" role="alert">{submitError}</p>{/if}
-    <button class="btn" disabled={submitting || !currentEstimate || !bike || (walkIn ? !manualCustomer&&(!acknowledged || !signerName.trim()) : !visitHour)}><ActionIcon name={walkIn ? "save" : "send"} />{walkIn ? 'Save walk-in intake' : 'Submit booking'}</button>
+    <button class="btn" disabled={submitting || !currentEstimate || !bike || (editMode ? false : walkIn ? !manualCustomer&&!guestWalkIn&&(!acknowledged || !signerName.trim()) : !visitHour)}><ActionIcon name={walkIn || editMode ? "save" : "send"} />{editMode ? 'Save changes' : walkIn ? 'Save walk-in intake' : 'Submit booking'}</button>
    </aside>
   </form>
 {/if}</section>
 <dialog bind:this={reviewDialog} aria-labelledby="review-title" class="booking-review">
- <div class="stack">
-  <h2 id="review-title">Review booking</h2>
-  <dl class="review-facts">
-   <div><dt>Booking source</dt><dd>{walkIn ? 'Walk-in' : 'Online'}</dd></div>
-   <div><dt>Appointment · Philippine time</dt><dd>{visitDate ? fmtDate(visitDate, {month:'long', day:'numeric', year:'numeric'}) : ''} · {visitHour ? fmtSlot(slotFromHour(visitHour)) : ''}</dd></div>
-   <div><dt>Customer</dt><dd>{name.trim()}</dd></div>
-   <div><dt>Mobile</dt><dd>{phone.trim() || 'Not provided'}</dd></div>
-   {#if !manualGuest}<div><dt>Email</dt><dd>{email.trim() || 'Not provided'}</dd></div>{/if}
-   <div><dt>Motorcycle</dt><dd>{bike}{isPcx && modelYear ? ' · ' + modelYear : ''}</dd></div>
-   <div><dt>Plate number</dt><dd>{plate.trim() || 'Not provided'}</dd></div>
-   {#if walkIn}<div><dt>Intake signed by</dt><dd>{signerName.trim()}</dd></div>{/if}
-   <div class="review-notes"><dt>Notes for the shop</dt><dd>{notes.trim() || 'None'}</dd></div>
-  </dl>
-  <section class="stack" aria-label="Services and estimated prices">
-   <h3>Services and estimate</h3>
-   <p>{serviceLabel(catalogSelection)}{catalogSelection.powder && catalogSelection.finish ? ' · ' + catalogSelection.finish : ''}</p>
+ <div class="stack review-body">
+  <header class="review-head">
+   <p class="review-eyebrow">Please confirm</p>
+   <h2 id="review-title">Review booking</h2>
+   <p class="review-sub">Check the details below, then confirm to {editMode ? 'save your changes' : 'send your request to the shop'}.</p>
+  </header>
+
+  <section class="review-group" aria-label="Appointment">
+   <h3 class="review-group-title">Appointment</h3>
+   <dl class="review-facts">
+    {#if !editMode}<div><dt>Booking source</dt><dd>{walkIn ? 'Walk-in' : 'Online'}</dd></div>{/if}
+    <div><dt>Date and time</dt><dd>{editMode ? (editDetails ? fmtDate(editDetails.date, {month:'long', day:'numeric', year:'numeric'}) + ' (unchanged)' : '—') : walkIn ? 'Walk-in today' : (visitDate ? fmtDate(visitDate, {month:'long', day:'numeric', year:'numeric'}) : '—') + (visitHour ? ' · ' + fmtSlot(slotFromHour(visitHour)) : '')}</dd></div>
+   </dl>
+  </section>
+
+  <section class="review-group" aria-label="Customer">
+   <h3 class="review-group-title">Customer</h3>
+   <dl class="review-facts">
+    <div><dt>Name</dt><dd>{name.trim()}</dd></div>
+    <div><dt>Mobile</dt><dd>{phone.trim() || 'Not provided'}</dd></div>
+    <div><dt>Email</dt><dd>{email.trim() || 'Not provided'}</dd></div>
+    {#if walkIn && !guestWalkIn}<div><dt>Intake signed by</dt><dd>{signerName.trim()}</dd></div>{/if}
+   </dl>
+  </section>
+
+  <section class="review-group" aria-label="Motorcycle">
+   <h3 class="review-group-title">Motorcycle</h3>
+   <dl class="review-facts">
+    <div><dt>Motorcycle</dt><dd>{bike}{isPcx && modelYear ? ' · ' + modelYear : ''}</dd></div>
+    <div><dt>Plate number</dt><dd>{plate.trim() || 'Not provided'}</dd></div>
+    <div class="review-notes"><dt>Notes for the shop</dt><dd>{notes.trim() || 'None'}</dd></div>
+   </dl>
+  </section>
+
+  <section class="review-group review-services" aria-label="Services and estimated prices">
+   <h3 class="review-group-title">Services and estimate</h3>
+   <p class="review-service-type">{serviceLabel(catalogSelection)}{catalogSelection.powder && catalogSelection.finish ? ' · ' + catalogSelection.finish : ''}</p>
    {#each cartLines as line}<div class="cart-line"><span>{line.label}</span><strong>{displayServicePrice(line)}</strong></div>{/each}
    {#if 0}<div class="cart-line"><span>Promo savings</span><strong>{money(0)}</strong></div>{/if}
    <div class="cart-line cart-total"><span>Estimated total</span><strong>{currentEstimate?displayEstimate(currentEstimate.lines,currentEstimate.totalCentavos):'Shop quote'}</strong></div>
+   <p class="review-estimate-note small muted">Your estimate may change after an in-shop inspection. The shop will confirm any changes before starting work.</p>
   </section>
+
   {#if submitError}<p class="error" role="alert">{submitError}</p>{/if}
-  <div class="row"><button type="button" class="btn sm ghost" onclick={() => reviewDialog?.close()}>Back to edit</button><button type="button" class="btn sm" disabled={submitting} onclick={confirmBooking}><ActionIcon name="check" />Confirm and submit</button></div>
+  <div class="row review-actions"><button type="button" class="btn sm ghost" onclick={() => reviewDialog?.close()}>Back to edit</button><button type="button" class="btn sm" disabled={submitting} onclick={confirmBooking}><ActionIcon name="check" />{editMode ? 'Confirm and save' : 'Confirm and submit'}</button></div>
  </div>
 </dialog>
 <style>
- .booking-review { width: min(680px, calc(100% - 24px)); max-height: 88dvh; padding: clamp(16px, 4vw, 28px); border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); }
+ .booking-review { width: min(680px, calc(100% - 24px)); max-height: 88dvh; padding: clamp(16px, 4vw, 28px); border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--text); }
  .booking-review::backdrop { background: #0009; }
- .booking-review h2 { font-size: 2rem; }
- .review-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: .7rem; margin: 0; }
- .review-facts dt { color: var(--muted); font-size: .8rem; }
- .review-facts dd { margin: 0; overflow-wrap: anywhere; }
+ .review-body { gap: 16px; }
+ .review-head { display: grid; gap: .25rem; padding-bottom: 14px; border-bottom: 2px solid var(--accent); }
+ .review-eyebrow { margin: 0; color: var(--accent); font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+ .booking-review h2 { font-size: clamp(1.6rem, 5vw, 2rem); font-family: var(--body); font-weight: 900; font-style: italic; letter-spacing: -.03em; }
+ .review-sub { margin: 0; color: var(--muted); font-size: .9rem; }
+ .review-group { display: grid; gap: .6rem; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+ .review-group-title { margin: 0; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+ .review-services { border-top: 3px solid var(--accent); }
+ .review-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: .7rem 1.1rem; margin: 0; }
+ .review-facts > div { display: grid; gap: .15rem; align-content: start; }
+ .review-facts dt { color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+ .review-facts dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
  .review-notes { grid-column: 1 / -1; white-space: pre-wrap; }
+ .review-service-type { margin: 0; font-weight: 750; }
+ .review-estimate-note { margin: .2rem 0 0; }
+ .review-actions { justify-content: flex-end; }
  .booking { max-width: 1280px; background: var(--bg); color: var(--text); }
 
  .booking-source { max-width: 18rem; }

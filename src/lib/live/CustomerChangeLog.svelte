@@ -27,19 +27,19 @@
 	onMount(() => { void load(); });
 </script>
 
-<section aria-label="Change log">
-	<h4>Change log</h4>
+<section aria-label="Booking activity">
+	<h4>Booking activity</h4>
 	{#if failed}
-		<p role="alert" class="small">Could not load the change log.</p>
+		<p role="alert" class="small">Could not load booking activity.</p>
 		<div><button type="button" class="btn sm ghost" onclick={load}>Try again</button></div>
 	{:else if !lines}
-		<p role="status" class="small muted">Loading the change log…</p>
+		<p role="status" class="small muted">Loading booking activity…</p>
 	{:else if !lines.length}
-		<p class="small muted">No changes yet. Price and service changes will show here.</p>
+		<p class="small muted">No activity yet. Booking, price and service changes will show here.</p>
 	{:else}
 		<ol>
 			{#each shown ?? [] as line (line.key)}
-				<li><span class="text">{line.text}</span><span class="meta small muted"><b class:shop={line.actor === 'Shop'}>{line.actor}</b> · {line.when} Philippine time</span></li>
+				<li><span class="text">{line.text}</span><span class="meta small muted"><b class:shop={line.actor === 'Shop'}>{line.actor}</b> · {line.when}</span></li>
 			{/each}
 		</ol>
 		{#if lines.length > preview}

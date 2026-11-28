@@ -57,12 +57,13 @@ test('a staff guest booking accepts a name with no phone or account', async () =
 	assert.equal(rpc, 'herco_create_staff_guest_booking');
 	assert.equal(booking.customer_name, payload.name);
 	assert.equal(booking.customer_phone, '');
-	assert.equal('customer_email' in booking, false);
+	assert.equal(booking.customer_email, '');
+	assert.equal(booking.walk_in, false);
 	assert.equal('customer' in booking, false);
 });
 
 test('guest booking validates blank names, phones, slots, walk-ins and permission failures', async () => {
-	for (const change of [{ name: '   ' }, { name: 'a'.repeat(121) }, { phone: 12 }, { phone: 'abc' }, { hour: -1 }, { walkIn: true }]) {
+	for (const change of [{ name: '   ' }, { name: 'a'.repeat(121) }, { phone: 12 }, { phone: 'abc' }, { hour: -1 }, { walkIn: true }, { walkIn: 'yes' }, { email: 'not-an-email' }, { email: 5 }, { email: 'a@b.test'.padStart(256, 'x') }]) {
 		const event = request({ ...payload, ...change });
 		await assert.rejects(() => manual(event), { status: 400 });
 		assert.equal(event.calls.length, 0);
@@ -72,6 +73,23 @@ test('guest booking validates blank names, phones, slots, walk-ins and permissio
 	const priceChange = await manual(request(payload, { failure: { code: 'P0409' } }));
 	assert.equal(priceChange.status, 409);
 	assert.equal((await priceChange.json()).code, 'price_changed');
+});
+
+test('a guest walk-in sends no hour and an optional trimmed email', async () => {
+	const event = request({ ...payload, hour: null, walkIn: true, email: '  mara@example.test ' });
+	assert.equal((await manual(event)).status, 200);
+	const [[, booking]] = event.calls;
+	assert.equal(booking.visit_hour, null);
+	assert.equal(booking.walk_in, true);
+	assert.equal(booking.customer_email, 'mara@example.test');
+	const { date, ...noDate } = payload;
+	const undated = request({ ...noDate, hour: null, walkIn: true });
+	assert.equal((await manual(undated)).status, 200);
+	assert.equal(undated.calls[0][1].visit_date, null);
+	await assert.rejects(() => manual(request(noDate)), { status: 400 });
+	const blank = request({ ...payload, hour: null, walkIn: true, email: '' });
+	assert.equal((await manual(blank)).status, 200);
+	assert.equal(blank.calls[0][1].customer_email, '');
 });
 
 test('verified manual bookings keep the account-based database path', async () => {

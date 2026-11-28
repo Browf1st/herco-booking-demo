@@ -90,6 +90,25 @@ As shop staff, I want to change powder prices, add new colours with photos, add 
 ## Open questions for the owner
 - None blocking. (Q-C migrate+drop, Q-D public bucket, Q-E/Q-05 powder prices confirmed, Q-F any pricing-grant staff — all resolved 2026-11-26.)
 
+## Owner clarification — unnamed Special photos (2026-11-26)
+
+- Owner confirmed unnamed photos from MAGS POWDER COAT may default to **Special**, labelled **Color 1, Color 2, …**, with staff renaming/re-tagging later through the colour-entry manager. Do not block seeding on identifying the exact finish name or invent a manufacturer colour name.
+- The local review pack assigns 32 formerly unclassified image files to Special / Color 1–32. These are provisional photo entries, not a claim of 32 distinct verified finishes. One MOV remains a separate reference, not a colour-photo entry. Named Basic/Luminous/Prismatic and Custom references retain their categories.
+- Keep per-category IDs stable even if display names change; Special Color 1 and the unnamed Prismatic chart swatch Color 1 are distinct entries. Preserve source-to-copy mappings. Unsupported HEIC/DNG previews need proper web-image conversion during F-021 asset preparation; original-present is distinct from missing-photo. No hosted upload or pricing/config change is performed by organizing the local preview.
+
+## Owner clarification — image display and Prismatic swatches (2026-11-26)
+
+- HEIC/HEIF source photos must appear in the booking/colour preview via browser-compatible converted display copies; an existing source photo must not remain a missing-photo placeholder just because its original format is unsupported. Preserve originals and strip metadata from web assets. Apply the same conversion to any selected DNG reference.
+- Extract the seven individual Prismatic samples directly from the supplied chart rather than showing only the whole chart or marking individual samples missing: **Prism Blue, Prism Purple, Prism Teal, Prism Green, Prism Deep Violet, Prism Pink, Prism Bronze**. Owner confirmed the previously unnamed pink sample is **Prism Pink**; it is not Color 1. Retain the original chart as a reference, not an additional selectable finish. Preserve the source colours; no generative replacement of the samples.
+
+## Cross-feature release reminders — 2026-11-27
+
+- Pricing-specific: catalog/base/exception/promotion edits affect new work only; preserve existing transaction amounts and history. Public swatch uploads are not private booking proof. Protect pricing writes, bound uploads/requests and verify unchanged old booking totals.
+- Shared requirement: finished-product proof can be saved while Booked before Complete and viewed only by authorized staff/Admin/Owner (F-009/F-012/F-026); no customer proof access. API/data design must reconcile the existing optional customer photo-sharing path.
+- Before release, verify request-abuse controls, protected Admin/Owner/data access and performance (F-016), database plus linked-photo backups/recovery (F-015), independent incident email to **elijahpayoc12@gmail.com** (F-027), and preserved historical transaction prices (F-004/F-021). Each feature verifies its affected paths; provider wiring belongs to the coordinating specs rather than seven duplicate implementations.
+- One production application environment. Local fictional verification and disposable isolated recovery checks do not imply standing staging resources. These reminders record requirements, not completed security/performance audits or deployed protection.
+- Open release decisions remain visible: proof retention and post-save edit/delete policy; evidence grant/API design; numeric API quotas/provider/budget; backup schedule/retention/destination/recovery targets; monitoring thresholds/provider. Previously Ready feature scope is not silently declared fully designed for these new extensions.
+
 ## Ready checklist (no code until all are ticked and the owner approves)
 - [x] Every user step is written out
 - [x] Rules, limits and permissions are decided

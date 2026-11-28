@@ -89,7 +89,7 @@
 					<p>{info.lines.find(line => line.code === correction.service_code)?.label ?? correction.service_code} ·
 						{correction.previous_centavos == null ? 'Unquoted' : money.format(correction.previous_centavos / 100)} →
 						{money.format(correction.corrected_centavos / 100)} · {correction.reason} ·
-						{stamp.format(new Date(correction.recorded_at))} Philippine time</p>
+						{stamp.format(new Date(correction.recorded_at))}</p>
 				{/each}
 			</section>
 		{/if}

@@ -14,10 +14,12 @@
 	import StatusBadge from './StatusBadge.svelte';
 	import type { RecordStatus } from './records-ui';
 
-	let { when, status, name, facts = [], services, onDetails, detailsButton = true, actions }: {
+	let { when, status, name, facts = [], services, onDetails, detailsButton = true, actionsTop = false, actions }: {
 		when: string; status: RecordStatus; name?: string; facts?: CardFact[];
 		/** Service codes or labels, used for the Ceramic / Powder tag. */
-		services?: readonly string[]; onDetails: () => void; detailsButton?: boolean; actions?: Snippet;
+		services?: readonly string[]; onDetails: () => void; detailsButton?: boolean;
+		/** Put the Actions menu on the top row (beside the status) instead of the bottom bar. */
+		actionsTop?: boolean; actions?: Snippet;
 	} = $props();
 	let opener = $state<HTMLButtonElement>();
 
@@ -31,7 +33,13 @@
 <div class="booking-card">
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (The Details button, or the Actions menu, is the keyboard way in.) -->
 	<div class="face" onclick={openFromCard}>
-		<div class="top"><strong class="when">{when}</strong><StatusBadge {status} /></div>
+		<div class="top"><strong class="when">{when}</strong>
+			<div class="top-end">
+				<StatusBadge {status} />
+				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (The menu's own button is the control; this only stops the card from opening.) -->
+				{#if actionsTop && actions}<div class="top-actions" onclick={(event) => event.stopPropagation()}>{@render actions()}</div>{/if}
+			</div>
+		</div>
 		{#if name}<strong class="who">{name}</strong>{/if}
 		{#if facts.length}
 			<dl class="facts">{#each facts as fact (fact.label)}
@@ -41,7 +49,7 @@
 		{#if services}<ServiceTypeTag {services} />{/if}
 	</div>
 	<div class="bar">
-		<div class="actions">{@render actions?.()}</div>
+		{#if !actionsTop}<div class="actions">{@render actions?.()}</div>{/if}
 		{#if detailsButton}<button type="button" class="details-button" bind:this={opener} aria-label={'Details for ' + (name ?? when)} onclick={onDetails}>Details</button>{/if}
 	</div>
 </div>
@@ -50,6 +58,8 @@
 	.booking-card { display: grid; gap: .55rem; min-width: 0; }
 	.face { display: grid; gap: .35rem; min-width: 0; cursor: pointer; }
 	.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; }
+	.top-end { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .5rem; }
+	.top-actions { display: flex; align-items: center; }
 	.when { font-size: 1.1rem; }
 	.who { font-size: 1rem; overflow-wrap: anywhere; }
 	.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: .4rem; margin: 0; }

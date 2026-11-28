@@ -38,7 +38,7 @@
 <dialog bind:this={dialog} aria-labelledby="more-details-title" onclose={onclose} onclick={(event) => { if (event.target === dialog) dialog?.close(); }}>
 	<header>
 		<div><p class="eyebrow">{customer ? 'Booking details' : 'More details'}</p><h3 id="more-details-title">{customer ? 'Your booking' : 'Details for ' + detail.name}</h3></div>
-		<button type="button" class="close" onclick={() => dialog?.close()}>Close</button>
+		<button type="button" class="close" aria-label="Close" onclick={() => dialog?.close()}>×</button>
 	</header>
 	<div class="body">
 		<div class="head">
@@ -51,7 +51,7 @@
 						{#if onEditService}<button type="button" class="edit" onclick={onEditService}><ActionIcon name="adjust" />Edit service</button>{/if}
 					</div>
 				{/if}
-				<dl class="stamps" aria-label="Dates in Philippine time">
+				<dl class="stamps" aria-label="Dates">
 					<div><dt>Booked</dt><dd>{detail.booked}</dd></div><div><dt>Approved</dt><dd>{detail.approved}</dd></div><div><dt>Completed</dt><dd>{detail.completed}</dd></div>
 				</dl>
 			</div>
@@ -90,7 +90,9 @@
 	header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .9rem 1.1rem; background: light-dark(#1b2230, #0d1218); color: #fff; }
 	.eyebrow { color: #fda4af; font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 	h3 { font-size: 1.25rem; overflow-wrap: anywhere; }
-	.close { min-height: 2.75rem; padding: 0 1rem; border: 1px solid #ffffff44; border-radius: 8px; background: #ffffff1a; color: #fff; font: 700 .85rem var(--body); cursor: pointer; }
+	.close { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; padding: 0; border: 1px solid #ffffff44; border-radius: 8px; background: #ffffff1a; color: #fff; font: 400 1.6rem/1 var(--body); cursor: pointer; }
+	.close:hover { background: #ffffff2e; }
+	.close:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 	.body { display: grid; gap: .85rem; padding: 1rem 1.1rem 1.1rem; overflow-y: auto; overflow-wrap: anywhere; }
 	.head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: .75rem; }
 	.visit { display: grid; gap: .1rem; padding: .55rem .75rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); font-size: .9rem; }
