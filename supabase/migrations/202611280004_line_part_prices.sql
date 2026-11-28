@@ -22,7 +22,8 @@ declare
   quote_line boolean;
   has_details boolean;
   parts_total bigint;
-  new_total bigint;
+  new_total bigint;      -- the edited line's new total (sum of its parts, or the flat price)
+  booking_total bigint;  -- the whole booking's new total (sum of every current line)
   note text := btrim(coalesce(reason, ''));
 begin
   perform herco_private.require_price_adjustment();
@@ -107,8 +108,10 @@ begin
 
   select jsonb_agg(case when item->>'code' = service_code then new_line else item end order by pos)
     into revised from jsonb_array_elements(lines) with ordinality as l(item, pos);
+  -- The booking total is the sum of EVERY current line, not just the edited one.
+  select coalesce(sum((item->>'price_centavos')::bigint), 0) into booking_total from jsonb_array_elements(revised) item;
 
-  update public.herco_bookings set current_services = revised, current_total_centavos = new_total,
+  update public.herco_bookings set current_services = revised, current_total_centavos = booking_total,
     service_revision = b.service_revision + 1 where id = b.id;
   insert into herco_private.booking_price_edits (booking_id, revision, actor_id, request_id, service_code, service_label,
     previous_centavos, new_centavos, reason, previous_line)
@@ -116,7 +119,7 @@ begin
       case when quote_line then null else old_price end, new_total, note, line);
   insert into public.herco_booking_events (booking_id, actor_id, kind, to_status)
     values (b.id, auth.uid(), 'booking_line_price_changed', b.status);
-  return jsonb_build_object('revision', b.service_revision + 1, 'status', b.status, 'lines', revised, 'totalCentavos', new_total);
+  return jsonb_build_object('revision', b.service_revision + 1, 'status', b.status, 'lines', revised, 'totalCentavos', booking_total);
 end;
 $$;
 revoke all on function public.herco_staff_set_line_price(uuid, uuid, text, bigint, bigint, text, jsonb) from public, anon, authenticated;
