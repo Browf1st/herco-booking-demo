@@ -28,7 +28,9 @@ select set_config('test.aal','aal2',true);
 do $$
 declare rows jsonb;
 begin
-  select coalesce(jsonb_agg(to_jsonb(a)),'[]') into rows from public.herco_staff_activity(current_date,current_date) a where a.area='Bookings';
+  -- Window spans current_date-1..current_date+1 so the now() fixtures fall inside it whatever time (UTC) CI runs;
+  -- the function reads the range in Asia/Manila, so a single-day current_date window can exclude a fresh now().
+  select coalesce(jsonb_agg(to_jsonb(a)),'[]') into rows from public.herco_staff_activity(current_date-1,current_date+1) a where a.area='Bookings';
   if not exists (select 1 from jsonb_array_elements(rows) r
     where r->>'action' = 'Powder Coating price ₱1,999 → ₱2,999' and r->>'reference' like 'HG-%') then
     raise exception 'Price-change detail missing: %', rows; end if;
