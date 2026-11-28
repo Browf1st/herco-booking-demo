@@ -96,7 +96,6 @@
 	{:else if status === 'loading'}
 		<p role="status">Loading change requests…</p>
 	{:else}
-		<p class="muted">Visit times are in Philippine time.</p>
 		{#if !requests.length}<p>No pending requests on this page.</p>{/if}
 		{#each requests as request (request.id)}
 			<article class="card stack">

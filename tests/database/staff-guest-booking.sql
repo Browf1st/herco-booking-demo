@@ -238,7 +238,7 @@ declare
   booking public.herco_bookings;
 begin
   select * into strict booking from public.herco_bookings where id = guest_id;
-  if booking.customer_id is not null or booking.customer_contact ? 'email' or booking.customer_contact->>'phone' <> ''
+  if booking.customer_id is not null or booking.customer_contact->>'email' <> '' or booking.customer_contact->>'phone' <> ''
     or booking.customer_contact->>'name' is distinct from E'  fixture Mara\t  VILLANUEVA  ' or booking.status <> 'cancelled' then
     raise exception 'Guest ownership, original contact, or staff workflow is incorrect';
   end if;

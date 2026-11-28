@@ -7,21 +7,31 @@ const read = (path) => readFile(new URL('../' + path, import.meta.url), 'utf8');
 
 test('staff can choose a guest booking on the scheduled path only', async () => {
 	const picker = await read('src/lib/live/ManualBooking.svelte');
-	assert.match(picker, /\{#if guest && !walkIn\}[\s\S]*?<ServerBooking manualGuest/);
-	assert.match(picker, /\{#if !walkIn\}<button[^\n]*>Book without an account/);
+	assert.match(picker, /\{#if guest\}[\s\S]*?<ServerBooking manualGuest \{walkIn\}/);
+	assert.match(picker, /<button[^\n]*>Book without an account/);
 	assert.match(picker, /<ServerBooking manualCustomer=\{customer\} walkIn=/);
 });
 
 test('guest contact asks for a name, allows an empty mobile, and omits account details', async () => {
 	const screen = await read('src/lib/live/ServerBooking.svelte');
 	assert.match(screen, /phoneRequired = \$derived\(walkIn \|\| !!manualCustomer\)/);
-	assert.match(screen, /\{#if !manualGuest\}<label>\s*<span>Email/);
-	assert.match(screen, /manualGuest \? \{ action: 'book_guest' \} : manualCustomer\s*\? \{ action: 'book', customerId:/);
+	assert.match(screen, /\{#if manualGuest\}<label>Email \(optional\)\s*<input type="email" bind:value=\{email\} autocomplete="email"(?![^>]*readonly)/);
+	assert.match(screen, /\{:else\}<label>\s*<span>Email/);
+	assert.match(screen, /manualGuest \? \{ action: 'book_guest', email: email.trim\(\), walkIn \} : manualCustomer\s*\? \{ action: 'book', customerId:/);
 	assert.match(screen, /manualGuest \? booked.reference \?\? booked.id/);
 	assert.equal(contactError('   ', '', false), 'Enter your name.');
 	assert.equal(contactError('Test Guest', '', false), '');
 	assert.match(contactError('Test Guest', '123', false), /leave it blank/);
 	assert.equal(contactError('Test Guest', '+63 917 000 0000', false), '');
+});
+
+test('a guest walk-in skips the digital intake and submits without it', async () => {
+	const screen = await read('src/lib/live/ServerBooking.svelte');
+	assert.match(screen, /guestWalkIn = \$derived\(manualGuest && walkIn\)/);
+	assert.match(screen, /walkIn && !guestWalkIn \? fetchIntake\(\)/);
+	assert.match(screen, /guestWalkIn \? \{ hour: null \}/);
+	assert.match(screen, /!manualCustomer&&!guestWalkIn&&\(!acknowledged/);
+	assert.match(screen, /\{#if walkIn && !guestWalkIn\}<div><dt>Intake signed by/);
 });
 
 test('the recorded-name group browser is removed from the Customers directory and history', async () => {

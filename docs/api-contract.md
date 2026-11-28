@@ -185,8 +185,15 @@ Six months after staff mark a booking Done, the customer gets one email at 9 AM 
 ### `GET /api/booking-services`
 - **Who:** signed-in. Booking must be visible to the caller (database).
 - **Input (query):** `booking` uuid, required.
-- **Success:** `200` booked services for the booking (`original`, `current`, `totalCentavos`, `revision`, `date`, `canEdit`, `changes`, `bike`, `options`, and new `shop_priced: boolean`). When `shop_priced` is true, `canEdit` is `false` for the booking's customer (staff keep their own `canEdit`). When the caller is staff without `viewIncome`, `totalCentavos` is `null` and the lines in `original`, `current` and `changes` have no `price_centavos`, `max_centavos` or `promotion`; customers always see their own prices.
+- **Success:** `200` booked services for the booking (`original`, `current`, `totalCentavos`, `revision`, `date`, `canEdit`, `changes`, `bike`, `options`, `shop_priced: boolean`, and new `contact: { name, phone, plate }` (strings, empty when not stored; the email is never included)). When `shop_priced` is true, `canEdit` is `false` for the booking's customer (staff keep their own `canEdit`). When the caller is staff without `viewIncome`, `totalCentavos` is `null` and the lines in `original`, `current` and `changes` have no `price_centavos`, `max_centavos` or `promotion`; customers always see their own prices.
 - **Errors:** `400`; `401`; `404` "Could not find a booking you can access."; `503`.
+
+### `POST /api/bookings/edit`
+- **Who:** signed-in customer who owns the booking (checked in the database). Same-origin required. The booking must be Pending and its visit in the future; once the shop priced the booking the customer can no longer edit it.
+- **Input (JSON):** `bookingId` uuid; `requestId` uuid (resend the same one when retrying); `revision` integer 0-2147483647 (from `GET /api/booking-services`); `services` array of 1-20 strings (each 1-64); `coating` optional object (under 3000 chars, same options as `POST /api/bookings`); `bike` string 1-120; `name` string 1-120; `phone` string, empty allowed, otherwise a valid mobile number (same rule as `POST /api/bookings`); `plate` string 0-30; `priceFingerprint` optional 32 lowercase hex characters.
+- **Behaviour:** prices are recalculated on the server for the new motorcycle and services. The current services, total, options, motorcycle and contact (name, phone, plate) are replaced and `revision` goes up by one; the original booking snapshot and the email never change. If nothing changed, the revision stays the same.
+- **Success:** `200` same shape as `GET /api/booking-services` (includes `contact`).
+- **Errors:** `400` invalid input; `401` not signed in; `404` no booking you can access (also for someone else's booking); `409` `{ code, message }` with `code` `"booking_locked"`, `"line_changed"` (stale revision: reload) or `"shop_priced"` (same meaning as `POST /api/booking-services`); `503` retry.
 
 ### `POST /api/booking-services`
 - **Who:** signed-in; booking must belong to or be accessible by the caller (database). Same-origin required.
@@ -319,7 +326,7 @@ All staff endpoints rely on database grants. Endpoints marked "confirmed email" 
 - **Input (JSON):** `action`. Send `email` (complete address, up to 254) for `lookup` and `book`.
   - `lookup`: finds the verified customer. Returns `200` the customer record (shape unclear from code).
   - `book`: `customerId` uuid, `requestId` uuid, `date`, `hour` (integer 0-23 that is open for that date, or `null` when `walkIn` is true; the database refuses other hours with `409`), `walkIn` optional boolean, `services` 1-20 strings (each up to 64), `bike` up to 120, `name` up to 120, `phone` up to 40, `plate` up to 30 (all required strings), `coating` optional object (under 3000 chars), `priceFingerprint` optional (not type-checked in route).
-  - `book_guest`: same scheduled-visit fields as `book` except omit `customerId`, `email`, and `walkIn`. Send a nonblank `name`. `phone` is optional and limited to 40 characters.
+  - `book_guest`: same scheduled-visit fields as `book` except omit `customerId`, `email`, and `walkIn`. Send a nonblank `name`. `phone` is optional and limited to 40 characters. **Added:** optional `email` (empty or absent is fine; if given it must be a complete address up to 254, stored trimmed in the booking contact as `email`, empty string when none) and optional `walkIn: true` with `hour: null`; `date` may be omitted (the server uses today in Philippine time) and, if sent, must be today, which books a same-day walk-in directly as `confirmed` with no hour and no digital intake (a guest has no account to sign it; `intakeRequired` stays false). A non-boolean `walkIn` or an invalid `email` is `400`.
 - **Success:** `200` verified customer record for `lookup`, or `{id, reference, status, totalCentavos, intakeRequired, estimateOpen}` for either booking action.
 - **Errors:** `400`; `401`; `403` unconfirmed email or no permission; `404` no unique verified account matched / account no longer matches; `409` slot unavailable or `{ code: "price_changed", message }`; `503`.
 

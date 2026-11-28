@@ -49,6 +49,18 @@ As a customer or staff member, I want screens that look organised — each piece
 ## Open questions for the owner
 - None blocking. (Q-M icon style, Q-N priority screens — both resolved as sensible defaults 2026-11-26; owner may flag specific screens later.)
 
+## Shared appointment-time wording — owner confirmed 2026-11-26
+
+- Align staff/customer schedule wording with F-026: **Last booking time** means the inclusive final appointment start, currently **5 PM**. Avoid implying the last slot is 4 PM or that 5 PM is a submission deadline. Apply consistently to default/date controls, availability, booking and rescheduling.
+
+## Cross-feature release reminders — 2026-11-27
+
+- Shared detail styles must preserve customer/staff field boundaries. Proof gallery appears only in authorized staff detail; lazy-load thumbnails when opened, keep phone layout/loading/error/empty states and keyboard labels, and do not add duplicate API calls.
+- Shared requirement: finished-product proof can be saved while Booked before Complete and viewed only by authorized staff/Admin/Owner (F-009/F-012/F-026); no customer proof access. API/data design must reconcile the existing optional customer photo-sharing path.
+- Before release, verify request-abuse controls, protected Admin/Owner/data access and performance (F-016), database plus linked-photo backups/recovery (F-015), independent incident email to **elijahpayoc12@gmail.com** (F-027), and preserved historical transaction prices (F-004/F-021). Each feature verifies its affected paths; provider wiring belongs to the coordinating specs rather than seven duplicate implementations.
+- One production application environment. Local fictional verification and disposable isolated recovery checks do not imply standing staging resources. These reminders record requirements, not completed security/performance audits or deployed protection.
+- Open release decisions remain visible: proof retention and post-save edit/delete policy; evidence grant/API design; numeric API quotas/provider/budget; backup schedule/retention/destination/recovery targets; monitoring thresholds/provider. Previously Ready feature scope is not silently declared fully designed for these new extensions.
+
 ## Ready checklist (no code until all are ticked and the owner approves)
 - [x] Every user step is written out
 - [x] Rules, limits and permissions are decided

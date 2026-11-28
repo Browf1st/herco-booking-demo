@@ -127,7 +127,7 @@
 		{#if intake}
 			<section class="card stack" aria-label="Booking intake">
 				<h2>{intake.bike}</h2>
-				<p>{intake.hour === null ? 'Walk-in' : 'Booking'} for <strong>{intake.customerName}</strong> on {fmtDate(intake.date)}{intake.hour === null ? '' : ' at ' + fmtSlot(intake.hour + ':00')} Philippine time.</p>
+				<p>{intake.hour === null ? 'Walk-in' : 'Booking'} for <strong>{intake.customerName}</strong> on {fmtDate(intake.date)}{intake.hour === null ? '' : ' at ' + fmtSlot(intake.hour + ':00')}.</p>
 				{#if intake.state === 'unavailable'}
 					<p>The shop has no approved intake form configured.</p>
 				{:else if intake.state === 'closed'}
@@ -141,7 +141,7 @@
 					{#if intake.canRequest}
 						<div><button class="btn" type="button" disabled={busy} onclick={() => submit('request')}>Open intake for customer</button></div>
 					{:else if intake.state === 'signed'}
-						<p><strong>Signed</strong>{intake.signerName ? ' by ' + intake.signerName : ''} on {intake.signedAt ? dateAndTime.format(new Date(intake.signedAt)) : ''} Philippine time.</p>
+						<p><strong>Signed</strong>{intake.signerName ? ' by ' + intake.signerName : ''} on {intake.signedAt ? dateAndTime.format(new Date(intake.signedAt)) : ''}.</p>
 					{:else if intake.canSign}
 						<form class="stack" onsubmit={event => { event.preventDefault(); void submit('sign'); }}>
 							<label class="acknowledgement">

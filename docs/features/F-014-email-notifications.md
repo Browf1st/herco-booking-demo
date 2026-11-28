@@ -17,6 +17,7 @@ Customers get emails when they book, when the shop confirms, and when a change r
 4. Shop inbox (if set) receives new change-request notices with references and dates.
 
 ## Rules and details
+- Owner routing update 2026-11-26: planned service-account owner `hercowebsite@gmail.com`; staff booking/admin notices route to `browf1st10@gmail.com`, while errors/health alerts route separately to `elijahpayoc12@gmail.com`. See [F-027](F-027-service-setup-and-alert-routing.md) for pending setup, sender/domain and event-scope decisions. Customer Auth/booking mail still goes to the customer. No hosted inbox setting or new send was changed by this spec update.
 - Sign-in emails (verify, reset) go through Supabase Auth with Brevo SMTP, separate from this worker.
 - `HERCO_EMAIL_MODE`: disabled (default), allowlist (staging), live (approved production).
 - Retries: rate limits back off up to 24 hours and 5 attempts; rejections stop; timeouts go to review.

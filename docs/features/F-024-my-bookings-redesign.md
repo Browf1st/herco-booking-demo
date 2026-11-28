@@ -56,6 +56,19 @@ As a customer, I want a clean card with one Actions menu, and when I tap it I wa
 ## Open questions for the owner
 - None blocking. (Q-K hide staff reason, Q-L Actions-menu items — both resolved 2026-11-26.)
 
+## Shared appointment-time revision — owner confirmed 2026-11-26
+
+- Customer reschedule requests follow F-002/F-026 staff-managed effective hours, including **5 PM as the current final appointment start**, inclusive. Staff may change default/date last-booking times; customer choices must reflect those settings.
+- Preserve existing booked date/time in cards and details when settings change. Validate current availability again at submit and explain when a selected hour was closed/blocked. Acceptance: request 5 PM, refuse 6 PM under current hours, honor date overrides, reject a stale now-closed time, preserve older bookings after shortening hours.
+
+## Cross-feature release reminders — 2026-11-27
+
+- Customer My Bookings/details/history must omit private proof images, object paths, links and metadata. Existing customer sharing routes/controls must be reconciled with F-009, not merely hidden. Keep permitted text/history separate and preserve historical prices.
+- Shared requirement: finished-product proof can be saved while Booked before Complete and viewed only by authorized staff/Admin/Owner (F-009/F-012/F-026); no customer proof access. API/data design must reconcile the existing optional customer photo-sharing path.
+- Before release, verify request-abuse controls, protected Admin/Owner/data access and performance (F-016), database plus linked-photo backups/recovery (F-015), independent incident email to **elijahpayoc12@gmail.com** (F-027), and preserved historical transaction prices (F-004/F-021). Each feature verifies its affected paths; provider wiring belongs to the coordinating specs rather than seven duplicate implementations.
+- One production application environment. Local fictional verification and disposable isolated recovery checks do not imply standing staging resources. These reminders record requirements, not completed security/performance audits or deployed protection.
+- Open release decisions remain visible: proof retention and post-save edit/delete policy; evidence grant/API design; numeric API quotas/provider/budget; backup schedule/retention/destination/recovery targets; monitoring thresholds/provider. Previously Ready feature scope is not silently declared fully designed for these new extensions.
+
 ## Ready checklist (no code until all are ticked and the owner approves)
 - [x] Every user step is written out
 - [x] Rules, limits and permissions are decided

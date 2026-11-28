@@ -50,6 +50,19 @@ As a customer booking ceramic, I want a modern, clear screen with tappable multi
 ## Open questions for the owner
 - None blocking. (Q-I multi-select checkboxes, Q-J copy final — both resolved 2026-11-26. New: modern revamp is a confirmed goal.)
 
+## Shared appointment-time revision — owner confirmed 2026-11-26
+
+- Follow F-026's inclusive **Last booking time** revision and F-002 rules. Ceramic and mixed-service appointments include **5 PM as the current final start**. The 2–3-hour turnover estimate must not remove this appointment or turn it into a completion deadline.
+- Staff-managed default/date hours, blocks and server validation drive customer choices. Acceptance: 5 PM succeeds when open, 6 PM is refused under the current schedule, staff changes and date overrides appear, and old bookings remain unchanged.
+
+## Cross-feature release reminders — 2026-11-27
+
+- Ceramic/mixed bookings share the same protected, bounded booking path and price-snapshot rules. Customer ceramic UI must not expose staff proof; turnover copy does not alter the proof lifecycle.
+- Shared requirement: finished-product proof can be saved while Booked before Complete and viewed only by authorized staff/Admin/Owner (F-009/F-012/F-026); no customer proof access. API/data design must reconcile the existing optional customer photo-sharing path.
+- Before release, verify request-abuse controls, protected Admin/Owner/data access and performance (F-016), database plus linked-photo backups/recovery (F-015), independent incident email to **elijahpayoc12@gmail.com** (F-027), and preserved historical transaction prices (F-004/F-021). Each feature verifies its affected paths; provider wiring belongs to the coordinating specs rather than seven duplicate implementations.
+- One production application environment. Local fictional verification and disposable isolated recovery checks do not imply standing staging resources. These reminders record requirements, not completed security/performance audits or deployed protection.
+- Open release decisions remain visible: proof retention and post-save edit/delete policy; evidence grant/API design; numeric API quotas/provider/budget; backup schedule/retention/destination/recovery targets; monitoring thresholds/provider. Previously Ready feature scope is not silently declared fully designed for these new extensions.
+
 ## Ready checklist (no code until all are ticked and the owner approves)
 - [x] Every user step is written out
 - [x] Rules, limits and permissions are decided

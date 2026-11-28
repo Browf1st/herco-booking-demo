@@ -71,7 +71,9 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f tests/database/inclusive-closing-slot.sql
           psql -v ON_ERROR_STOP=1 -f tests/database/customer-directory.sql
           psql -v ON_ERROR_STOP=1 -f tests/database/staff-guest-booking.sql
+          psql -v ON_ERROR_STOP=1 -f tests/database/staff-guest-walk-in-email.sql
           psql -v ON_ERROR_STOP=1 -f tests/database/reports-owner-only.sql
           psql -v ON_ERROR_STOP=1 -f tests/database/activity-log-detail.sql
           psql -v ON_ERROR_STOP=1 -f tests/database/booking-detail-one.sql
           psql -v ON_ERROR_STOP=1 -f tests/database/line-part-prices.sql
+          psql -v ON_ERROR_STOP=1 -f tests/database/customer-full-booking-edit.sql

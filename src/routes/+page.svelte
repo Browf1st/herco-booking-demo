@@ -120,7 +120,7 @@
 	<div class="wrap stack">
 		<div class="schedule-heading">
 			<h2>Shop schedule</h2>
-			<p class="muted">{openHours.text} Philippine time.{#if closedDays} <strong>Closed {closedDays}.</strong>{/if}</p>
+			<p class="muted">{openHours.text}.{#if closedDays} <strong>Closed {closedDays}.</strong>{/if}</p>
 		</div>
 		<div class="schedule card stack">
 			<div class="schedule-heading">

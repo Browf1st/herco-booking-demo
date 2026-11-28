@@ -1,32 +1,32 @@
 <!-- Styles load together with this popup (not in the My bookings first stylesheet). -->
 <svelte:options css="injected" />
 <script lang="ts">
-	// The customer's booking details: the shared Reports popup (customer variant) with services and inclusions,
-	// totals (the original struck through when the shop changed it), the change log, and their own change requests.
-	// Loaded only when a card is opened. Staff names, reasons, notes and contact rows are never shown here.
+	// The customer's booking details: the shared Reports popup (customer variant) with the priced service
+	// breakdown and inclusions, totals (the original struck through when the shop changed it), and one
+	// Booking activity log. Editing services is the card's "Edit service" action, not shown here.
 	import ReportDetails, { type Detail } from '../shared/ReportDetails.svelte';
 	import { fmtDate, fmtSlot } from '../shared/dates';
 	import { bookingWasUpdated } from '../shared/booking-changes';
-	import BookingServiceEditor from './BookingServiceEditor.svelte';
 	import CoatingOptionSummary from './CoatingOptionSummary.svelte';
 	import CustomerChangeLog from './CustomerChangeLog.svelte';
-	import ServerBookingActivity from './ServerBookingActivity.svelte';
 	import ServerSharedBookingDetails from './ServerSharedBookingDetails.svelte';
 	import { displayEstimate, displayServicePrice } from './service-estimate';
-	import type { CustomerBooking, CustomerChangeRequest } from './server-booking-types';
+	import type { CustomerBooking, CustomerChangeRequest, CustomerService } from './server-booking-types';
 	import type { CoatingOptions } from './booking-coating';
 
 	let { booking, requests, onclose }: { booking: CustomerBooking; requests: CustomerChangeRequest[]; onclose: () => void } = $props();
 	const price = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
 	const stamp = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' });
 	const services = $derived(booking.current_services ?? booking.original_services);
+	// Flatten each service into its priced parts (ceramic base + each add-on) so the breakdown is visible.
+	const breakdown = $derived<CustomerService[]>(services.flatMap((service) => service.details?.length ? service.details : [service]));
 	const updated = $derived(bookingWasUpdated({ originalTotal: booking.original_total_centavos, currentTotal: booking.current_total_centavos,
 		originalCodes: booking.original_services.map((service) => service.code), currentCodes: booking.current_services?.map((service) => service.code) }));
 	const detail = $derived<Detail>({
 		name: '', ref: booking.reference_no ? 'HG-' + booking.reference_no : booking.id, status: booking.status, walkIn: booking.visit_hour === null,
-		lines: services.map((service) => ({
-			label: service.label, price: displayServicePrice(service),
-			parts: service.promotion ? [{ label: service.promotion.label + ', regular ' + price.format(service.promotion.base_price_centavos / 100) }] : undefined
+		lines: breakdown.map((line) => ({
+			label: line.label, price: displayServicePrice(line),
+			parts: line.promotion ? [{ label: line.promotion.label + ', regular ' + price.format(line.promotion.base_price_centavos / 100) }] : undefined
 		})),
 		total: displayEstimate(services, booking.current_total_centavos ?? booking.original_total_centavos),
 		originalTotal: updated ? displayEstimate(booking.original_services, booking.original_total_centavos) : undefined,
@@ -42,13 +42,11 @@
 
 {#snippet coating()}<CoatingOptionSummary options={booking.coating_options as CoatingOptions | undefined} />{/snippet}
 {#snippet changeLog()}
-	{#if updated}<p class="updated small">Updated by the shop after inspection</p>{/if}
+	{#if updated && booking.shop_priced}<p class="updated small">Updated by the shop after inspection</p>{/if}
 	<CustomerChangeLog bookingId={booking.id} />
 {/snippet}
 {#snippet more()}
-	<BookingServiceEditor bookingId={booking.id} fromStaff={false} shopPriced={booking.shop_priced && (booking.status === 'pending' || booking.status === 'confirmed')} embedded />
 	<ServerSharedBookingDetails bookingId={booking.id} />
-	<ServerBookingActivity bookingId={booking.id} />
 	{#if requests.length}
 		<section class="requests" aria-label="Change requests">
 			<h4>Change requests</h4>

@@ -85,7 +85,7 @@
 			{:else if loading && !entries}
 				<p role="status">Loading activity…</p>
 			{:else if entries}
-				<p class="muted small">{visible.length} {visible.length === 1 ? 'entry' : 'entries'} · Philippine time · Newest first{entries.length >= 100 ? ' · Showing the latest 100 for these dates' : ''}</p>
+				<p class="muted small">{visible.length} {visible.length === 1 ? 'entry' : 'entries'} · Newest first{entries.length >= 100 ? ' · Showing the latest 100 for these dates' : ''}</p>
 				{#each pageEntries as entry, index (entry.recorded_at + entry.reference + entry.action + index)}
 					<article class="entry stack">
 						<div class="row entry-heading">

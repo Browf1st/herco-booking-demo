@@ -6,6 +6,10 @@
 ## In one sentence
 The admin sets the shop's default opening hours and open weekdays, changes single dates when needed, and customers only see hours the shop can take.
 
+## Superseding owner revision — 2026-11-26
+
+Owner clarified that **5 PM is the final selectable appointment start time**, inclusive, and authorized staff settings control this on both staff and customer screens. Earlier exclusive-closing examples below (9 AM–5 PM yielding a 4 PM final slot) describe the previous requirement/implementation and are superseded for this revision. Implementation belongs to **F-026**, with customer coverage in **F-022/F-023/F-024** and wording in F-025. Current 9 AM through 5 PM gives nine hourly choices. Existing bookings remain unchanged when settings change. This records the approved change; application/database behavior is not changed yet.
+
 ## Owner answers (record)
 - 2026-11-21 Q-07: the admin sets the general opening hours (e.g. 9 AM–5 PM); these become the hourly slots for every date. Every slot is bookable unless the admin blocks it. No service durations: a booking holds only its own hour.
 - 2026-11-23 Q-07 follow-up, owner's words: "Admin set opening hours and it would be their default. Admin can also modify time per day. For example admin can set 8 up to 8 pm, then that would be the default, then they can modify each day like checklist what to show and what not."

@@ -29,25 +29,30 @@ test('serviceTypeLabel is empty for other services, empty or missing lists', () 
 
 const base = { status: 'confirmed', visitHour: 10, future: true, requestsReady: true, hasOpenRequest: false };
 
-test('a future booked visit offers Reschedule, Cancel and View details', () => {
-	assert.deepEqual(menuItems(base), ['reschedule', 'cancel', 'details']);
-	assert.deepEqual(menuItems({ ...base, status: 'pending' }), ['reschedule', 'cancel', 'details']);
+test('only a pending visit offers Edit service; a confirmed one offers View service', () => {
+	assert.deepEqual(menuItems({ ...base, status: 'pending' }), ['reschedule', 'cancel', 'edit-service']);
+	assert.deepEqual(menuItems(base), ['reschedule', 'cancel', 'view-service']);
 });
 
 test('an open request offers Withdraw request instead of Reschedule and Cancel', () => {
-	assert.deepEqual(menuItems({ ...base, hasOpenRequest: true }), ['withdraw', 'details']);
+	assert.deepEqual(menuItems({ ...base, status: 'pending', hasOpenRequest: true }), ['withdraw', 'edit-service']);
+	assert.deepEqual(menuItems({ ...base, hasOpenRequest: true }), ['withdraw', 'view-service']);
 });
 
-test('past, done, cancelled and walk-in bookings only offer View details', () => {
-	assert.deepEqual(menuItems({ ...base, future: false }), ['details']);
-	assert.deepEqual(menuItems({ ...base, status: 'done' }), ['details']);
-	assert.deepEqual(menuItems({ ...base, status: 'cancelled' }), ['details']);
-	assert.deepEqual(menuItems({ ...base, visitHour: null }), ['details']);
+test('a shop-priced pending booking can be viewed but no longer edited', () => {
+	assert.deepEqual(menuItems({ ...base, status: 'pending', shopPriced: true }), ['reschedule', 'cancel', 'view-service']);
 });
 
-test('request items stay hidden until the request check has finished', () => {
-	assert.deepEqual(menuItems({ ...base, requestsReady: false }), ['details']);
-	assert.deepEqual(menuItems({ ...base, requestsReady: false, hasOpenRequest: true }), ['details']);
+test('past, done, cancelled and walk-in bookings offer View service only', () => {
+	assert.deepEqual(menuItems({ ...base, status: 'pending', future: false }), ['view-service']);
+	assert.deepEqual(menuItems({ ...base, status: 'done' }), ['view-service']);
+	assert.deepEqual(menuItems({ ...base, status: 'cancelled' }), ['view-service']);
+	assert.deepEqual(menuItems({ ...base, status: 'pending', visitHour: null }), ['view-service']);
+});
+
+test('request items stay hidden until the request check has finished, but services stay reachable', () => {
+	assert.deepEqual(menuItems({ ...base, status: 'pending', requestsReady: false }), ['edit-service']);
+	assert.deepEqual(menuItems({ ...base, status: 'pending', requestsReady: false, hasOpenRequest: true }), ['edit-service']);
 });
 
 // F-024: customer change log

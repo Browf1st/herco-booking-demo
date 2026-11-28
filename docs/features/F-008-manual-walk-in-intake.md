@@ -33,6 +33,8 @@ Intake for an existing appointment:
 
 ### Booking groups for staff
 
+Hosted setup reminder (owner 2026-11-26): migration `202611250002_staff_guest_booking.sql` still needs installation/cache preflight and verification on the connected Supabase project. The API currently cannot find the grouping function (`PGRST202`). Follow the unchecked [Supabase setup checklist in F-026](F-026-staff-booking-revamp.md#required-supabase-setup-reminder--pending); merging application code does not install this database function. Clickable full read-only visit details in Customers are planned in F-026, not implemented here.
+
 - **Customers:** Open a name group to see its booking count and bookings, newest visit first.
 - **Booking History:** Keep the date-ordered list. Add a way to open the full same-name booking group from a booking.
 - Show each booking’s reference, visit date, and status in the grouped list. Label the group by recorded name because different people may share one name. Apply each screen’s existing staff permissions.

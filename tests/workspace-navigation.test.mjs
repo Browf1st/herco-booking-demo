@@ -19,8 +19,9 @@ test('restricted accounts receive only supported permitted links and landing pag
 	assert.equal(workspaceLanding({ role: 'owner', pages: ['Pricing'], actions: [] }), '/pricing');
 	assert.equal(workspaceLanding({ role: 'staff', pages: [], actions: [] }), '/account');
 	assert.equal(workspaceLinks({ role: 'staff', pages: ['Bookings'], actions: [] }).some(link => link.href === '/manual-booking'), false);
-	assert.deepEqual(workspaceLinks({ role: 'admin', pages: ['Bookings'], actions: ['createBooking'] }).map(link => link.href),
-		['/admin', '/manual-booking', '/manual-booking?walk-in=1']);
+	// Manual booking links moved out of the menu into the "Book" dropdown, so they never appear here now.
+	assert.deepEqual(workspaceLinks({ role: 'admin', pages: ['Bookings'], actions: ['createBooking'] }).map(link => link.href), ['/admin']);
+	assert.equal(workspaceLinks({ role: 'admin', pages: ['Bookings'], actions: ['createBooking'] }).some(link => link.href.startsWith('/manual-booking')), false);
 });
 
 test('rejects malformed or unrecognized account permissions', () => {

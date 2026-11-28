@@ -7,7 +7,7 @@
 	import { menuLabels, type MenuItem } from './booking-menu';
 
 	let { id, items, busy = false, onpick }: { id: string; items: MenuItem[]; busy?: boolean; onpick: (item: MenuItem) => void } = $props();
-	const icons = { reschedule: 'calendar', cancel: 'block', withdraw: 'reset', details: 'view' } as const;
+	const icons = { reschedule: 'calendar', cancel: 'block', withdraw: 'reset', 'edit-service': 'adjust', 'view-service': 'view' } as const;
 	let open = $state(false);
 	let root = $state<HTMLDivElement>();
 	let trigger = $state<HTMLButtonElement>();
@@ -31,8 +31,9 @@
 	$effect(() => { if (open && page.state.actionsMenu !== id) open = false; });
 	function pick(item: MenuItem) {
 		hide(false, true);
-		// "View details" turns this entry into the sheet's own entry; other items just clear it.
-		if (item !== 'details' && page.state.actionsMenu === id) replaceState('', {});
+		// Edit/View service open a sheet that takes over this entry; other items just clear it.
+		const opensSheet = item === 'edit-service' || item === 'view-service';
+		if (!opensSheet && page.state.actionsMenu === id) replaceState('', {});
 		onpick(item);
 	}
 	function tapOutside(target: Node) {

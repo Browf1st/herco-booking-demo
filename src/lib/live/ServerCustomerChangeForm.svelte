@@ -73,12 +73,14 @@
 </script>
 
 <form class="card stack" onsubmit={submit}>
+	<div class="form-head">
+		<h3>{staffVisit ? (kind === 'cancel' ? 'Cancel booking' : 'Reschedule booking') : (kind === 'cancel' ? 'Request cancellation' : 'Request rescheduling')}</h3>
+		<button type="button" class="form-close" aria-label="Close" disabled={busy} onclick={onClose}>×</button>
+	</div>
 	{#if staffVisit}
-		<h3>{kind === 'cancel' ? 'Cancel booking' : 'Reschedule booking'}</h3>
 		<p class="small">{staffVisit.hour === null ? 'This cancels the walk-in in My Bookings.'
 			: 'This changes the appointment in My Bookings and releases the original slot.'}</p>
 	{:else}
-		<h3>{kind === 'cancel' ? 'Request cancellation' : 'Request rescheduling'}</h3>
 		<p class="small">Your current slot stays booked while the shop reviews your request.</p>
 	{/if}
 	{#if kind === 'reschedule'}
@@ -93,3 +95,10 @@
 		<button type="button" class="btn sm ghost" disabled={busy} onclick={onClose}>Close</button>
 	</div>
 </form>
+<style>
+	.form-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+	.form-head h3 { margin: 0; }
+	.form-close { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; flex: none; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--text); font: 400 1.6rem/1 var(--body); cursor: pointer; }
+	.form-close:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+	.form-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>

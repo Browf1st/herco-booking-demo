@@ -29,15 +29,11 @@ export function parseWorkspaceAccess(value: unknown): WorkspaceAccess | null {
 }
 
 export function workspaceLinks(access: WorkspaceAccess): WorkspaceLink[] {
-	const links = sections.filter(section => access.pages.includes(section.page) &&
+	// Manual booking is reached from the "Book" dropdown on the Bookings and Reports tabs, not from this menu.
+	return sections.filter(section => access.pages.includes(section.page) &&
 		(section.page !== 'Reports' || ['owner', 'superadmin'].includes(access.role)) &&
 		(section.page !== 'Staff Access' || (['owner', 'superadmin'].includes(access.role) && access.actions.includes('manageStaff'))))
 		.map(({ label, href }) => ({ label, href }));
-	if (access.pages.includes('Bookings') && access.actions.includes('createBooking')) {
-		links.push({ label: 'Manual booking · Online', href: '/manual-booking' },
-			{ label: 'Manual booking · Walk-in', href: '/manual-booking?walk-in=1' });
-	}
-	return links;
 }
 
 export function workspaceGroups(access: WorkspaceAccess): { label: string; links: WorkspaceLink[] }[] {

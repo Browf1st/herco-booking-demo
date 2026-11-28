@@ -5,12 +5,12 @@
  const walkIn = $derived(page.url.searchParams.get('walk-in') === '1');
  async function lookup(event:SubmitEvent){event.preventDefault();if(busy)return;busy=true;message='';try{const r=await fetch(resolve('/api/staff/manual-booking'),{method:'POST',headers:{'content-type':'application/json',accept:'application/json'},body:JSON.stringify({action:'lookup',email:email.trim()})});const data=await r.json();if(!r.ok)throw Error(data.message??'Could not find this verified customer.');customer=data;}catch(e){message=e instanceof Error?e.message:'Could not look up the customer.';}finally{busy=false;}}
 </script>
-{#if guest && !walkIn}
+{#if guest}
  <div class="wrap row customer-selection">
   <p>Booking without a HERCO account</p>
   <button type="button" class="btn sm ghost" onclick={() => guest = false}><ActionIcon name="edit"/>Change customer</button>
  </div>
- <ServerBooking manualGuest />
+ {#key walkIn}<ServerBooking manualGuest {walkIn} />{/key}
 {:else if customer}
  <div class="wrap row customer-selection"><p>Booking for <strong>{customer.email}</strong></p><button class="btn sm ghost" onclick={()=>customer=undefined}><ActionIcon name="edit"/>Change customer</button></div>
  {#key customer.id + page.url.search}<ServerBooking manualCustomer={customer} walkIn={page.url.searchParams.get('walk-in')==='1'}/>{/key}
@@ -19,12 +19,12 @@
   <h1>Manual booking</h1>
   <form class="card stack" onsubmit={lookup}>
    <h2>Find the customer</h2>
-   <p>{walkIn ? 'The customer needs a verified HERCO account. Enter their full email address.' : 'Enter the full email address for the customer’s verified HERCO account.'}</p>
+   <p>{walkIn ? 'Enter the full email address for the customer’s verified HERCO account, or book without an account.' : 'Enter the full email address for the customer’s verified HERCO account.'}</p>
    <label>Customer email<input type="email" bind:value={email} maxlength="254" required disabled={busy}/></label>
    {#if message}<p role="alert">{message}</p>{/if}
    <div class="row options">
     <button class="btn" disabled={busy}><ActionIcon name="search"/>{busy?'Checking…':'Find verified account'}</button>
-    {#if !walkIn}<button type="button" class="btn ghost" disabled={busy} onclick={() => {message = ''; guest = true;}}>Book without an account</button>{/if}
+    <button type="button" class="btn ghost" disabled={busy} onclick={() => {message = ''; guest = true;}}>Book without an account</button>
    </div>
   </form>
  </section>
